@@ -5,9 +5,9 @@ import type { Actions, PageServerLoad } from './$types'
 export const load: PageServerLoad = async ({ url, locals: { safeGetSession } }) => {
   const { session } = await safeGetSession()
 
-  // if the user is already logged in return them to the account page
+  // if the user is already logged in return them to the app page
   if (session) {
-    redirect(303, '/account')
+    redirect(303, '/app')
   }
 
   return { url: url.origin }
@@ -22,25 +22,43 @@ export const actions: Actions = {
     } = event
     const formData = await request.formData()
     const email = formData.get('email') as string
-    const validEmail = /^[\w-\.+]+@([\w-]+\.)+[\w-]{2,8}$/.test(email)
-
+    const password = formData.get('password') as string
+    
+    // Validate email
+    const validEmail = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,8}$/.test(email)
     if (!validEmail) {
-      return fail(400, { errors: { email: 'Please enter a valid email address' }, email })
+      return fail(400, { 
+        errors: { email: 'Please enter a valid email address' }, 
+        email, 
+        success: false 
+      })
     }
 
-    const { error } = await supabase.auth.signInWithOtp({ email })
+    // Validate password (minimum validation)
+    if (!password || password.length < 6) {
+      return fail(400, { 
+        errors: { password: 'Password must be at least 6 characters' }, 
+        email, 
+        success: false 
+      })
+    }
+
+    // Sign in with email and password
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    })
 
     if (error) {
       return fail(400, {
         success: false,
         email,
-        message: `There was an issue, Please contact support.`,
+        message: error.message || 'Failed to sign in. Please check your credentials.',
       })
     }
 
-    return {
-      success: true,
-      message: 'Please check your email for a magic link to log into the website.',
-    }
+    // This is a crucial difference - this redirect needs to be after the authentication
+    // process completes successfully, not in the middle of the process
+    throw redirect(303, '/app')
   },
 }
