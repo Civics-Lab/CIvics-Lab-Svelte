@@ -3,6 +3,7 @@
   import { onMount } from 'svelte';
   import { writable } from 'svelte/store';
   import { workspaceStore } from '$lib/stores/workspaceStore';
+  import { toastStore } from '$lib/stores/toastStore'; // Add this import
   import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
   import type { PageData } from './$types';
   
@@ -185,7 +186,7 @@
   }
   
   // Fetch views for the current workspace
-  async function fetchViews() {
+  async function fetchViews(selectViewId = null) {
     if (!$workspaceStore.currentWorkspace) return;
     
     viewsLoading.set(true);
@@ -203,6 +204,17 @@
       if (fetchedViews && fetchedViews.length > 0) {
         views.set(fetchedViews);
         
+        // If a specific view ID is provided, select that view
+        if (selectViewId) {
+          const viewToSelect = fetchedViews.find(view => view.id === selectViewId);
+          if (viewToSelect) {
+            currentView.set(viewToSelect);
+            filters.set(viewToSelect.filters || []);
+            sorting.set(viewToSelect.sorting || []);
+            return;
+          }
+        }
+        
         // Try to restore the previously selected view from localStorage
         const storedViewId = typeof window !== 'undefined' 
           ? localStorage.getItem('currentContactViewId') 
@@ -213,7 +225,6 @@
           const savedView = fetchedViews.find(view => view.id === storedViewId);
           if (savedView) {
             currentView.set(savedView);
-            // Set filters and sorting from saved view
             filters.set(savedView.filters || []);
             sorting.set(savedView.sorting || []);
           } else {
@@ -283,24 +294,26 @@
   }
   
   // Create a new view
-  async function createView() {
-    if (!$workspaceStore.currentWorkspace || !$newViewName.trim()) return;
+  async function createView(event) {
+    const viewName = event.detail;
+    if (!$workspaceStore.currentWorkspace || !viewName.trim()) return;
     
     try {
+      // Create the view with default fields visible
       const newView = {
-        view_name: $newViewName.trim(),
+        view_name: viewName.trim(),
         workspace_id: $workspaceStore.currentWorkspace.id,
         first_name: true,
         last_name: true,
-        middle_name: false,
+        middle_name: true,
         emails: true,
         phone_numbers: true,
-        addresses: false,
-        gender: false,
-        race: false,
-        pronouns: false,
-        social_media_accounts: false,
-        vanid: false,
+        addresses: true,
+        gender: true,
+        race: true,
+        pronouns: true,
+        social_media_accounts: true,
+        vanid: true,
         filters: [],
         sorting: []
       };
@@ -313,15 +326,26 @@
       
       if (error) throw error;
       
-      views.update(v => [...v, createdView]);
-      currentView.set(createdView);
-      filters.set([]);
-      sorting.set([]);
-      newViewName.set('');
+      // Close modal first to avoid any state issues
       isCreateViewModalOpen.set(false);
+      newViewName.set('');
+      
+      // Re-fetch all views to ensure consistency
+      await fetchViews();
+      
+      // Find the newly created view in the refreshed list
+      const refreshedView = $views.find(v => v.id === createdView.id);
+      if (refreshedView) {
+        // Set as current view
+        currentView.set(refreshedView);
+        filters.set(refreshedView.filters || []);
+        sorting.set(refreshedView.sorting || []);
+      }
       
     } catch (error) {
       console.error('Error creating view:', error);
+      // Handle error without toast if needed
+      alert('Failed to create view');
     }
   }
   

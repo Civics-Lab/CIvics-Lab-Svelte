@@ -26,12 +26,14 @@
     
     function createView() {
       if (newViewName.trim()) {
+        // Pass the newViewName as the event detail
         dispatch('createView', newViewName);
       }
     }
     
     function updateView() {
       if (newViewName.trim()) {
+        // Pass the newViewName as the event detail
         dispatch('updateView', newViewName);
       }
     }
