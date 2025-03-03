@@ -69,6 +69,8 @@
     currentView.set(view);
     filters.set(view.filters || []);
     sorting.set(view.sorting || []);
+    // Re-apply filters and sorting when view changes
+    applyFiltersAndSorting();
   }
   
   function handleToggleField(event) {
@@ -131,13 +133,19 @@
   
   function handleFilterChanged() {
     updateView();
+    applyFiltersAndSorting();
   }
   
   function handleSortChanged() {
     updateView();
+    applyFiltersAndSorting();
   }
   
-  function handleSearchChanged() {
+  function handleSearchChanged(event) {
+    // Update the searchQuery store with the value from the event
+    if (event && event.detail !== undefined) {
+      searchQuery.set(event.detail);
+    }
     applyFiltersAndSorting();
   }
   
@@ -385,7 +393,7 @@
   function addFilter() {
     filters.update(f => [
       ...f, 
-      { field: Object.keys($currentView || {}).find(key => ($currentView || {})[key] === true) || 'first_name', operator: '=', value: '' }
+      { field: Object.keys($currentView).find(key => $currentView[key] === true) || 'first_name', operator: '=', value: '' }
     ]);
   }
   
@@ -393,13 +401,14 @@
   function removeFilter(index) {
     filters.update(f => f.filter((_, i) => i !== index));
     updateView();
+    applyFiltersAndSorting();
   }
   
   // Add a new sort
   function addSort() {
     sorting.update(s => [
       ...s, 
-      { field: Object.keys($currentView || {}).find(key => ($currentView || {})[key] === true) || 'first_name', direction: 'asc' }
+      { field: Object.keys($currentView).find(key => $currentView[key] === true) || 'first_name', direction: 'asc' }
     ]);
   }
   
@@ -407,6 +416,7 @@
   function removeSort(index) {
     sorting.update(s => s.filter((_, i) => i !== index));
     updateView();
+    applyFiltersAndSorting();
   }
   
   // Move filter up or down
@@ -421,6 +431,7 @@
       return newFilters;
     });
     updateView();
+    applyFiltersAndSorting();
   }
   
   // Move sort up or down
@@ -435,6 +446,7 @@
       return newSorting;
     });
     updateView();
+    applyFiltersAndSorting();
   }
   
   // Function to fetch contacts
@@ -504,11 +516,46 @@
     if ($searchQuery.trim()) {
       const query = $searchQuery.toLowerCase().trim();
       result = result.filter(contact => {
+        // Helper function to safely check if a field includes the search query
+        const fieldIncludes = (field) => {
+          if (!field) return false;
+          
+          // Handle array values
+          if (Array.isArray(field)) {
+            return field.some(item => 
+              String(item).toLowerCase().includes(query)
+            );
+          }
+          
+          // Handle comma-separated string values
+          if (typeof field === 'string' && field.includes(',')) {
+            return field.split(',').some(item => 
+              item.trim().toLowerCase().includes(query)
+            );
+          }
+          
+          // Handle regular string/number values
+          return String(field).toLowerCase().includes(query);
+        };
+        
+        // Check all possible fields
         return (
-          (contact.first_name && contact.first_name.toLowerCase().includes(query)) ||
-          (contact.last_name && contact.last_name.toLowerCase().includes(query)) ||
-          (contact.email && contact.email.toLowerCase().includes(query)) ||
-          (contact.phone && contact.phone.toLowerCase().includes(query))
+          fieldIncludes(contact.first_name) ||
+          fieldIncludes(contact.last_name) ||
+          fieldIncludes(contact.middle_name) || 
+          fieldIncludes(contact.email) ||
+          fieldIncludes(contact.emails) ||
+          fieldIncludes(contact.phone) ||
+          fieldIncludes(contact.phone_number) ||
+          fieldIncludes(contact.phone_numbers) ||
+          fieldIncludes(contact.gender) ||
+          fieldIncludes(contact.gender_name) ||
+          fieldIncludes(contact.race) ||
+          fieldIncludes(contact.race_name) ||
+          fieldIncludes(contact.pronouns) ||
+          fieldIncludes(contact.address) || 
+          fieldIncludes(contact.addresses) ||
+          fieldIncludes(contact.vanid)
         );
       });
     }
@@ -532,44 +579,52 @@
     filteredContacts.set(result);
   }
   
-  // When workspace changes, fetch views and contacts
+  // Watch for changes that should trigger filtering/sorting
+  $: if ($searchQuery !== undefined) {
+    applyFiltersAndSorting();
+  }
+  
+  $: if ($filters !== undefined) {
+    applyFiltersAndSorting();
+  }
+  
+  $: if ($sorting !== undefined) {
+    applyFiltersAndSorting();
+  }
+  
+  // Initialize data on component mount
+  onMount(() => {
+    if ($workspaceStore.currentWorkspace) {
+      fetchViews();
+      fetchContacts();
+    }
+  });
+  
+  // Fetch data when workspace changes
   $: if ($workspaceStore.currentWorkspace) {
     fetchViews();
     fetchContacts();
   }
-  
-  // Get visible columns from current view
-  $: visibleColumns = $currentView ? 
-    Object.keys($currentView).filter(key => 
-      $currentView[key] === true && 
-      key !== 'id' && 
-      key !== 'workspace_id' && 
-      key !== 'view_name' && 
-      key !== 'created_at' && 
-      key !== 'updated_at' && 
-      key !== 'filters' && 
-      key !== 'sorting'
-    ) : [];
 </script>
 
 <svelte:head>
   <title>Contacts | Engagement Portal</title>
 </svelte:head>
 
-{#if $workspaceStore.isLoading}
-  <div class="flex justify-center items-center h-64">
-    <LoadingSpinner size="lg" />
-  </div>
-{:else if !$workspaceStore.currentWorkspace}
-  <div class="bg-white p-8 rounded-lg shadow-md">
-    <h2 class="text-xl font-semibold mb-4 text-gray-700">No Workspace Selected</h2>
-    <p class="text-gray-600">
-      Please select a workspace from the dropdown in the sidebar to continue.
-    </p>
-  </div>
-{:else}
-  <div class="h-full flex flex-col">
-    <!-- Navbar -->
+<div class="h-full flex flex-col">
+  {#if $workspaceStore.isLoading}
+    <div class="flex-1 flex justify-center items-center">
+      <LoadingSpinner size="lg" />
+    </div>
+  {:else if !$workspaceStore.currentWorkspace}
+    <div class="bg-white p-8 rounded-lg shadow-md m-6">
+      <h2 class="text-xl font-semibold mb-4 text-gray-700">No Workspace Selected</h2>
+      <p class="text-gray-600">
+        Please select a workspace from the dropdown in the sidebar to continue.
+      </p>
+    </div>
+  {:else}
+    <!-- Navbar with view selector and settings -->
     <ContactsViewNavbar 
       views={$views}
       currentView={$currentView}
@@ -586,7 +641,7 @@
       on:openContactModal={handleOpenContactModal}
     />
     
-    <!-- Filter and Sort Bar -->
+    <!-- Filter, sort, and search bar -->
     <ContactsFilterSortBar 
       isFilterPopoverOpen={$isFilterPopoverOpen}
       isSortPopoverOpen={$isSortPopoverOpen}
@@ -606,19 +661,21 @@
       on:searchChanged={handleSearchChanged}
     />
     
-    <!-- Data Grid -->
+    <!-- Contacts data grid -->
     <ContactsDataGrid 
       contacts={$filteredContacts}
       isLoading={$isLoadingContacts}
       error={$contactsError}
-      visibleColumns={visibleColumns}
+      visibleColumns={$currentView ? Object.entries($currentView)
+        .filter(([key, value]) => value === true && !key.startsWith('_'))
+        .map(([key]) => key) : []}
       availableFields={$availableFields}
       on:viewContact={handleViewContact}
       on:editContact={handleEditContact}
       on:addContact={handleAddContact}
     />
     
-    <!-- Modals -->
+    <!-- Modals for contact and view management -->
     <ContactsViewModals 
       isContactModalOpen={$isContactModalOpen}
       isCreateViewModalOpen={$isCreateViewModalOpen}
@@ -636,5 +693,5 @@
       on:closeEditViewModal={() => isEditViewModalOpen.set(false)}
       on:closeDeleteViewModal={() => isDeleteViewModalOpen.set(false)}
     />
-  </div>
-{/if}
+  {/if}
+</div>
