@@ -385,7 +385,7 @@
   function addFilter() {
     filters.update(f => [
       ...f, 
-      { field: Object.keys($currentView).find(key => $currentView[key] === true) || 'first_name', operator: '=', value: '' }
+      { field: Object.keys($currentView || {}).find(key => ($currentView || {})[key] === true) || 'first_name', operator: '=', value: '' }
     ]);
   }
   
@@ -399,7 +399,7 @@
   function addSort() {
     sorting.update(s => [
       ...s, 
-      { field: Object.keys($currentView).find(key => $currentView[key] === true) || 'first_name', direction: 'asc' }
+      { field: Object.keys($currentView || {}).find(key => ($currentView || {})[key] === true) || 'first_name', direction: 'asc' }
     ]);
   }
   
@@ -531,3 +531,110 @@
     
     filteredContacts.set(result);
   }
+  
+  // When workspace changes, fetch views and contacts
+  $: if ($workspaceStore.currentWorkspace) {
+    fetchViews();
+    fetchContacts();
+  }
+  
+  // Get visible columns from current view
+  $: visibleColumns = $currentView ? 
+    Object.keys($currentView).filter(key => 
+      $currentView[key] === true && 
+      key !== 'id' && 
+      key !== 'workspace_id' && 
+      key !== 'view_name' && 
+      key !== 'created_at' && 
+      key !== 'updated_at' && 
+      key !== 'filters' && 
+      key !== 'sorting'
+    ) : [];
+</script>
+
+<svelte:head>
+  <title>Contacts | Engagement Portal</title>
+</svelte:head>
+
+{#if $workspaceStore.isLoading}
+  <div class="flex justify-center items-center h-64">
+    <LoadingSpinner size="lg" />
+  </div>
+{:else if !$workspaceStore.currentWorkspace}
+  <div class="bg-white p-8 rounded-lg shadow-md">
+    <h2 class="text-xl font-semibold mb-4 text-gray-700">No Workspace Selected</h2>
+    <p class="text-gray-600">
+      Please select a workspace from the dropdown in the sidebar to continue.
+    </p>
+  </div>
+{:else}
+  <div class="h-full flex flex-col">
+    <!-- Navbar -->
+    <ContactsViewNavbar 
+      views={$views}
+      currentView={$currentView}
+      viewsLoading={$viewsLoading}
+      viewsError={$viewsError}
+      isViewSelectOpen={$isViewSelectOpen}
+      isViewSettingsOpen={$isViewSettingsOpen}
+      availableFields={$availableFields}
+      on:selectView={handleSelectView}
+      on:toggleField={handleToggleField}
+      on:openCreateViewModal={handleOpenCreateViewModal}
+      on:openEditViewModal={handleOpenEditViewModal}
+      on:openDeleteViewModal={handleOpenDeleteViewModal}
+      on:openContactModal={handleOpenContactModal}
+    />
+    
+    <!-- Filter and Sort Bar -->
+    <ContactsFilterSortBar 
+      isFilterPopoverOpen={$isFilterPopoverOpen}
+      isSortPopoverOpen={$isSortPopoverOpen}
+      filters={$filters}
+      sorting={$sorting}
+      searchQuery={$searchQuery}
+      availableFields={$availableFields}
+      currentView={$currentView}
+      on:addFilter={handleAddFilter}
+      on:removeFilter={handleRemoveFilter}
+      on:moveFilter={handleMoveFilter}
+      on:addSort={handleAddSort}
+      on:removeSort={handleRemoveSort}
+      on:moveSort={handleMoveSort}
+      on:filterChanged={handleFilterChanged}
+      on:sortChanged={handleSortChanged}
+      on:searchChanged={handleSearchChanged}
+    />
+    
+    <!-- Data Grid -->
+    <ContactsDataGrid 
+      contacts={$filteredContacts}
+      isLoading={$isLoadingContacts}
+      error={$contactsError}
+      visibleColumns={visibleColumns}
+      availableFields={$availableFields}
+      on:viewContact={handleViewContact}
+      on:editContact={handleEditContact}
+      on:addContact={handleAddContact}
+    />
+    
+    <!-- Modals -->
+    <ContactsViewModals 
+      isContactModalOpen={$isContactModalOpen}
+      isCreateViewModalOpen={$isCreateViewModalOpen}
+      isEditViewModalOpen={$isEditViewModalOpen}
+      isDeleteViewModalOpen={$isDeleteViewModalOpen}
+      newViewName={$newViewName}
+      currentView={$currentView}
+      supabase={data.supabase}
+      on:closeContactModal={handleCloseContactModal}
+      on:contactCreated={handleContactCreated}
+      on:createView={createView}
+      on:updateView={updateView}
+      on:deleteView={deleteView}
+      on:closeCreateViewModal={() => isCreateViewModalOpen.set(false)}
+      on:closeEditViewModal={() => isEditViewModalOpen.set(false)}
+      on:closeDeleteViewModal={() => isDeleteViewModalOpen.set(false)}
+    />
+  </div>
+{/if}
