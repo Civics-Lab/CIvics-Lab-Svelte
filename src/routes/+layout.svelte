@@ -24,6 +24,6 @@
 	<title>User Management</title>
 </svelte:head>
 
-<div class="container">
+<div>
 	<slot />
 </div>
