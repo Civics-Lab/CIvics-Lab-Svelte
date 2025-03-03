@@ -28,7 +28,28 @@
   
   // View management
   const views = writable<any[]>([]);
-  const currentView = writable<any | null>(null);
+  // Use browser localStorage to persist the current view
+  const createPersistentViewStore = () => {
+    const storedViewId = typeof window !== 'undefined' 
+      ? localStorage.getItem('currentContactViewId') 
+      : null;
+    
+    const { subscribe, set, update } = writable<any | null>(null);
+    
+    return {
+      subscribe,
+      set: (view) => {
+        // Store the view ID in localStorage when set
+        if (view && view.id && typeof window !== 'undefined') {
+          localStorage.setItem('currentContactViewId', view.id);
+        }
+        set(view);
+      },
+      update
+    };
+  };
+  
+  const currentView = createPersistentViewStore();
   const newViewName = writable('');
   const viewsLoading = writable(false);
   const viewsError = writable<string | null>(null);
@@ -181,11 +202,32 @@
       
       if (fetchedViews && fetchedViews.length > 0) {
         views.set(fetchedViews);
-        currentView.set(fetchedViews[0]);
         
-        // Set filters and sorting from current view
-        filters.set(fetchedViews[0].filters || []);
-        sorting.set(fetchedViews[0].sorting || []);
+        // Try to restore the previously selected view from localStorage
+        const storedViewId = typeof window !== 'undefined' 
+          ? localStorage.getItem('currentContactViewId') 
+          : null;
+        
+        if (storedViewId) {
+          // Find the view with the stored ID
+          const savedView = fetchedViews.find(view => view.id === storedViewId);
+          if (savedView) {
+            currentView.set(savedView);
+            // Set filters and sorting from saved view
+            filters.set(savedView.filters || []);
+            sorting.set(savedView.sorting || []);
+          } else {
+            // If stored view is not found, use the first one
+            currentView.set(fetchedViews[0]);
+            filters.set(fetchedViews[0].filters || []);
+            sorting.set(fetchedViews[0].sorting || []);
+          }
+        } else {
+          // If no stored view, use the first one
+          currentView.set(fetchedViews[0]);
+          filters.set(fetchedViews[0].filters || []);
+          sorting.set(fetchedViews[0].sorting || []);
+        }
       } else {
         // Create a default view if none exists
         await createDefaultView();
