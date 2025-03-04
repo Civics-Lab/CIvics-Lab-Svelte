@@ -1,345 +1,998 @@
 <!-- src/lib/components/ContactFormModal.svelte -->
 <script lang="ts">
-    import { createEventDispatcher } from 'svelte';
-    import { writable } from 'svelte/store';
-    import Modal from './Modal.svelte';
-    import { toastStore } from '$lib/stores/toastStore';
-    import { workspaceStore } from '$lib/stores/workspaceStore';
-    import LoadingSpinner from './LoadingSpinner.svelte';
-    import type { TypedSupabaseClient } from '$lib/types/supabase';
+  import { createEventDispatcher } from 'svelte';
+  import { writable } from 'svelte/store';
+  import Modal from './Modal.svelte';
+  import { toastStore } from '$lib/stores/toastStore';
+  import { workspaceStore } from '$lib/stores/workspaceStore';
+  import LoadingSpinner from './LoadingSpinner.svelte';
+  import type { TypedSupabaseClient } from '$lib/types/supabase';
+  
+  export let isOpen = false;
+  export let supabase: TypedSupabaseClient;
+  
+  const dispatch = createEventDispatcher();
+  
+  // Form state for basic info
+  const formData = writable({
+    first_name: '',
+    middle_name: '',
+    last_name: '',
+    gender_id: '',
+    race_id: '',
+    pronouns: '',
+    vanid: '',
+    status: 'active' // Default to active
+  });
+  
+  // Multi-item sections
+  const emails = writable([{ email: '', status: 'active' }]);
+  const phoneNumbers = writable([{ phone_number: '', status: 'active' }]);
+  const addresses = writable([{ 
+    street_address: '', 
+    secondary_street_address: '', 
+    city: '', 
+    state_id: '', 
+    zip_code: '', 
+    status: 'active' 
+  }]);
+  const socialMedia = writable([{ 
+    social_media_account: '', 
+    service_type: 'facebook', 
+    status: 'active' 
+  }]);
+  const tags = writable([]);
+  const tagInput = writable('');
+  
+  // Loading and errors
+  const isSubmitting = writable(false);
+  const errors = writable<Record<string, string>>({});
+  
+  // Options for dropdowns
+  const genderOptions = writable<{id: string, gender: string}[]>([]);
+  const raceOptions = writable<{id: string, race: string}[]>([]);
+  const stateOptions = writable<{id: string, name: string, abbreviation: string}[]>([]);
+  const existingTags = writable<string[]>([]);
+  const filteredTags = writable<string[]>([]);
+  
+  // Social media service options
+  const socialMediaServices = [
+    { value: 'facebook', label: 'Facebook' },
+    { value: 'twitter', label: 'Twitter' },
+    { value: 'instagram', label: 'Instagram' },
+    { value: 'threads', label: 'Threads' },
+    { value: 'tiktok', label: 'TikTok' },
+    { value: 'bluesky', label: 'Bluesky' },
+    { value: 'youtube', label: 'YouTube' }
+  ];
+  
+  function validateForm() {
+    let valid = true;
+    let formErrors: Record<string, string> = {};
     
-    export let isOpen = false;
-    export let supabase: TypedSupabaseClient;
-    
-    const dispatch = createEventDispatcher();
-    
-    // Form state
-    const formData = writable({
-      first_name: '',
-      middle_name: '',
-      last_name: '',
-      email: '',
-      phone: '',
-      gender_id: '',
-      race_id: '',
-      pronouns: ''
-    });
-    
-    // Loading and errors
-    const isSubmitting = writable(false);
-    const errors = writable<Record<string, string>>({});
-    
-    // Options for dropdowns
-    const genderOptions = writable<{id: string, gender: string}[]>([]);
-    const raceOptions = writable<{id: string, race: string}[]>([]);
-    
-    function validateForm() {
-      let valid = true;
-      let formErrors: Record<string, string> = {};
-      
-      // Required fields
-      if (!$formData.first_name.trim()) {
-        formErrors.first_name = 'First name is required';
-        valid = false;
-      }
-      
-      if (!$formData.last_name.trim()) {
-        formErrors.last_name = 'Last name is required';
-        valid = false;
-      }
-      
-      // Email validation (if provided)
-      if ($formData.email.trim() && !isValidEmail($formData.email)) {
-        formErrors.email = 'Please enter a valid email address';
-        valid = false;
-      }
-      
-      errors.set(formErrors);
-      return valid;
+    // Required fields
+    if (!$formData.first_name.trim()) {
+      formErrors.first_name = 'First name is required';
+      valid = false;
     }
     
-    function isValidEmail(email: string) {
-      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    if (!$formData.last_name.trim()) {
+      formErrors.last_name = 'Last name is required';
+      valid = false;
     }
     
-    async function fetchOptions() {
-      try {
-        // Fetch gender options
-        const { data: genderData, error: genderError } = await supabase
-          .from('genders')
-          .select('id, gender');
-        
-        if (genderError) throw genderError;
-        genderOptions.set(genderData || []);
-        
-        // Fetch race options
-        const { data: raceData, error: raceError } = await supabase
-          .from('races')
-          .select('id, race');
-        
-        if (raceError) throw raceError;
-        raceOptions.set(raceData || []);
-        
-      } catch (error) {
-        console.error('Error fetching options:', error);
-        toastStore.error('Failed to load form options');
+    // Validate emails
+    if ($emails.length > 0) {
+      $emails.forEach((item, index) => {
+        if (item.email && !isValidEmail(item.email)) {
+          formErrors[`email_${index}`] = 'Please enter a valid email address';
+          valid = false;
+        }
+      });
+    }
+    
+    errors.set(formErrors);
+    return valid;
+  }
+  
+  function isValidEmail(email: string) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  }
+  
+  // Add field to multi-item sections
+  function addEmail() {
+    emails.update(items => [...items, { email: '', status: 'active' }]);
+  }
+  
+  function addPhoneNumber() {
+    phoneNumbers.update(items => [...items, { phone_number: '', status: 'active' }]);
+  }
+  
+  function addAddress() {
+    addresses.update(items => [...items, { 
+      street_address: '', 
+      secondary_street_address: '', 
+      city: '', 
+      state_id: '', 
+      zip_code: '', 
+      status: 'active' 
+    }]);
+  }
+  
+  function addSocialMedia() {
+    socialMedia.update(items => [...items, { 
+      social_media_account: '', 
+      service_type: 'facebook', 
+      status: 'active' 
+    }]);
+  }
+  
+  // Remove field from multi-item sections
+  function removeEmail(index: number) {
+    emails.update(items => items.filter((_, i) => i !== index));
+  }
+  
+  function removePhoneNumber(index: number) {
+    phoneNumbers.update(items => items.filter((_, i) => i !== index));
+  }
+  
+  function removeAddress(index: number) {
+    addresses.update(items => items.filter((_, i) => i !== index));
+  }
+  
+  function removeSocialMedia(index: number) {
+    socialMedia.update(items => items.filter((_, i) => i !== index));
+  }
+  
+  // Tag management
+  function addTag() {
+    if ($tagInput.trim()) {
+      if (!$tags.includes($tagInput.trim())) {
+        tags.update(items => [...items, $tagInput.trim()]);
       }
+      tagInput.set('');
+      filteredTags.set([]);
     }
+  }
+  
+  function removeTag(tag: string) {
+    tags.update(items => items.filter(item => item !== tag));
+  }
+  
+  function handleTagInputChange() {
+    if ($tagInput.trim()) {
+      filteredTags.set(
+        $existingTags.filter(tag => 
+          tag.toLowerCase().includes($tagInput.toLowerCase()) && 
+          !$tags.includes(tag)
+        ).slice(0, 5)
+      );
+    } else {
+      filteredTags.set([]);
+    }
+  }
+  
+  function selectTag(tag: string) {
+    if (!$tags.includes(tag)) {
+      tags.update(items => [...items, tag]);
+    }
+    tagInput.set('');
+    filteredTags.set([]);
+  }
+  
+  async function fetchOptions() {
+    try {
+      // Fetch gender options
+      const { data: genderData, error: genderError } = await supabase
+        .from('genders')
+        .select('id, gender')
+        .order('gender');
+      
+      if (genderError) throw genderError;
+      genderOptions.set(genderData || []);
+      
+      // Fetch race options
+      const { data: raceData, error: raceError } = await supabase
+        .from('races')
+        .select('id, race')
+        .order('race');
+      
+      if (raceError) throw raceError;
+      raceOptions.set(raceData || []);
+      
+      // Fetch state options
+      const { data: stateData, error: stateError } = await supabase
+        .from('states')
+        .select('id, name, abbreviation')
+        .order('name');
+      
+      if (stateError) throw stateError;
+      stateOptions.set(stateData || []);
+      
+      // Fetch existing tags
+      const { data: tagData, error: tagError } = await supabase
+        .from('contact_tags')
+        .select('tag')
+        .order('tag');
+      
+      if (tagError) throw tagError;
+      const uniqueTags = [...new Set(tagData?.map(t => t.tag) || [])];
+      existingTags.set(uniqueTags);
+      
+    } catch (error) {
+      console.error('Error fetching options:', error);
+      toastStore.error('Failed to load form options');
+    }
+  }
+  
+  async function handleSubmit() {
+    if (!validateForm()) return;
     
-    async function handleSubmit() {
-      if (!validateForm()) return;
+    isSubmitting.set(true);
+    errors.set({});
+    
+    try {
+      // Create contact
+      const contactData = {
+        ...$formData,
+        workspace_id: $workspaceStore.currentWorkspace?.id
+      };
       
-      isSubmitting.set(true);
-      errors.set({});
+      const { data: contact, error: contactError } = await supabase
+        .from('contacts')
+        .insert(contactData)
+        .select()
+        .single();
       
-      try {
-        // Create contact
-        const contactData = {
-          ...$formData,
-          workspace_id: $workspaceStore.currentWorkspace?.id
-        };
-        
-        const { data: contact, error: contactError } = await supabase
-          .from('contacts')
-          .insert(contactData)
-          .select()
-          .single();
-        
-        if (contactError) throw contactError;
-        
-        // If email is provided, add it to contact_emails
-        if ($formData.email.trim()) {
-          const { error: emailError } = await supabase
+      if (contactError) throw contactError;
+      
+      // Add emails
+      const validEmails = $emails.filter(item => item.email.trim());
+      if (validEmails.length > 0) {
+        const emailPromises = validEmails.map(item => {
+          return supabase
             .from('contact_emails')
             .insert({
               contact_id: contact.id,
-              email: $formData.email,
-              status: 'active'
+              email: item.email.trim(),
+              status: item.status
             });
-          
-          if (emailError) throw emailError;
-        }
+        });
         
-        // If phone is provided, add it to contact_phone_numbers
-        if ($formData.phone.trim()) {
-          const { error: phoneError } = await supabase
+        const emailResults = await Promise.all(emailPromises);
+        const emailErrors = emailResults.filter(result => result.error);
+        
+        if (emailErrors.length > 0) {
+          console.error('Some emails could not be added:', emailErrors);
+        }
+      }
+      
+      // Add phone numbers
+      const validPhones = $phoneNumbers.filter(item => item.phone_number.trim());
+      if (validPhones.length > 0) {
+        const phonePromises = validPhones.map(item => {
+          return supabase
             .from('contact_phone_numbers')
             .insert({
               contact_id: contact.id,
-              phone_number: $formData.phone,
-              status: 'active'
+              phone_number: item.phone_number.trim(),
+              status: item.status
             });
-          
-          if (phoneError) throw phoneError;
+        });
+        
+        const phoneResults = await Promise.all(phonePromises);
+        const phoneErrors = phoneResults.filter(result => result.error);
+        
+        if (phoneErrors.length > 0) {
+          console.error('Some phone numbers could not be added:', phoneErrors);
         }
-        
-        // Success toast and reset form
-        toastStore.success('Contact created successfully!');
-        resetForm();
-        
-        // Emit success event
-        dispatch('success', contact);
-        
-        // Close modal
-        handleClose();
-        
-      } catch (error) {
-        console.error('Error creating contact:', error);
-        toastStore.error('Failed to create contact');
-      } finally {
-        isSubmitting.set(false);
       }
-    }
-    
-    function handleClose() {
-      dispatch('close');
-    }
-    
-    function resetForm() {
-      formData.set({
-        first_name: '',
-        middle_name: '',
-        last_name: '',
-        email: '',
-        phone: '',
-        gender_id: '',
-        race_id: '',
-        pronouns: ''
-      });
-      errors.set({});
-    }
-    
-    // Fetch options when the component mounts and modal opens
-    $: if (isOpen) {
-      fetchOptions();
+      
+      // Add addresses
+      const validAddresses = $addresses.filter(addr => addr.street_address.trim() && addr.city.trim());
+      if (validAddresses.length > 0) {
+        const addressPromises = validAddresses.map(addr => {
+          return supabase
+            .from('contact_addresses')
+            .insert({
+              contact_id: contact.id,
+              street_address: addr.street_address.trim(),
+              secondary_street_address: addr.secondary_street_address.trim() || null,
+              city: addr.city.trim(),
+              state_id: addr.state_id || null,
+              zip_code_id: addr.zip_code.trim() || null,
+              status: addr.status
+            });
+        });
+        
+        const addressResults = await Promise.all(addressPromises);
+        const addressErrors = addressResults.filter(result => result.error);
+        
+        if (addressErrors.length > 0) {
+          console.error('Some addresses could not be added:', addressErrors);
+        }
+      }
+      
+      // Add social media accounts
+      const validSocial = $socialMedia.filter(item => item.social_media_account.trim());
+      if (validSocial.length > 0) {
+        const socialPromises = validSocial.map(item => {
+          return supabase
+            .from('contact_social_media_accounts')
+            .insert({
+              contact_id: contact.id,
+              social_media_account: item.social_media_account.trim(),
+              service_type: item.service_type,
+              status: item.status
+            });
+        });
+        
+        const socialResults = await Promise.all(socialPromises);
+        const socialErrors = socialResults.filter(result => result.error);
+        
+        if (socialErrors.length > 0) {
+          console.error('Some social media accounts could not be added:', socialErrors);
+        }
+      }
+      
+      // Add tags
+      if ($tags.length > 0) {
+        const tagPromises = $tags.map(tag => {
+          return supabase
+            .from('contact_tags')
+            .insert({
+              contact_id: contact.id,
+              tag: tag,
+              workspace_id: $workspaceStore.currentWorkspace?.id
+            });
+        });
+        
+        const tagResults = await Promise.all(tagPromises);
+        const tagErrors = tagResults.filter(result => result.error);
+        
+        if (tagErrors.length > 0) {
+          console.error('Some tags could not be added:', tagErrors);
+        }
+      }
+      
+      // Success toast with view contact button
+      toastStore.success(`Contact ${$formData.first_name} ${$formData.last_name} created successfully!`, 5000);
+      
       resetForm();
+      
+      // Emit success event with the new contact
+      dispatch('success', contact);
+      
+      // Close modal
+      handleClose();
+      
+    } catch (error) {
+      console.error('Error creating contact:', error);
+      toastStore.error('Failed to create contact');
+    } finally {
+      isSubmitting.set(false);
     }
-  </script>
+  }
   
-  <Modal 
-    isOpen={isOpen} 
-    title="Add New Contact" 
-    on:close={handleClose}
-    maxWidth="max-w-3xl"
-  >
-    <form on:submit|preventDefault={handleSubmit}>
-      <!-- Contact Information Section -->
-      <div class="mb-6">
-        <h2 class="text-lg font-medium text-gray-900 mb-4">Contact Information</h2>
-        <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
-          <div class="sm:col-span-2">
-            <label for="first_name" class="block text-sm font-medium text-gray-700">First Name*</label>
-            <div class="mt-1">
-              <input 
-                type="text" 
-                id="first_name" 
-                bind:value={$formData.first_name}
-                class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md {$errors.first_name ? 'border-red-300' : ''}"
-                disabled={$isSubmitting}
-              />
-            </div>
-            {#if $errors.first_name}
-              <p class="mt-1 text-sm text-red-600">{$errors.first_name}</p>
-            {/if}
+  function handleClose() {
+    dispatch('close');
+  }
+  
+  function resetForm() {
+    formData.set({
+      first_name: '',
+      middle_name: '',
+      last_name: '',
+      gender_id: '',
+      race_id: '',
+      pronouns: '',
+      vanid: '',
+      status: 'active'
+    });
+    
+    emails.set([{ email: '', status: 'active' }]);
+    phoneNumbers.set([{ phone_number: '', status: 'active' }]);
+    addresses.set([{ 
+      street_address: '', 
+      secondary_street_address: '', 
+      city: '', 
+      state_id: '', 
+      zip_code: '', 
+      status: 'active' 
+    }]);
+    socialMedia.set([{ 
+      social_media_account: '', 
+      service_type: 'facebook', 
+      status: 'active' 
+    }]);
+    tags.set([]);
+    tagInput.set('');
+    filteredTags.set([]);
+    errors.set({});
+  }
+  
+  // Fetch options when the component mounts and modal opens
+  $: if (isOpen) {
+    fetchOptions();
+    resetForm();
+  }
+  
+  // Watch for tag input changes
+  $: if ($tagInput !== undefined) {
+    handleTagInputChange();
+  }
+</script>
+
+<Modal 
+  isOpen={isOpen} 
+  title="Add New Contact" 
+  on:close={handleClose}
+  maxWidth="max-w-4xl"
+>
+  <form on:submit|preventDefault={handleSubmit} class="space-y-6">
+    <!-- Basic Information Section -->
+    <div>
+      <h2 class="text-lg font-medium text-gray-900 mb-4">Basic Information</h2>
+      <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
+        <div class="sm:col-span-2">
+          <label for="first_name" class="block text-sm font-medium text-gray-700">First Name*</label>
+          <div class="mt-1">
+            <input 
+              type="text" 
+              id="first_name" 
+              bind:value={$formData.first_name}
+              class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md {$errors.first_name ? 'border-red-300' : ''}"
+              disabled={$isSubmitting}
+            />
           </div>
-          
-          <div class="sm:col-span-2">
-            <label for="middle_name" class="block text-sm font-medium text-gray-700">Middle Name</label>
-            <div class="mt-1">
-              <input 
-                type="text" 
-                id="middle_name" 
-                bind:value={$formData.middle_name}
-                class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                disabled={$isSubmitting}
-              />
-            </div>
-          </div>
-          
-          <div class="sm:col-span-2">
-            <label for="last_name" class="block text-sm font-medium text-gray-700">Last Name*</label>
-            <div class="mt-1">
-              <input 
-                type="text" 
-                id="last_name" 
-                bind:value={$formData.last_name}
-                class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md {$errors.last_name ? 'border-red-300' : ''}"
-                disabled={$isSubmitting}
-              />
-            </div>
-            {#if $errors.last_name}
-              <p class="mt-1 text-sm text-red-600">{$errors.last_name}</p>
-            {/if}
-          </div>
-          
-          <div class="sm:col-span-3">
-            <label for="email" class="block text-sm font-medium text-gray-700">Email</label>
-            <div class="mt-1">
-              <input 
-                type="email" 
-                id="email" 
-                bind:value={$formData.email}
-                class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md {$errors.email ? 'border-red-300' : ''}"
-                disabled={$isSubmitting}
-              />
-            </div>
-            {#if $errors.email}
-              <p class="mt-1 text-sm text-red-600">{$errors.email}</p>
-            {/if}
-          </div>
-          
-          <div class="sm:col-span-3">
-            <label for="phone" class="block text-sm font-medium text-gray-700">Phone</label>
-            <div class="mt-1">
-              <input 
-                type="tel" 
-                id="phone" 
-                bind:value={$formData.phone}
-                class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                disabled={$isSubmitting}
-              />
-            </div>
+          {#if $errors.first_name}
+            <p class="mt-1 text-sm text-red-600">{$errors.first_name}</p>
+          {/if}
+        </div>
+        
+        <div class="sm:col-span-2">
+          <label for="middle_name" class="block text-sm font-medium text-gray-700">Middle Name</label>
+          <div class="mt-1">
+            <input 
+              type="text" 
+              id="middle_name" 
+              bind:value={$formData.middle_name}
+              class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+              disabled={$isSubmitting}
+            />
           </div>
         </div>
+        
+        <div class="sm:col-span-2">
+          <label for="last_name" class="block text-sm font-medium text-gray-700">Last Name*</label>
+          <div class="mt-1">
+            <input 
+              type="text" 
+              id="last_name" 
+              bind:value={$formData.last_name}
+              class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md {$errors.last_name ? 'border-red-300' : ''}"
+              disabled={$isSubmitting}
+            />
+          </div>
+          {#if $errors.last_name}
+            <p class="mt-1 text-sm text-red-600">{$errors.last_name}</p>
+          {/if}
+        </div>
+        
+        <div class="sm:col-span-2">
+          <label for="gender" class="block text-sm font-medium text-gray-700">Gender</label>
+          <div class="mt-1">
+            <select 
+              id="gender" 
+              bind:value={$formData.gender_id}
+              class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+              disabled={$isSubmitting}
+            >
+              <option value="">Select Gender</option>
+              {#each $genderOptions as option}
+                <option value={option.id}>{option.gender}</option>
+              {/each}
+            </select>
+          </div>
+        </div>
+        
+        <div class="sm:col-span-2">
+          <label for="race" class="block text-sm font-medium text-gray-700">Race</label>
+          <div class="mt-1">
+            <select 
+              id="race" 
+              bind:value={$formData.race_id}
+              class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+              disabled={$isSubmitting}
+            >
+              <option value="">Select Race</option>
+              {#each $raceOptions as option}
+                <option value={option.id}>{option.race}</option>
+              {/each}
+            </select>
+          </div>
+        </div>
+        
+        <div class="sm:col-span-2">
+          <label for="pronouns" class="block text-sm font-medium text-gray-700">Pronouns</label>
+          <div class="mt-1">
+            <input 
+              type="text" 
+              id="pronouns" 
+              bind:value={$formData.pronouns}
+              class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+              disabled={$isSubmitting}
+              placeholder="e.g., she/her, they/them"
+            />
+          </div>
+        </div>
+        
+        <div class="sm:col-span-2">
+          <label for="vanid" class="block text-sm font-medium text-gray-700">VAN ID</label>
+          <div class="mt-1">
+            <input 
+              type="text" 
+              id="vanid" 
+              bind:value={$formData.vanid}
+              class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+              disabled={$isSubmitting}
+            />
+          </div>
+        </div>
+        
+        <div class="sm:col-span-2">
+          <label for="status" class="block text-sm font-medium text-gray-700">Status</label>
+          <div class="mt-1">
+            <select 
+              id="status" 
+              bind:value={$formData.status}
+              class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+              disabled={$isSubmitting}
+            >
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="deceased">Deceased</option>
+              <option value="moved">Moved</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Email Addresses Section -->
+    <div>
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-medium text-gray-900">Email Addresses</h2>
+        <button
+          type="button"
+          class="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800"
+          on:click={addEmail}
+          disabled={$isSubmitting}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+          Add Email
+        </button>
       </div>
       
-      <!-- Additional Information Section -->
-      <div>
-        <h2 class="text-lg font-medium text-gray-900 mb-4">Additional Information</h2>
-        <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
-          <div class="sm:col-span-2">
-            <label for="gender" class="block text-sm font-medium text-gray-700">Gender</label>
-            <div class="mt-1">
-              <select 
-                id="gender" 
-                bind:value={$formData.gender_id}
-                class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                disabled={$isSubmitting}
-              >
-                <option value="">Select Gender</option>
-                {#each $genderOptions as option}
-                  <option value={option.id}>{option.gender}</option>
-                {/each}
-              </select>
-            </div>
-          </div>
+      {#each $emails as email, i}
+        <div class="border rounded-md p-4 mb-4 bg-gray-50 relative">
+          {#if i > 0}
+            <button 
+              type="button" 
+              class="absolute top-2 right-2 text-gray-400 hover:text-red-600" 
+              on:click={() => removeEmail(i)}
+              disabled={$isSubmitting}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          {/if}
           
-          <div class="sm:col-span-2">
-            <label for="race" class="block text-sm font-medium text-gray-700">Race</label>
-            <div class="mt-1">
-              <select 
-                id="race" 
-                bind:value={$formData.race_id}
-                class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                disabled={$isSubmitting}
-              >
-                <option value="">Select Race</option>
-                {#each $raceOptions as option}
-                  <option value={option.id}>{option.race}</option>
-                {/each}
-              </select>
+          <div class="grid grid-cols-1 gap-y-3 gap-x-4 sm:grid-cols-6">
+            <div class="sm:col-span-4">
+              <label for="email_{i}" class="block text-sm font-medium text-gray-700">Email Address</label>
+              <div class="mt-1">
+                <input 
+                  type="email" 
+                  id="email_{i}" 
+                  bind:value={email.email}
+                  class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md {$errors[`email_${i}`] ? 'border-red-300' : ''}"
+                  disabled={$isSubmitting}
+                />
+              </div>
+              {#if $errors[`email_${i}`]}
+                <p class="mt-1 text-sm text-red-600">{$errors[`email_${i}`]}</p>
+              {/if}
             </div>
-          </div>
-          
-          <div class="sm:col-span-2">
-            <label for="pronouns" class="block text-sm font-medium text-gray-700">Pronouns</label>
-            <div class="mt-1">
-              <input 
-                type="text" 
-                id="pronouns" 
-                bind:value={$formData.pronouns}
-                class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                disabled={$isSubmitting}
-              />
+            
+            <div class="sm:col-span-2">
+              <label for="email_status_{i}" class="block text-sm font-medium text-gray-700">Status</label>
+              <div class="mt-1">
+                <select 
+                  id="email_status_{i}" 
+                  bind:value={email.status}
+                  class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                  disabled={$isSubmitting}
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="bounced">Bounced</option>
+                  <option value="unsubscribed">Unsubscribed</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    </form>
+      {/each}
+    </div>
     
-    <svelte:fragment slot="footer">
-      <button
-        type="button"
-        class="px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-        on:click={handleClose}
-        disabled={$isSubmitting}
-      >
-        Cancel
-      </button>
-      <button
-        type="button"
-        class="px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-        on:click={handleSubmit}
-        disabled={$isSubmitting}
-      >
-        {#if $isSubmitting}
-          <div class="flex items-center">
-            <LoadingSpinner size="sm" color="white" />
-            <span class="ml-2">Saving...</span>
+    <!-- Phone Numbers Section -->
+    <div>
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-medium text-gray-900">Phone Numbers</h2>
+        <button
+          type="button"
+          class="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800"
+          on:click={addPhoneNumber}
+          disabled={$isSubmitting}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+          Add Phone
+        </button>
+      </div>
+      
+      {#each $phoneNumbers as phone, i}
+        <div class="border rounded-md p-4 mb-4 bg-gray-50 relative">
+          {#if i > 0}
+            <button 
+              type="button" 
+              class="absolute top-2 right-2 text-gray-400 hover:text-red-600" 
+              on:click={() => removePhoneNumber(i)}
+              disabled={$isSubmitting}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          {/if}
+          
+          <div class="grid grid-cols-1 gap-y-3 gap-x-4 sm:grid-cols-6">
+            <div class="sm:col-span-4">
+              <label for="phone_{i}" class="block text-sm font-medium text-gray-700">Phone Number</label>
+              <div class="mt-1">
+                <input 
+                  type="tel" 
+                  id="phone_{i}" 
+                  bind:value={phone.phone_number}
+                  class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                  disabled={$isSubmitting}
+                />
+              </div>
+            </div>
+            
+            <div class="sm:col-span-2">
+              <label for="phone_status_{i}" class="block text-sm font-medium text-gray-700">Status</label>
+              <div class="mt-1">
+                <select 
+                  id="phone_status_{i}" 
+                  bind:value={phone.status}
+                  class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                  disabled={$isSubmitting}
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="wrong number">Wrong Number</option>
+                  <option value="disconnected">Disconnected</option>
+                </select>
+              </div>
+            </div>
           </div>
-        {:else}
-          Save Contact
-        {/if}
-      </button>
-    </svelte:fragment>
-  </Modal>
+        </div>
+      {/each}
+    </div>
+    
+    <!-- Addresses Section -->
+    <div>
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-medium text-gray-900">Addresses</h2>
+        <button
+          type="button"
+          class="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800"
+          on:click={addAddress}
+          disabled={$isSubmitting}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+          Add Address
+        </button>
+      </div>
+      
+      {#each $addresses as address, i}
+        <div class="border rounded-md p-4 mb-4 bg-gray-50 relative">
+          {#if i > 0}
+            <button 
+              type="button" 
+              class="absolute top-2 right-2 text-gray-400 hover:text-red-600" 
+              on:click={() => removeAddress(i)}
+              disabled={$isSubmitting}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          {/if}
+          
+          <div class="grid grid-cols-1 gap-y-3 gap-x-4 sm:grid-cols-6">
+            <div class="sm:col-span-6">
+              <label for="street_{i}" class="block text-sm font-medium text-gray-700">Street Address</label>
+              <div class="mt-1">
+                <input 
+                  type="text" 
+                  id="street_{i}" 
+                  bind:value={address.street_address}
+                  class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                  disabled={$isSubmitting}
+                />
+              </div>
+            </div>
+            
+            <div class="sm:col-span-6">
+              <label for="street2_{i}" class="block text-sm font-medium text-gray-700">Secondary Address</label>
+              <div class="mt-1">
+                <input 
+                  type="text" 
+                  id="street2_{i}" 
+                  bind:value={address.secondary_street_address}
+                  class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                  disabled={$isSubmitting}
+                  placeholder="Apt, Suite, Unit, etc."
+                />
+              </div>
+            </div>
+            
+            <div class="sm:col-span-2">
+              <label for="city_{i}" class="block text-sm font-medium text-gray-700">City</label>
+              <div class="mt-1">
+                <input 
+                  type="text" 
+                  id="city_{i}" 
+                  bind:value={address.city}
+                  class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                  disabled={$isSubmitting}
+                />
+              </div>
+            </div>
+            
+            <div class="sm:col-span-2">
+              <label for="state_{i}" class="block text-sm font-medium text-gray-700">State</label>
+              <div class="mt-1">
+                <select 
+                  id="state_{i}" 
+                  bind:value={address.state_id}
+                  class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                  disabled={$isSubmitting}
+                >
+                  <option value="">Select State</option>
+                  {#each $stateOptions as option}
+                    <option value={option.id}>{option.name}</option>
+                  {/each}
+                </select>
+              </div>
+            </div>
+            
+            <div class="sm:col-span-2">
+              <label for="zip_{i}" class="block text-sm font-medium text-gray-700">ZIP Code</label>
+              <div class="mt-1">
+                <input 
+                  type="text" 
+                  id="zip_{i}" 
+                  bind:value={address.zip_code}
+                  class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                  disabled={$isSubmitting}
+                />
+              </div>
+            </div>
+            
+            <div class="sm:col-span-2">
+              <label for="address_status_{i}" class="block text-sm font-medium text-gray-700">Status</label>
+              <div class="mt-1">
+                <select 
+                  id="address_status_{i}" 
+                  bind:value={address.status}
+                  class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                  disabled={$isSubmitting}
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="moved">Moved</option>
+                  <option value="wrong address">Wrong Address</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      {/each}
+    </div>
+    
+    <!-- Social Media Section -->
+    <div>
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-lg font-medium text-gray-900">Social Media Accounts</h2>
+        <button
+          type="button"
+          class="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800"
+          on:click={addSocialMedia}
+          disabled={$isSubmitting}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+          Add Account
+        </button>
+      </div>
+      
+      {#each $socialMedia as social, i}
+        <div class="border rounded-md p-4 mb-4 bg-gray-50 relative">
+          {#if i > 0}
+            <button 
+              type="button" 
+              class="absolute top-2 right-2 text-gray-400 hover:text-red-600" 
+              on:click={() => removeSocialMedia(i)}
+              disabled={$isSubmitting}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          {/if}
+          
+          <div class="grid grid-cols-1 gap-y-3 gap-x-4 sm:grid-cols-6">
+            <div class="sm:col-span-2">
+              <label for="social_service_{i}" class="block text-sm font-medium text-gray-700">Platform</label>
+              <div class="mt-1">
+                <select
+                  id="social_service_{i}"
+                  bind:value={social.service_type}
+                  class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                  disabled={$isSubmitting}
+                >
+                  {#each socialMediaServices as service}
+                    <option value={service.value}>{service.label}</option>
+                  {/each}
+                </select>
+              </div>
+            </div>
+            
+            <div class="sm:col-span-2">
+              <label for="social_account_{i}" class="block text-sm font-medium text-gray-700">Username/Handle</label>
+              <div class="mt-1">
+                <input 
+                  type="text" 
+                  id="social_account_{i}" 
+                  bind:value={social.social_media_account}
+                  class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                  disabled={$isSubmitting}
+                />
+              </div>
+            </div>
+            
+            <div class="sm:col-span-2">
+              <label for="social_status_{i}" class="block text-sm font-medium text-gray-700">Status</label>
+              <div class="mt-1">
+                <select
+                  id="social_status_{i}"
+                  bind:value={social.status}
+                  class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                  disabled={$isSubmitting}
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="blocked">Blocked</option>
+                  <option value="deleted">Deleted</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      {/each}
+    </div>
+    
+    <!-- Tags Section -->
+    <div>
+      <h2 class="text-lg font-medium text-gray-900 mb-4">Tags</h2>
+      <div class="mb-4">
+        <div class="flex items-center">
+          <div class="flex-grow mr-2 relative">
+            <input
+              type="text"
+              placeholder="Add a tag..."
+              bind:value={$tagInput}
+              class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+              disabled={$isSubmitting}
+              on:keydown={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
+            />
+            
+            <!-- Tag suggestions dropdown -->
+            {#if $filteredTags.length > 0}
+              <div class="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto">
+                {#each $filteredTags as tag}
+                  <button
+                    type="button"
+                    class="block w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+                    on:click={() => selectTag(tag)}
+                  >
+                    {tag}
+                  </button>
+                {/each}
+              </div>
+            {/if}
+          </div>
+          
+          <button
+            type="button"
+            class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            on:click={addTag}
+            disabled={$isSubmitting || !$tagInput.trim()}
+          >
+            Add
+          </button>
+        </div>
+        
+        <p class="mt-2 text-sm text-gray-500">
+          Add tags to categorize this contact. Press Enter or click Add to create a tag.
+        </p>
+      </div>
+      
+      {#if $tags.length > 0}
+        <div class="flex flex-wrap gap-2 mt-2">
+          {#each $tags as tag}
+            <div class="inline-flex items-center px-2 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+              {tag}
+              <button
+                type="button"
+                class="ml-1 rounded-full text-blue-600 hover:text-blue-800 focus:outline-none"
+                on:click={() => removeTag(tag)}
+              >
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  </form>
+  
+  <svelte:fragment slot="footer">
+    <button
+      type="button"
+      class="px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+      on:click={handleClose}
+      disabled={$isSubmitting}
+    >
+      Cancel
+    </button>
+    <button
+      type="button"
+      class="ml-3 px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+      on:click={handleSubmit}
+      disabled={$isSubmitting}
+    >
+      {#if $isSubmitting}
+        <div class="flex items-center">
+          <LoadingSpinner size="sm" color="white" />
+          <span class="ml-2">Saving...</span>
+        </div>
+      {:else}
+        Save Contact
+      {/if}
+    </button>
+  </svelte:fragment>
+</Modal>
