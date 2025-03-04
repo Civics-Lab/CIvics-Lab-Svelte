@@ -3,7 +3,7 @@
   import { onMount } from 'svelte';
   import { writable } from 'svelte/store';
   import { workspaceStore } from '$lib/stores/workspaceStore';
-  import { toastStore } from '$lib/stores/toastStore'; // Add this import
+  import { toastStore } from '$lib/stores/toastStore';
   import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
   import type { PageData } from './$types';
   
@@ -127,6 +127,10 @@
     fetchContacts();
   }
   
+  function handleContactUpdated() {
+    fetchContacts();
+  }
+  
   function handleAddFilter() {
     addFilter();
   }
@@ -172,13 +176,13 @@
   }
   
   function handleViewContact(event) {
-    const contact = event.detail;
-    window.location.href = `/engage/contacts/${contact.id}`;
+    // This is now handled directly by the ContactsDataGrid component
+    // which now includes the ContactDetailsSheet
   }
   
   function handleEditContact(event) {
-    // Implementation for edit contact
-    console.log('Edit contact:', event.detail);
+    // This is now handled directly by the ContactsDataGrid component
+    // which now includes the ContactDetailsSheet
   }
   
   function handleAddContact() {
@@ -342,10 +346,11 @@
         sorting.set(refreshedView.sorting || []);
       }
       
+      toastStore.success('View created successfully');
+      
     } catch (error) {
       console.error('Error creating view:', error);
-      // Handle error without toast if needed
-      alert('Failed to create view');
+      toastStore.error('Failed to create view');
     }
   }
   
@@ -387,10 +392,12 @@
       if ($isEditViewModalOpen) {
         isEditViewModalOpen.set(false);
         newViewName.set('');
+        toastStore.success('View updated successfully');
       }
       
     } catch (error) {
       console.error('Error updating view:', error);
+      toastStore.error('Failed to update view');
     }
   }
   
@@ -419,9 +426,11 @@
       }
       
       isDeleteViewModalOpen.set(false);
+      toastStore.success('View deleted successfully');
       
     } catch (error) {
       console.error('Error deleting view:', error);
+      toastStore.error('Failed to delete view');
     }
   }
   
@@ -452,6 +461,7 @@
       
     } catch (error) {
       console.error('Error toggling field:', error);
+      toastStore.error('Failed to update view');
     }
   }
   
@@ -727,7 +737,7 @@
       on:searchChanged={handleSearchChanged}
     />
     
-    <!-- Contacts data grid -->
+    <!-- Contacts data grid with details sheet integrated -->
     <ContactsDataGrid 
       contacts={$filteredContacts}
       isLoading={$isLoadingContacts}
@@ -736,9 +746,9 @@
         .filter(([key, value]) => value === true && !key.startsWith('_'))
         .map(([key]) => key) : []}
       availableFields={$availableFields}
-      on:viewContact={handleViewContact}
-      on:editContact={handleEditContact}
+      supabase={data.supabase}
       on:addContact={handleAddContact}
+      on:contactUpdated={handleContactUpdated}
     />
     
     <!-- Modals for contact and view management -->
