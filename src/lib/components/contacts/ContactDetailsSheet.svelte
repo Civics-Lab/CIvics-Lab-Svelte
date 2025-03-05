@@ -103,7 +103,8 @@
     }
   }
   
-  // Fetch contact details
+  // Updated ContactDetailsSheet.svelte fetchContactDetails function
+
   async function fetchContactDetails() {
     if (!contactId) return;
     
@@ -111,20 +112,32 @@
     error.set(null);
     
     try {
+      console.log('Fetching contact with ID:', contactId);
+      
       // Fetch contact details
       const { data, error: fetchError } = await supabase
         .rpc('get_contact_details', { contact_uuid: contactId });
       
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        console.error('Error response from get_contact_details:', fetchError);
+        throw fetchError;
+      }
+      
+      console.log('Contact data received:', data);
       
       if (data && data.length > 0) {
         const contactData = data[0];
         
         // Set basic info
+        const nameParts = contactData.full_name.split(' ');
+        const firstName = nameParts[0] || '';
+        const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
+        const middleName = nameParts.length > 2 ? nameParts.slice(1, -1).join(' ') : '';
+        
         formData.set({
-          first_name: contactData.full_name.split(' ')[0] || '',
-          last_name: contactData.full_name.split(' ').slice(-1)[0] || '',
-          middle_name: contactData.full_name.split(' ').slice(1, -1).join(' ') || '',
+          first_name: firstName,
+          last_name: lastName,
+          middle_name: middleName,
           gender_id: contactData.gender_id || '',
           race_id: contactData.race_id || '',
           pronouns: contactData.pronouns || '',
@@ -136,55 +149,55 @@
         originalData.set(JSON.parse(JSON.stringify($formData)));
         
         // Set emails
-        if (contactData.emails && Array.isArray(contactData.emails)) {
-          emails.set(contactData.emails.map(email => ({
-            id: email.id,
-            email: email.email,
-            status: email.status
-          })));
+        if (contactData.emails) {
+          emails.set(Array.isArray(contactData.emails) ? contactData.emails : []);
+        } else {
+          emails.set([]);
         }
         
         // Set phone numbers
-        if (contactData.phone_numbers && Array.isArray(contactData.phone_numbers)) {
-          phoneNumbers.set(contactData.phone_numbers.map(phone => ({
-            id: phone.id,
-            phone_number: phone.phone_number,
-            status: phone.status
-          })));
+        if (contactData.phone_numbers) {
+          phoneNumbers.set(Array.isArray(contactData.phone_numbers) ? contactData.phone_numbers : []);
+        } else {
+          phoneNumbers.set([]);
         }
         
         // Set addresses
-        if (contactData.addresses && Array.isArray(contactData.addresses)) {
-          addresses.set(contactData.addresses.map(address => ({
+        if (contactData.addresses) {
+          addresses.set(Array.isArray(contactData.addresses) ? contactData.addresses.map(address => ({
             id: address.id,
-            street_address: address.street_address,
+            street_address: address.street_address || '',
             secondary_street_address: address.secondary_street_address || '',
-            city: address.city,
-            state_id: address.state_id,
-            zip_code: address.zip_code_id,
-            status: address.status
-          })));
+            city: address.city || '',
+            state_id: address.state_id || '',
+            zip_code: address.zip_code_id || '', // This is now the ZIP code name
+            status: address.status || 'active'
+          })) : []);
+        } else {
+          addresses.set([]);
         }
         
         // Set social media
-        if (contactData.social_media && Array.isArray(contactData.social_media)) {
-          socialMedia.set(contactData.social_media.map(social => ({
-            id: social.id,
-            social_media_account: social.social_media_account,
-            service_type: social.service_type,
-            status: social.status
-          })));
+        if (contactData.social_media) {
+          socialMedia.set(Array.isArray(contactData.social_media) ? contactData.social_media : []);
+        } else {
+          socialMedia.set([]);
         }
         
         // Set tags
-        if (contactData.tags && Array.isArray(contactData.tags)) {
-          tags.set(contactData.tags.map(tag => tag.tag));
+        if (contactData.tags) {
+          tags.set(Array.isArray(contactData.tags) ? contactData.tags.map(tag => tag.tag) : []);
+        } else {
+          tags.set([]);
         }
+      } else {
+        console.warn('No contact data returned for ID:', contactId);
+        error.set('Contact not found');
       }
       
     } catch (err) {
       console.error('Error fetching contact details:', err);
-      error.set('Failed to load contact details');
+      error.set('Failed to load contact details: ' + (err.message || 'Unknown error'));
     } finally {
       isLoading.set(false);
     }
