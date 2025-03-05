@@ -1,4 +1,4 @@
-// src/lib/components/contacts/ContactDetailsSheet/ContactAddresses.svelte
+<!-- src/lib/components/contacts/ContactDetailsSheet/ContactAddresses.svelte -->
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   
@@ -145,9 +145,13 @@
               disabled={isSaving}
             >
               <option value="">Select State</option>
-              {#each $stateOptions as option}
-                <option value={option.id}>{option.name}</option>
-              {/each}
+              {#if $stateOptions && $stateOptions.length > 0}
+                {#each $stateOptions as option}
+                  <option value={option.id}>{option.name} ({option.abbreviation})</option>
+                {/each}
+              {:else}
+                <option value="" disabled>Loading states...</option>
+              {/if}
             </select>
           </div>
         </div>
@@ -162,7 +166,11 @@
               on:input={(e) => updateAddress(i, 'zip_code', e.target.value)}
               class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
               disabled={isSaving}
+              placeholder="Enter ZIP code"
             />
+            <p class="mt-1 text-xs text-gray-500">
+              Enter ZIP code directly - it will be linked or created automatically
+            </p>
           </div>
         </div>
         

@@ -291,25 +291,69 @@
       // Add addresses
       const validAddresses = $addresses.filter(addr => addr.street_address.trim() && addr.city.trim());
       if (validAddresses.length > 0) {
-        const addressPromises = validAddresses.map(addr => {
-          return supabase
-            .from('contact_addresses')
-            .insert({
-              contact_id: contact.id,
-              street_address: addr.street_address.trim(),
-              secondary_street_address: addr.secondary_street_address.trim() || null,
-              city: addr.city.trim(),
-              state_id: addr.state_id || null,
-              zip_code_id: addr.zip_code.trim() || null,
-              status: addr.status
-            });
-        });
-        
-        const addressResults = await Promise.all(addressPromises);
-        const addressErrors = addressResults.filter(result => result.error);
-        
-        if (addressErrors.length > 0) {
-          console.error('Some addresses could not be added:', addressErrors);
+        // Process addresses one by one
+        for (const addr of validAddresses) {
+          let zip_code_id = null;
+          
+          // Get or create zip code if provided
+          if (addr.zip_code && addr.zip_code.trim()) {
+            // Try to find the zip code first
+            const { data: zipData, error: zipError } = await supabase
+              .from('zip_codes')
+              .select('id')
+              .eq('name', addr.zip_code.trim())
+              .maybeSingle();
+            
+            if (!zipError && zipData) {
+              // Use existing zip code
+              zip_code_id = zipData.id;
+            } else {
+              // Create a new zip code
+              try {
+                // First get the state info if available
+                let state_id = addr.state_id || null;
+                
+                // Create a new zip code record
+                const { data: newZipCode, error: zipCreateError } = await supabase
+                  .from('zip_codes')
+                  .insert({
+                    name: addr.zip_code.trim(),
+                    state_id: state_id
+                  })
+                  .select('id')
+                  .single();
+                
+                if (zipCreateError) {
+                  console.error('Error creating zip code:', zipCreateError);
+                } else {
+                  zip_code_id = newZipCode.id;
+                }
+              } catch (err) {
+                console.error('Error in zip code creation process:', err);
+              }
+            }
+          }
+          
+          // Now create the address with the zip code
+          try {
+            const { error: addressError } = await supabase
+              .from('contact_addresses')
+              .insert({
+                contact_id: contact.id,
+                street_address: addr.street_address.trim(),
+                secondary_street_address: addr.secondary_street_address.trim() || null,
+                city: addr.city.trim(),
+                state_id: addr.state_id || null,
+                zip_code_id: zip_code_id,
+                status: addr.status
+              });
+              
+            if (addressError) {
+              console.error('Error adding address:', addressError);
+            }
+          } catch (addressErr) {
+            console.error('Error in address creation process:', addressErr);
+          }
         }
       }
       
