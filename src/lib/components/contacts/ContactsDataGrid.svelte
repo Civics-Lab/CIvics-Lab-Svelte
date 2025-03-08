@@ -3,6 +3,7 @@
   import { createEventDispatcher, onMount } from 'svelte';
   import { writable } from 'svelte/store';
   import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+  import ContactDetailsSheet from '$lib/components/contacts/ContactDetailsSheet.svelte';
   import type { TypedSupabaseClient } from '$lib/types/supabase';
   
   // Props
@@ -18,6 +19,10 @@
   let startX = 0;
   let startWidth = 0;
   let currentColumn = null;
+  
+  // Contact details sheet state
+  const isContactDetailsOpen = writable(false);
+  const selectedContactId = writable<string | null>(null);
   
   const dispatch = createEventDispatcher();
   
@@ -57,18 +62,33 @@
     return field ? field.label : columnId;
   }
   
-  function editContact(contact) {
-    // Dispatch an event to the parent component to handle
-    dispatch('viewContact', { id: contact.id });
+  function viewContact(contact, e) {
+    // Prevent the event from bubbling up to the tr click handler
+    if (e) e.stopPropagation();
+    
+    selectedContactId.set(contact.id);
+    isContactDetailsOpen.set(true);
+  }
+  
+  function editContact(contact, e) {
+    // Prevent the event from bubbling up to the tr click handler
+    if (e) e.stopPropagation();
+    
+    selectedContactId.set(contact.id);
+    isContactDetailsOpen.set(true);
   }
   
   function addContact() {
     dispatch('addContact');
   }
-
-  function viewContact(contact) {
-    console.log('Dispatching viewContact event for contact:', contact);
-    dispatch('viewContact', { id: contact.id });
+  
+  function handleContactUpdated() {
+    dispatch('contactUpdated');
+  }
+  
+  function closeContactDetails() {
+    isContactDetailsOpen.set(false);
+    selectedContactId.set(null);
   }
   
   onMount(() => {
@@ -79,7 +99,7 @@
   });
 </script>
 
-<div class="flex-1 overflow-auto">
+<div class="flex-1 overflow-auto relative">
   <div class="bg-white rounded-lg shadow overflow-hidden">
     {#if isLoading}
       <div class="flex justify-center items-center py-20">
@@ -170,19 +190,13 @@
                 <td class="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <button 
                     class="text-blue-600 hover:text-blue-900 mr-3"
-                    on:click={(e) => {
-                      e.stopPropagation();
-                      viewContact(contact);
-                    }}
+                    on:click={(e) => viewContact(contact, e)}
                   >
                     View
                   </button>
                   <button 
                     class="text-gray-600 hover:text-gray-900"
-                    on:click={(e) => {
-                      e.stopPropagation();
-                      editContact(contact);
-                    }}
+                    on:click={(e) => editContact(contact, e)}
                   >
                     Edit
                   </button>
@@ -195,3 +209,14 @@
     {/if}
   </div>
 </div>
+
+<!-- Contact Details Sheet -->
+{#if $isContactDetailsOpen}
+  <ContactDetailsSheet 
+    isOpen={$isContactDetailsOpen}
+    contactId={$selectedContactId}
+    {supabase}
+    on:close={closeContactDetails}
+    on:updated={handleContactUpdated}
+  />
+{/if}
