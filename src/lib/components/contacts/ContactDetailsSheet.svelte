@@ -2,7 +2,7 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
   import { writable } from 'svelte/store';
-  import { fly } from 'svelte/transition';
+  import { fade, fly } from 'svelte/transition';
   import { toastStore } from '$lib/stores/toastStore';
   import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
   import type { TypedSupabaseClient } from '$lib/types/supabase';
@@ -102,8 +102,6 @@
       error.set('Failed to load form options');
     }
   }
-  
-  // Updated ContactDetailsSheet.svelte fetchContactDetails function
 
   async function fetchContactDetails() {
     if (!contactId) return;
@@ -506,165 +504,170 @@
 
 {#if isOpen}
   <div class="fixed inset-0 z-50 overflow-hidden">
-    <!-- Backdrop -->
+    <!-- Backdrop overlay -->
     <div 
-      class="absolute inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
+      class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
       on:click={handleClose}
-      transition:fly={{ duration: 200, opacity: 0 }}
+      in:fade={{ duration: 200 }}
+      out:fade={{ duration: 150 }}
     ></div>
     
-    <!-- Sheet panel -->
-    <div 
-      class="absolute inset-y-0 right-0 max-w-2xl w-full flex"
-      transition:fly={{ duration: 300, x: '100%' }}
+    <!-- Panel container -->
+    <section 
+      class="absolute inset-y-0 right-0 pl-10 max-w-full flex"
+      in:fly={{ x: 400, duration: 300 }}
+      out:fly={{ x: 400, duration: 200 }}
     >
-      <div class="h-full w-full flex flex-col bg-white shadow-xl overflow-y-scroll">
-        <!-- Header -->
-        <div class="px-4 py-6 bg-gray-50 sm:px-6 sticky top-0 z-10 border-b">
-          <div class="flex items-start justify-between">
-            <div>
-              <h2 class="text-lg font-medium text-gray-900">
-                {#if $isLoading}
-                  Loading...
-                {:else if $error}
-                  Error Loading Contact
-                {:else}
-                  {$formData.first_name} {$formData.last_name}
-                {/if}
-              </h2>
-              <p class="mt-1 text-sm text-gray-500">
-                {#if $hasChanges}
-                  You have unsaved changes
-                {:else}
-                  Contact details
-                {/if}
-              </p>
+      <!-- Side drawer panel -->
+      <div class="relative w-screen max-w-md">
+        <div class="h-full flex flex-col bg-white shadow-xl overflow-y-auto">
+          <!-- Header -->
+          <div class="px-4 py-6 bg-gray-50 sm:px-6 sticky top-0 z-10 border-b">
+            <div class="flex items-start justify-between">
+              <div>
+                <h2 class="text-lg font-medium text-gray-900">
+                  {#if $isLoading}
+                    Loading...
+                  {:else if $error}
+                    Error Loading Contact
+                  {:else}
+                    {$formData.first_name} {$formData.last_name}
+                  {/if}
+                </h2>
+                <p class="mt-1 text-sm text-gray-500">
+                  {#if $hasChanges}
+                    You have unsaved changes
+                  {:else}
+                    Contact details
+                  {/if}
+                </p>
+              </div>
+              <button
+                type="button"
+                class="rounded-md text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                on:click={handleClose}
+              >
+                <span class="sr-only">Close panel</span>
+                <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
-            <button
-              type="button"
-              class="rounded-md text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              on:click={handleClose}
-            >
-              <span class="sr-only">Close panel</span>
-              <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
           </div>
-        </div>
-        
-        <!-- Content -->
-        <div class="relative flex-1 px-4 py-6 sm:px-6">
-          {#if $isLoading}
-            <div class="flex items-center justify-center h-40">
-              <LoadingSpinner size="lg" />
-            </div>
-          {:else if $error}
-            <div class="bg-red-50 p-4 rounded-md mb-6">
-              <div class="flex">
-                <div class="flex-shrink-0">
-                  <svg class="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-                  </svg>
-                </div>
-                <div class="ml-3">
-                  <h3 class="text-sm font-medium text-red-800">Error</h3>
-                  <div class="mt-2 text-sm text-red-700">
-                    <p>{$error}</p>
+          
+          <!-- Content -->
+          <div class="relative flex-1 px-4 py-6 sm:px-6">
+            {#if $isLoading}
+              <div class="flex items-center justify-center h-40">
+                <LoadingSpinner size="lg" />
+              </div>
+            {:else if $error}
+              <div class="bg-red-50 p-4 rounded-md mb-6">
+                <div class="flex">
+                  <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                    </svg>
+                  </div>
+                  <div class="ml-3">
+                    <h3 class="text-sm font-medium text-red-800">Error</h3>
+                    <div class="mt-2 text-sm text-red-700">
+                      <p>{$error}</p>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          {:else}
-            <form class="space-y-6">
-              <!-- Basic Information Section -->
-              <ContactBasicInfo 
-                {formData}
-                {genderOptions}
-                {raceOptions}
-                {isSaving}
-                on:change={handleFormDataChange}
-              />
-              
-              <!-- Email Addresses Section -->
-              <ContactEmails 
-                {emails}
-                {isSaving}
-                on:change={handleMultiItemChange}
-              />
-              
-              <!-- Phone Numbers Section -->
-              <ContactPhones 
-                phoneNumbers={phoneNumbers}
-                {isSaving}
-                on:change={handleMultiItemChange}
-              />
-              
-              <!-- Addresses Section -->
-              <ContactAddresses 
-                {addresses}
-                {stateOptions}
-                {isSaving}
-                on:change={handleMultiItemChange}
-              />
-              
-              <!-- Social Media Section -->
-              <ContactSocialMedia 
-                socialMedia={socialMedia}
-                {isSaving}
-                on:change={handleMultiItemChange}
-              />
-              
-              <!-- Tags Section -->
-              <ContactTags 
-                {tags}
-                {isSaving}
-                on:change={handleMultiItemChange}
-              />
-            </form>
-          {/if}
-        </div>
-        
-        <!-- Footer with action buttons -->
-        <div class="px-4 py-4 sm:px-6 bg-gray-50 border-t sticky bottom-0">
-          <div class="flex justify-end space-x-3">
-            {#if $hasChanges}
-              <button
-                type="button"
-                class="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                on:click={cancelChanges}
-                disabled={$isSaving}
-              >
-                Cancel
-              </button>
-              
-              <button
-                type="button"
-                class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                on:click={saveChanges}
-                disabled={$isSaving}
-              >
-                {#if $isSaving}
-                  <div class="flex items-center">
-                    <LoadingSpinner size="sm" color="white" />
-                    <span class="ml-2">Saving...</span>
-                  </div>
-                {:else}
-                  Save Changes
-                {/if}
-              </button>
             {:else}
-              <button
-                type="button"
-                class="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                on:click={handleClose}
-              >
-                Close
-              </button>
+              <form class="space-y-6">
+                <!-- Basic Information Section -->
+                <ContactBasicInfo 
+                  {formData}
+                  {genderOptions}
+                  {raceOptions}
+                  {isSaving}
+                  on:change={handleFormDataChange}
+                />
+                
+                <!-- Email Addresses Section -->
+                <ContactEmails 
+                  {emails}
+                  {isSaving}
+                  on:change={handleMultiItemChange}
+                />
+                
+                <!-- Phone Numbers Section -->
+                <ContactPhones 
+                  phoneNumbers={phoneNumbers}
+                  {isSaving}
+                  on:change={handleMultiItemChange}
+                />
+                
+                <!-- Addresses Section -->
+                <ContactAddresses 
+                  {addresses}
+                  {stateOptions}
+                  {isSaving}
+                  on:change={handleMultiItemChange}
+                />
+                
+                <!-- Social Media Section -->
+                <ContactSocialMedia 
+                  socialMedia={socialMedia}
+                  {isSaving}
+                  on:change={handleMultiItemChange}
+                />
+                
+                <!-- Tags Section -->
+                <ContactTags 
+                  {tags}
+                  {isSaving}
+                  on:change={handleMultiItemChange}
+                />
+              </form>
             {/if}
+          </div>
+          
+          <!-- Footer with action buttons -->
+          <div class="px-4 py-4 sm:px-6 bg-gray-50 border-t sticky bottom-0">
+            <div class="flex justify-end space-x-3">
+              {#if $hasChanges}
+                <button
+                  type="button"
+                  class="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  on:click={cancelChanges}
+                  disabled={$isSaving}
+                >
+                  Cancel
+                </button>
+                
+                <button
+                  type="button"
+                  class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  on:click={saveChanges}
+                  disabled={$isSaving}
+                >
+                  {#if $isSaving}
+                    <div class="flex items-center">
+                      <LoadingSpinner size="sm" color="white" />
+                      <span class="ml-2">Saving...</span>
+                    </div>
+                  {:else}
+                    Save Changes
+                  {/if}
+                </button>
+              {:else}
+                <button
+                  type="button"
+                  class="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  on:click={handleClose}
+                >
+                  Close
+                </button>
+              {/if}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </section>
   </div>
-  {/if}
+{/if}

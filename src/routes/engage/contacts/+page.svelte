@@ -6,6 +6,7 @@
   import { toastStore } from '$lib/stores/toastStore';
   import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
   import type { PageData } from './$types';
+  import ContactDetailsSheet from '$lib/components/contacts/ContactDetailsSheet.svelte';
   
   // Import components
   import ContactsViewNavbar from '$lib/components/contacts/ContactsViewNavbar.svelte';
@@ -26,6 +27,19 @@
   const isViewSelectOpen = writable(false);
   const isFilterPopoverOpen = writable(false);
   const isSortPopoverOpen = writable(false);
+
+  const isContactDetailsOpen = writable(false);
+  const selectedContactId = writable(null);
+
+  function viewContact(contact) {
+    selectedContactId.set(contact.id);
+    isContactDetailsOpen.set(true);
+  }
+
+  function closeContactDetails() {
+    isContactDetailsOpen.set(false);
+    selectedContactId.set(null);
+  }
   
   // View management
   const views = writable<any[]>([]);
@@ -176,8 +190,9 @@
   }
   
   function handleViewContact(event) {
-    // This is now handled directly by the ContactsDataGrid component
-    // which now includes the ContactDetailsSheet
+    console.log('View contact event received:', event.detail);
+    selectedContactId.set(event.detail.id);
+    isContactDetailsOpen.set(true);
   }
   
   function handleEditContact(event) {
@@ -738,17 +753,23 @@
     />
     
     <!-- Contacts data grid with details sheet integrated -->
+    <!-- Inside the main flex container div -->
     <ContactsDataGrid 
-      contacts={$filteredContacts}
-      isLoading={$isLoadingContacts}
-      error={$contactsError}
-      visibleColumns={$currentView ? Object.entries($currentView)
-        .filter(([key, value]) => value === true && !key.startsWith('_'))
-        .map(([key]) => key) : []}
-      availableFields={$availableFields}
-      supabase={data.supabase}
-      on:addContact={handleAddContact}
-      on:contactUpdated={handleContactUpdated}
+    contacts={$filteredContacts}
+    isLoading={$isLoadingContacts}
+    error={$contactsError}
+    visibleColumns={$currentView ? Object.entries($currentView)
+      .filter(([key, value]) => value === true && !key.startsWith('_'))
+      .map(([key]) => key) : []}
+    availableFields={$availableFields}
+    supabase={data.supabase}
+    on:viewContact={(e) => {
+      console.log('View contact event received:', e.detail);
+      selectedContactId.set(e.detail.id);
+      isContactDetailsOpen.set(true);
+    }}
+    on:addContact={handleAddContact}
+    on:contactUpdated={handleContactUpdated}
     />
     
     <!-- Modals for contact and view management -->
@@ -771,3 +792,15 @@
     />
   {/if}
 </div>
+
+<!-- At the bottom of the file, outside the main div -->
+<ContactDetailsSheet 
+  isOpen={$isContactDetailsOpen}
+  contactId={$selectedContactId}
+  supabase={data.supabase}
+  on:close={() => {
+    console.log('Closing sheet');
+    isContactDetailsOpen.set(false);
+  }}
+  on:updated={handleContactUpdated}
+/>
