@@ -1,4 +1,4 @@
-// src/lib/components/contacts/ContactDetailsSheet/ContactTags.svelte
+<!--  src/lib/components/contacts/ContactDetailsSheet/ContactTags.svelte -->
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { writable } from 'svelte/store';

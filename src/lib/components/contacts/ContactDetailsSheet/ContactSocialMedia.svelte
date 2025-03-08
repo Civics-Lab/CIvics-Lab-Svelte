@@ -1,4 +1,4 @@
-// src/lib/components/contacts/ContactDetailsSheet/ContactSocialMedia.svelte
+<!--  src/lib/components/contacts/ContactDetailsSheet/ContactSocialMedia.svelte -->
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   
