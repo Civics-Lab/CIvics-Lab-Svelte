@@ -189,6 +189,7 @@
       <!-- Desktop Navigation - Right Side -->
       <div class="hidden md:flex items-center space-x-4">
         <Button type="primary" href="/contact">Contact Sales</Button>
+        <Button type="secondary" href="/login">Login</Button>
       </div>
     </div>
   </div>
