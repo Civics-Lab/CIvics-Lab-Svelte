@@ -1,6 +1,8 @@
 <!-- src/routes/+layout.svelte -->
 <script lang="ts">
-	import '../app.css'
+	import '../../app.css'
+	import Navbar from '$lib/components/marketing-site/Navbar.svelte';
+  	import Footer from '$lib/components/marketing-site/Footer.svelte';
 	import { invalidate } from '$app/navigation'
 	import { onMount } from 'svelte'
 
@@ -24,6 +26,11 @@
 	<title>Civics Lab</title>
 </svelte:head>
 
-<div>
+
+<Navbar />
+
+<main>
   <slot />
-</div>
+</main>
+
+<Footer />
