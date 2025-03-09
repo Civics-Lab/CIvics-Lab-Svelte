@@ -28,6 +28,9 @@
   const hasChanges = writable(false);
   const error = writable<string | null>(null);
   
+  // State for unsaved changes confirmation dialog
+  const showUnsavedChangesDialog = writable(false);
+  
   // Contact data
   const originalData = writable<any>(null);
   const formData = writable<any>({
@@ -123,7 +126,10 @@
         });
         
         // Store original data for comparison
-        originalData.set(JSON.parse(JSON.stringify($formData)));
+        originalData.set({
+          ...JSON.parse(JSON.stringify($formData)),
+          tags: contactData.tags ? [...contactData.tags.map(t => t.tag)] : []
+        });
         
         // Set emails
         if (contactData.emails) {
@@ -189,9 +195,21 @@
     try {
       // Update contact basic info if changed
       if (JSON.stringify($formData) !== JSON.stringify($originalData)) {
+        // Sanitize the form data to handle UUID fields
+        const sanitizedFormData = { ...$formData };
+        
+        // Convert empty string UUID fields to null
+        // These fields are typically UUID foreign keys
+        const uuidFields = ['gender_id', 'race_id'];
+        uuidFields.forEach(field => {
+          if (sanitizedFormData[field] === '') {
+            sanitizedFormData[field] = null;
+          }
+        });
+        
         const { error: updateError } = await supabase
           .from('contacts')
-          .update($formData)
+          .update(sanitizedFormData)
           .eq('id', contactId);
         
         if (updateError) throw updateError;
@@ -257,6 +275,11 @@
       
       // Handle address updates
       for (const address of $addresses) {
+        // Sanitize address data - convert empty state_id to null
+        if (address.state_id === '') {
+          address.state_id = null;
+        }
+        
         if (address.isNew) {
           // Handle the zip code first - get or create it
           let zip_code_id = null;
@@ -302,7 +325,7 @@
               street_address: address.street_address,
               secondary_street_address: address.secondary_street_address || null,
               city: address.city,
-              state_id: address.state_id,
+              state_id: address.state_id, // Now null if it was empty string
               zip_code_id: zip_code_id,
               status: address.status
             });
@@ -356,7 +379,7 @@
               street_address: address.street_address,
               secondary_street_address: address.secondary_street_address || null,
               city: address.city,
-              state_id: address.state_id,
+              state_id: address.state_id, // Now null if it was empty string
               zip_code_id: zip_code_id,
               status: address.status
             })
@@ -433,18 +456,24 @@
   // Close the sheet
   function handleClose() {
     if ($hasChanges) {
-      if (confirm('You have unsaved changes. Are you sure you want to close?')) {
-        dispatch('close');
-      }
+      // Show the custom dialog instead of using browser confirm
+      showUnsavedChangesDialog.set(true);
     } else {
       dispatch('close');
     }
   }
   
-  // Watch for contact ID changes
-  $: if (contactId && isOpen) {
-    fetchContactDetails();
-    fetchOptions();
+  // Discard changes and close
+  function discardChangesAndClose() {
+    showUnsavedChangesDialog.set(false);
+    dispatch('close');
+  }
+  
+  // Save changes and close
+  async function saveChangesAndClose() {
+    showUnsavedChangesDialog.set(false);
+    await saveChanges();
+    dispatch('close');
   }
   
   // Event handlers for child components
@@ -452,7 +481,10 @@
     // Check if form data has changed
     if ($originalData) {
       const changed = Object.keys($formData).some(key => {
-        return $formData[key] !== $originalData[key];
+        // Handle empty strings vs nulls
+        const origValue = $originalData[key] === null ? '' : $originalData[key];
+        const newValue = $formData[key] === null ? '' : $formData[key];
+        return String(newValue) !== String(origValue);
       });
       
       hasChanges.set(changed);
@@ -460,7 +492,36 @@
   }
   
   function handleMultiItemChange() {
-    hasChanges.set(true);
+    // Check if any multi-item sections have changes
+    const hasEmailChanges = $emails.some(email => email.isNew || email.isDeleted || email.isModified);
+    const hasPhoneChanges = $phoneNumbers.some(phone => phone.isNew || phone.isDeleted || phone.isModified);
+    const hasAddressChanges = $addresses.some(address => address.isNew || address.isDeleted || address.isModified);
+    const hasSocialChanges = $socialMedia.some(social => social.isNew || social.isDeleted || social.isModified);
+    
+    // Original tags is an array of strings, we need to compare differently
+    let originalTags = [];
+    try {
+      if ($originalData && $originalData.tags) {
+        originalTags = $originalData.tags;
+      }
+    } catch (err) {
+      console.log('Error getting original tags:', err);
+    }
+    
+    // Compare current tags with original ones
+    let hasTagChanges = false;
+    if ($tags.length !== originalTags.length) {
+      hasTagChanges = true;
+    } else {
+      // Check if any tags were added or removed
+      hasTagChanges = $tags.some(tag => !originalTags.includes(tag)) || 
+                      originalTags.some(tag => !$tags.includes(tag));
+    }
+    
+    const anyChanges = hasEmailChanges || hasPhoneChanges || hasAddressChanges || 
+                       hasSocialChanges || hasTagChanges;
+    
+    hasChanges.set(anyChanges);
   }
   
   // Key event handler for escape key
@@ -478,21 +539,28 @@
       window.removeEventListener('keydown', handleKeydown);
     };
   });
+  
+  // Watch for contact ID changes
+  $: if (contactId && isOpen) {
+    fetchContactDetails();
+    fetchOptions();
+  }
 </script>
 
 {#if isOpen}
   <div class="fixed inset-0 z-50 overflow-hidden">
-    <!-- Backdrop -->
+    <!-- Backdrop - stop propagation to prevent clicks from closing when clicking form elements -->
     <div 
-      class="absolute inset-0 transition-opacity" 
-      on:click={handleClose}
+      class="absolute inset-0 bg-opacity-25 transition-opacity" 
+      on:click|stopPropagation={handleClose}
       transition:fly={{ duration: 200, opacity: 0 }}
     ></div>
     
-    <!-- Sheet panel -->
+    <!-- Sheet panel - prevent click events from reaching the backdrop -->
     <div 
       class="absolute inset-y-0 right-0 max-w-2xl w-full flex"
       transition:fly={{ duration: 300, x: '100%' }}
+      on:click|stopPropagation={() => {}}
     >
       <div class="h-full w-full flex flex-col bg-white shadow-xl overflow-y-scroll">
         <!-- Header -->
@@ -508,7 +576,7 @@
                   {$formData.first_name} {$formData.last_name}
                 {/if}
               </h2>
-              <p class="mt-1 text-sm text-gray-500">
+              <p class="mt-1 text-sm {$hasChanges ? 'text-orange-500 font-medium' : 'text-gray-500'}">
                 {#if $hasChanges}
                   You have unsaved changes
                 {:else}
@@ -519,7 +587,7 @@
             <button
               type="button"
               class="rounded-md text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              on:click={handleClose}
+              on:click|stopPropagation={handleClose}
             >
               <span class="sr-only">Close panel</span>
               <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -552,27 +620,27 @@
               </div>
             </div>
           {:else}
-            <form class="space-y-6">
+            <form class="space-y-6" on:click|stopPropagation={() => {}}>
               <!-- Basic Information Section -->
               <ContactBasicInfo 
                 {formData}
                 {genderOptions}
                 {raceOptions}
-                {isSaving}
+                isSaving={false}
                 on:change={handleFormDataChange}
               />
               
               <!-- Email Addresses Section -->
               <ContactEmails 
                 {emails}
-                {isSaving}
+                isSaving={false}
                 on:change={handleMultiItemChange}
               />
               
               <!-- Phone Numbers Section -->
               <ContactPhones 
                 phoneNumbers={phoneNumbers}
-                {isSaving}
+                isSaving={false}
                 on:change={handleMultiItemChange}
               />
               
@@ -580,21 +648,21 @@
               <ContactAddresses 
                 {addresses}
                 {stateOptions}
-                {isSaving}
+                isSaving={false}
                 on:change={handleMultiItemChange}
               />
               
               <!-- Social Media Section -->
               <ContactSocialMedia 
                 socialMedia={socialMedia}
-                {isSaving}
+                isSaving={false}
                 on:change={handleMultiItemChange}
               />
               
               <!-- Tags Section -->
               <ContactTags 
                 {tags}
-                {isSaving}
+                isSaving={false}
                 on:change={handleMultiItemChange}
               />
             </form>
@@ -608,16 +676,16 @@
               <button
                 type="button"
                 class="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                on:click={cancelChanges}
+                on:click|stopPropagation={cancelChanges}
                 disabled={$isSaving}
               >
-                Cancel
+                Discard Changes
               </button>
               
               <button
                 type="button"
                 class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                on:click={saveChanges}
+                on:click|stopPropagation={saveChanges}
                 disabled={$isSaving}
               >
                 {#if $isSaving}
@@ -633,7 +701,7 @@
               <button
                 type="button"
                 class="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                on:click={handleClose}
+                on:click|stopPropagation={handleClose}
               >
                 Close
               </button>
@@ -643,4 +711,58 @@
       </div>
     </div>
   </div>
+  
+  <!-- Unsaved changes confirmation dialog -->
+  {#if $showUnsavedChangesDialog}
+    <div class="fixed inset-0 z-[60] overflow-y-auto">
+      <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+        <div 
+          class="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg"
+          transition:fly={{ duration: 200, y: 10 }}
+          on:click|stopPropagation={() => {}}
+        >
+          <div class="bg-white px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
+            <div class="sm:flex sm:items-start">
+              <div class="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                <svg class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
+              </div>
+              <div class="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
+                <h3 class="text-base font-semibold leading-6 text-gray-900">Unsaved Changes</h3>
+                <div class="mt-2">
+                  <p class="text-sm text-gray-500">
+                    You have unsaved changes. Are you sure you want to close without saving? Your changes will be lost.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+            <button 
+              type="button" 
+              class="inline-flex w-full justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 sm:ml-3 sm:w-auto"
+              on:click|stopPropagation={saveChangesAndClose}
+            >
+              Save Changes
+            </button>
+            <button 
+              type="button" 
+              class="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto"
+              on:click|stopPropagation={discardChangesAndClose}
+            >
+              Discard
+            </button>
+            <button 
+              type="button" 
+              class="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto mr-auto"
+              on:click|stopPropagation={() => showUnsavedChangesDialog.set(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  {/if}
 {/if}
