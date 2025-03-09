@@ -1,0 +1,13 @@
+<svg width="125" height="70" viewBox="0 0 125 70" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g clip-path="url(#clip0_21_150)">
+<path d="M56 0H0V42H56V0Z" fill="#0072EF"/>
+<path d="M125 0H69V14H125V0Z" fill="#DA1D3E"/>
+<path d="M125 28H69V42H125V28Z" fill="#DA1D3E"/>
+<path d="M125 55H0V70H125V55Z" fill="#DA1D3E"/>
+</g>
+<defs>
+<clipPath id="clip0_21_150">
+<rect width="125" height="70" fill="white"/>
+</clipPath>
+</defs>
+</svg>
