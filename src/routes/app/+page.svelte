@@ -8,7 +8,7 @@
 	import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
 	import { writable } from 'svelte/store';
 	
-	export let data: PageData;
+	export const data: PageData;
 	
 	// State for create workspace modal
 	const isCreateModalOpen = writable(false);
