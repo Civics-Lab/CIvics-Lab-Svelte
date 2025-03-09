@@ -89,7 +89,7 @@
           <ul class="space-y-1">
             <li>
               <a 
-                href="/app/profile" 
+                href="/engage/profile" 
                 class="flex items-center px-3 py-2 text-sm rounded-md text-gray-700 hover:bg-gray-100"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -100,7 +100,7 @@
             </li>
             <li>
               <a 
-                href="/app/settings" 
+                href="/engage/settings" 
                 class="flex items-center px-3 py-2 text-sm rounded-md text-gray-700 hover:bg-gray-100"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -112,7 +112,7 @@
             </li>
             <li>
               <a 
-                href="/app/help" 
+                href="/engage/help" 
                 class="flex items-center px-3 py-2 text-sm rounded-md text-gray-700 hover:bg-gray-100"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
