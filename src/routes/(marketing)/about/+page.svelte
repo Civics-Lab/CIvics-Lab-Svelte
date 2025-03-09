@@ -1,8 +1,8 @@
 <script lang="ts">
     import { ClipboardList, GitPullRequestCreateArrow, MapPinCheck } from '@lucide/svelte';
-    import ServiceGrid from '$lib/components/ServiceGrid.svelte';
-    import Button from '$lib/components/ui/Button.svelte';
-    import StaffMember from '$lib/components/StaffMember.svelte';
+    import ServiceGrid from '$lib/components/marketing-site/ServiceGrid.svelte';
+    import Button from '$lib/components/marketing-site/Button.svelte';
+    import StaffMember from '$lib/components/marketing-site/StaffMember.svelte';
     
     const playbook = [
       {

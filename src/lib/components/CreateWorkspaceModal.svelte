@@ -106,9 +106,17 @@
   
   {#if isOpen}
     <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div class="bg-white rounded-lg shadow-xl max-w-md w-full" on:click|stopPropagation>
+      <div 
+        class="bg-white rounded-lg shadow-xl max-w-md w-full" 
+        on:click|stopPropagation 
+        on:keydown|stopPropagation
+        role="dialog"
+        tabindex="-1"
+        aria-labelledby="modal-title"
+        aria-modal="true"
+      >
         <div class="p-6">
-          <h2 class="text-xl font-semibold mb-4">Create New Workspace</h2>
+          <h2 id="modal-title" class="text-xl font-semibold mb-4">Create New Workspace</h2>
           
           <form on:submit|preventDefault={createWorkspace}>
             <div class="mb-4">

@@ -4,10 +4,10 @@
     import WorkspaceContext from '$lib/components/WorkspaceContext.svelte';
     
     export let data: LayoutData;
-  </script>
+</script>
   
-  <WorkspaceContext supabase={data.supabase}>
-    <div class="min-h-screen bg-gray-50">
-      <slot />
-    </div>
-  </WorkspaceContext>
+<WorkspaceContext supabase={data.supabase}>
+  <div class="min-h-screen bg-gray-50">
+    <slot />
+  </div>
+</WorkspaceContext>

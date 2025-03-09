@@ -2,154 +2,187 @@
 <script lang="ts">
     import { createEventDispatcher } from 'svelte';
     
+    interface Field {
+        id: string;
+        label: string;
+    }
+    
+    interface Filter {
+        field: string;
+        operator: string;
+        value: string;
+    }
+    
+    interface Sort {
+        field: string;
+        direction: 'asc' | 'desc';
+    }
+    
+    interface FieldView {
+        [key: string]: boolean;
+    }
+    
     // Props
     export let isFilterPopoverOpen = false;
     export let isSortPopoverOpen = false;
-    export let filters = [];
-    export let sorting = [];
+    export let filters: Filter[] = [];
+    export let sorting: Sort[] = [];
     export let searchQuery = '';
-    export let availableFields = [];
-    export let currentView = null;
+    export let availableFields: Field[] = [];
+    export let currentView: FieldView | null = null;
     
-    const dispatch = createEventDispatcher();
+    const dispatch = createEventDispatcher<{
+        searchChanged: string;
+        addFilter: void;
+        removeFilter: number;
+        moveFilter: { index: number; direction: 'up' | 'down' };
+        filterChanged: void;
+        addSort: void;
+        removeSort: number;
+        moveSort: { index: number; direction: 'up' | 'down' };
+        sortChanged: void;
+    }>();
     
     // Get field label from id
-    function getFieldLabel(fieldId) {
-      const field = availableFields.find(f => f.id === fieldId);
-      return field ? field.label : fieldId;
+    function getFieldLabel(fieldId: string): string {
+        const field = availableFields.find(f => f.id === fieldId);
+        return field ? field.label : fieldId;
     }
     
     // Toggle filter popover
-    function toggleFilterPopover() {
-      isFilterPopoverOpen = !isFilterPopoverOpen;
-      if (isFilterPopoverOpen) isSortPopoverOpen = false;
+    function toggleFilterPopover(): void {
+        isFilterPopoverOpen = !isFilterPopoverOpen;
+        if (isFilterPopoverOpen) isSortPopoverOpen = false;
     }
     
     // Toggle sort popover
-    function toggleSortPopover() {
-      isSortPopoverOpen = !isSortPopoverOpen;
-      if (isSortPopoverOpen) isFilterPopoverOpen = false;
+    function toggleSortPopover(): void {
+        isSortPopoverOpen = !isSortPopoverOpen;
+        if (isSortPopoverOpen) isFilterPopoverOpen = false;
     }
     
     // Handle search input change
-    function handleSearchInput(e) {
-      dispatch('searchChanged', e.target.value);
+    function handleSearchInput(e: Event): void {
+        const target = e.target as HTMLInputElement;
+        dispatch('searchChanged', target.value);
     }
     
     // Add a new filter
-    function addFilter() {
-      dispatch('addFilter');
+    function addFilter(): void {
+        dispatch('addFilter');
     }
     
     // Remove a filter
-    function removeFilter(index) {
-      dispatch('removeFilter', index);
+    function removeFilter(index: number): void {
+        dispatch('removeFilter', index);
     }
     
     // Move a filter up or down
-    function moveFilter(index, direction) {
-      dispatch('moveFilter', { index, direction });
+    function moveFilter(index: number, direction: 'up' | 'down'): void {
+        dispatch('moveFilter', { index, direction });
     }
     
     // Update filter field
-    function updateFilterField(index, fieldId) {
-      filters[index].field = fieldId;
-      dispatch('filterChanged');
+    function updateFilterField(index: number, fieldId: string): void {
+        filters[index].field = fieldId;
+        dispatch('filterChanged');
     }
     
     // Update filter operator
-    function updateFilterOperator(index, operator) {
-      filters[index].operator = operator;
-      dispatch('filterChanged');
+    function updateFilterOperator(index: number, operator: string): void {
+        filters[index].operator = operator;
+        dispatch('filterChanged');
     }
     
     // Update filter value
-    function updateFilterValue(index, value) {
-      filters[index].value = value;
-      dispatch('filterChanged');
+    function updateFilterValue(index: number, value: string): void {
+        filters[index].value = value;
+        dispatch('filterChanged');
     }
     
     // Add a new sort
-    function addSort() {
-      dispatch('addSort');
+    function addSort(): void {
+        dispatch('addSort');
     }
     
     // Remove a sort
-    function removeSort(index) {
-      dispatch('removeSort', index);
+    function removeSort(index: number): void {
+        dispatch('removeSort', index);
     }
     
     // Move a sort up or down
-    function moveSort(index, direction) {
-      dispatch('moveSort', { index, direction });
+    function moveSort(index: number, direction: 'up' | 'down'): void {
+        dispatch('moveSort', { index, direction });
     }
     
     // Update sort field
-    function updateSortField(index, fieldId) {
-      sorting[index].field = fieldId;
-      dispatch('sortChanged');
+    function updateSortField(index: number, fieldId: string): void {
+        sorting[index].field = fieldId;
+        dispatch('sortChanged');
     }
     
     // Update sort direction
-    function updateSortDirection(index, direction) {
-      sorting[index].direction = direction;
-      dispatch('sortChanged');
+    function updateSortDirection(index: number, direction: 'asc' | 'desc'): void {
+        sorting[index].direction = direction;
+        dispatch('sortChanged');
     }
     
     // Get available operators
-    function getAvailableOperators() {
-      return [
-        { id: '=', label: 'Equals' },
-        { id: '!=', label: 'Not equals' },
-        { id: 'contains', label: 'Contains' },
-        { id: 'startsWith', label: 'Starts with' },
-        { id: 'endsWith', label: 'Ends with' },
-        { id: '>', label: 'Greater than' },
-        { id: '<', label: 'Less than' },
-        { id: '>=', label: 'Greater than or equal' },
-        { id: '<=', label: 'Less than or equal' }
-      ];
+    function getAvailableOperators(): Array<{ id: string; label: string }> {
+        return [
+            { id: '=', label: 'Equals' },
+            { id: '!=', label: 'Not equals' },
+            { id: 'contains', label: 'Contains' },
+            { id: 'startsWith', label: 'Starts with' },
+            { id: 'endsWith', label: 'Ends with' },
+            { id: '>', label: 'Greater than' },
+            { id: '<', label: 'Less than' },
+            { id: '>=', label: 'Greater than or equal' },
+            { id: '<=', label: 'Less than or equal' }
+        ];
     }
     
     // Get the visible fields that can be filtered/sorted
-    function getFilterableFields() {
-      if (!currentView) return [];
-      
-      return availableFields.filter(field => 
-        // Only include fields that are visible in the current view
-        currentView[field.id] === true
-      );
+    function getFilterableFields(): Field[] {
+        if (!currentView) return [];
+        
+        return availableFields.filter(field => 
+            // Only include fields that are visible in the current view
+            currentView[field.id] === true
+        );
     }
     
     // Close popovers when clicking outside
-    function handleClickOutside(event) {
-      const filterPopover = document.getElementById('filter-popover');
-      const filterButton = document.getElementById('filter-button');
-      const sortPopover = document.getElementById('sort-popover');
-      const sortButton = document.getElementById('sort-button');
-      
-      if (filterPopover && filterButton && 
-          !filterPopover.contains(event.target) && 
-          !filterButton.contains(event.target)) {
-        isFilterPopoverOpen = false;
-      }
-      
-      if (sortPopover && sortButton && 
-          !sortPopover.contains(event.target) && 
-          !sortButton.contains(event.target)) {
-        isSortPopoverOpen = false;
-      }
+    function handleClickOutside(event: MouseEvent): void {
+        const filterPopover = document.getElementById('filter-popover');
+        const filterButton = document.getElementById('filter-button');
+        const sortPopover = document.getElementById('sort-popover');
+        const sortButton = document.getElementById('sort-button');
+        
+        const target = event.target as HTMLElement;
+        
+        if (filterPopover && filterButton && 
+            !filterPopover.contains(target) && 
+            !filterButton.contains(target)) {
+            isFilterPopoverOpen = false;
+        }
+        
+        if (sortPopover && sortButton && 
+            !sortPopover.contains(target) && 
+            !sortButton.contains(target)) {
+            isSortPopoverOpen = false;
+        }
     }
     
     // Add click outside listener
     import { onMount, onDestroy } from 'svelte';
     
     onMount(() => {
-      document.addEventListener('click', handleClickOutside);
+        document.addEventListener('click', handleClickOutside);
     });
     
     onDestroy(() => {
-      document.removeEventListener('click', handleClickOutside);
+        document.removeEventListener('click', handleClickOutside);
     });
 </script>
 
@@ -257,13 +290,17 @@
                   
                   <div class="grid grid-cols-3 gap-2 pr-8">
                     <div>
-                      <label class="block text-xs font-medium text-gray-500 mb-1">
+                      <label for={`filter-field-${i}`} class="block text-xs font-medium text-gray-500 mb-1">
                         Field
                       </label>
                       <select
+                        id={`filter-field-${i}`}
                         class="block w-full px-2 py-1 text-sm border-gray-300 rounded-md"
                         value={filter.field}
-                        on:change={(e) => updateFilterField(i, e.target.value)}
+                        on:change={(e) => {
+                            const target = e.target as HTMLSelectElement;
+                            updateFilterField(i, target.value);
+                        }}
                       >
                         {#each getFilterableFields() as field}
                           <option value={field.id}>{field.label}</option>
@@ -272,13 +309,17 @@
                     </div>
                     
                     <div>
-                      <label class="block text-xs font-medium text-gray-500 mb-1">
+                      <label for={`filter-operator-${i}`} class="block text-xs font-medium text-gray-500 mb-1">
                         Operator
                       </label>
                       <select
+                        id={`filter-operator-${i}`}
                         class="block w-full px-2 py-1 text-sm border-gray-300 rounded-md"
                         value={filter.operator}
-                        on:change={(e) => updateFilterOperator(i, e.target.value)}
+                        on:change={(e) => {
+                            const target = e.target as HTMLSelectElement;
+                            updateFilterOperator(i, target.value);
+                        }}
                       >
                         {#each getAvailableOperators() as op}
                           <option value={op.id}>{op.label}</option>
@@ -287,14 +328,18 @@
                     </div>
                     
                     <div>
-                      <label class="block text-xs font-medium text-gray-500 mb-1">
+                      <label for={`filter-value-${i}`} class="block text-xs font-medium text-gray-500 mb-1">
                         Value
                       </label>
                       <input
+                        id={`filter-value-${i}`}
                         type="text"
                         class="block w-full px-2 py-1 text-sm border-gray-300 rounded-md"
                         value={filter.value}
-                        on:input={(e) => updateFilterValue(i, e.target.value)}
+                        on:input={(e) => {
+                            const target = e.target as HTMLInputElement;
+                            updateFilterValue(i, target.value);
+                        }}
                       />
                     </div>
                   </div>
@@ -401,7 +446,10 @@
                       <select
                         class="block w-full px-2 py-1 text-sm border-gray-300 rounded-md"
                         value={sort.field}
-                        on:change={(e) => updateSortField(i, e.target.value)}
+                        on:change={(e) => {
+                            const target = e.target as HTMLSelectElement;
+                            updateSortField(i, target.value);
+                        }}
                       >
                         {#each getFilterableFields() as field}
                           <option value={field.id}>{field.label}</option>
@@ -416,7 +464,10 @@
                       <select
                         class="block w-full px-2 py-1 text-sm border-gray-300 rounded-md"
                         value={sort.direction}
-                        on:change={(e) => updateSortDirection(i, e.target.value)}
+                        on:change={(e) => {
+                            const target = e.target as HTMLSelectElement;
+                            updateSortDirection(i, target.value as 'asc' | 'desc');
+                        }}
                       >
                         <option value="asc">Ascending (A→Z)</option>
                         <option value="desc">Descending (Z→A)</option>

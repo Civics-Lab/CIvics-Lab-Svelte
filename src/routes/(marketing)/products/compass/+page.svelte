@@ -1,10 +1,10 @@
 <script lang="ts">
     import { ArrowRight, ChartNetwork, GitPullRequestCreateArrow, ImageUpscale, MapPinCheck, User } from '@lucide/svelte';
-    import ProductNavbar from '$lib/components/ProductNavbar.svelte';
-    import ProductHeader from '$lib/components/ProductHeader.svelte';
-    import ServiceGrid from '$lib/components/ServiceGrid.svelte';
+    import ProductNavbar from '$lib/components/marketing-site/ProductNavbar.svelte';
+    import ProductHeader from '$lib/components/marketing-site/ProductHeader.svelte';
+    import ServiceGrid from '$lib/components/marketing-site/ServiceGrid.svelte';
     import { ClipboardList } from '@lucide/svelte';
-    import PricingCard from '$lib/components/PricingCard.svelte';
+    import PricingCard from '$lib/components/marketing-site/PricingCard.svelte';
     
     const services = [
       {
