@@ -3,6 +3,7 @@
 	import '../app.css'
 	import { invalidate } from '$app/navigation'
 	import { onMount } from 'svelte'
+	import { injectAnalytics } from '@vercel/analytics/sveltekit'
 
 	export let data
 
