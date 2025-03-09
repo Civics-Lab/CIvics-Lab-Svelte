@@ -59,13 +59,6 @@
         isLoadingProfile.set(false);
       }
     }
-      } catch (err) {
-        console.error('Error fetching user profile:', err);
-        profileError.set('Failed to load profile');
-      } finally {
-        isLoadingProfile.set(false);
-      }
-    }
     
     // Update user profile
     async function updateProfile() {
@@ -104,7 +97,6 @@
       } finally {
         isUpdatingProfile.set(false);
       }
-    }
     }
     
     // Update user email
@@ -186,10 +178,11 @@
     }
     
     // Upload avatar
-    async function uploadAvatar(event) {
+    async function uploadAvatar(event: Event): Promise<void> {
       if (!$userStore.user) return;
       
-      const files = event.target.files;
+      const target = event.target as HTMLInputElement;
+      const files = target.files;
       if (!files || files.length === 0) return;
       
       const file = files[0];

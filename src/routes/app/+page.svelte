@@ -9,6 +9,7 @@
 	import { writable } from 'svelte/store';
 	
 	export let data: PageData;
+	$: ({ supabase } = data);
 	
 	// State for create workspace modal
 	const isCreateModalOpen = writable(false);
