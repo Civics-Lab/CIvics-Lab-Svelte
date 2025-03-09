@@ -82,9 +82,9 @@
 			<button class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-slate-950 text-white hover:bg-slate-800 h-10 px-4 py-2 w-full">
 				{loading ? 'Loading...' : 'Sign in'}
 			</button>
-		</div>
+		<!-- </div>
 		<div class="text-center text-sm">
 			<p>Don't have an account? <a href="/signup" class="text-blue-600 hover:underline">Sign up</a></p>
-		</div>
+		</div> -->
 	</div>
 </form>
