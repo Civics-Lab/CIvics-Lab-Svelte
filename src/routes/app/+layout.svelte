@@ -3,7 +3,7 @@
     import type { LayoutData } from './$types';
     import WorkspaceContext from '$lib/components/WorkspaceContext.svelte';
     
-    export const data: LayoutData;
+    export let data: LayoutData;
   </script>
   
   <WorkspaceContext supabase={data.supabase}>
