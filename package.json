@@ -30,6 +30,7 @@
 		"@supabase/ssr": "^0.5.2",
 		"@supabase/supabase-js": "^2.49.1",
 		"@vercel/analytics": "^1.5.0",
+		"@vercel/speed-insights": "^1.2.0",
 		"supabase": "^2.15.8",
 		"uuid": "^11.1.0"
 	}
