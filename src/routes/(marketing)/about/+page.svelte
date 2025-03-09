@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { ClipboardList, GitPullRequestCreateArrow, MapPinCheck } from 'lucide-svelte';
+    import { ClipboardList, GitPullRequestCreateArrow, MapPinCheck } from '@lucide/svelte';
     import ServiceGrid from '$lib/components/ServiceGrid.svelte';
     import Button from '$lib/components/ui/Button.svelte';
     import StaffMember from '$lib/components/StaffMember.svelte';

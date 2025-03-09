@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { ArrowRight, ChartNetwork, GitPullRequestCreateArrow, ImageUpscale, MapPinCheck, User } from 'lucide-svelte';
+    import { ArrowRight, ChartNetwork, GitPullRequestCreateArrow, ImageUpscale, MapPinCheck, User } from '@lucide/svelte';
     import ProductNavbar from '$lib/components/ProductNavbar.svelte';
     import ProductHeader from '$lib/components/ProductHeader.svelte';
     import ServiceGrid from '$lib/components/ServiceGrid.svelte';
