@@ -4,9 +4,21 @@
   import { workspaceStore } from '$lib/stores/workspaceStore';
   import type { Workspace } from '$lib/types/supabase';
   import LoadingSpinner from './LoadingSpinner.svelte';
+  import { onMount } from 'svelte';
+  import { page } from '$app/stores';
   
   // Local state for popover
   const isOpen = writable(false);
+  
+  // Export supabase client if it's provided
+  export let supabase = undefined;
+  
+  // Ensure the workspaces are loaded when the component mounts
+  onMount(() => {
+    if (supabase && (!$workspaceStore.workspaces || $workspaceStore.workspaces.length === 0)) {
+      workspaceStore.refreshWorkspaces(supabase);
+    }
+  });
   
   function togglePopover() {
     isOpen.update(value => !value);
@@ -17,7 +29,7 @@
     isOpen.set(false);
   }
   
-  // Close popover when clicking outside (add in onMount in parent component or here with afterUpdate)
+  // Close popover when clicking outside
   function handleClickOutside(event: MouseEvent) {
     const target = event.target as HTMLElement;
     const popover = document.getElementById('workspace-popover');
@@ -29,8 +41,6 @@
   }
   
   // Add event listener for clicking outside
-  import { onMount } from 'svelte';
-  
   onMount(() => {
     document.addEventListener('click', handleClickOutside);
     
@@ -43,7 +53,7 @@
 <div class="relative">
   <button
     id="workspace-button"
-    class="flex items-center space-x-2 px-4 py-2 bg-white border rounded-lg shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+    class="flex items-center space-x-2 px-4 py-2 bg-white border rounded-lg shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
     on:click={togglePopover}
   >
     <span class="flex-1 text-left truncate max-w-[200px] flex items-center">
@@ -52,6 +62,8 @@
         <span class="ml-2">Loading...</span>
       {:else if $workspaceStore.currentWorkspace}
         {$workspaceStore.currentWorkspace.name}
+      {:else if $workspaceStore.error}
+        Error loading workspaces
       {:else}
         Select Workspace
       {/if}
@@ -86,6 +98,26 @@
             </button>
           {/each}
         {/if}
+        
+        <!-- Create workspace button -->
+        <div class="border-t mt-1 pt-1">
+          <button
+            class="w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50"
+            on:click={() => {
+              isOpen.set(false);
+              // Dispatch an event that can be caught by a parent component
+              const event = new CustomEvent('createWorkspace');
+              window.dispatchEvent(event);
+            }}
+          >
+            <div class="flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+              </svg>
+              Create New Workspace
+            </div>
+          </button>
+        </div>
       </div>
     </div>
   {/if}

@@ -35,7 +35,8 @@ function createWorkspaceStore() {
         return {
           ...state,
           workspaces,
-          currentWorkspace: current
+          currentWorkspace: current,
+          isLoading: false // Make sure loading is set to false
         };
       });
     },
@@ -47,6 +48,11 @@ function createWorkspaceStore() {
         
         if (!workspace) {
           workspace = state.workspaces.find(w => w.id === workspaceId) || null;
+        }
+        
+        // Store the workspace ID in localStorage for persistence
+        if (typeof window !== 'undefined' && workspace) {
+          localStorage.setItem('currentWorkspaceId', workspace.id);
         }
         
         return {
@@ -68,6 +74,9 @@ function createWorkspaceStore() {
     
     // Reset the store to its initial state
     reset: () => {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('currentWorkspaceId');
+      }
       set(initialState);
     },
     
@@ -87,6 +96,7 @@ function createWorkspaceStore() {
         const { data: userWorkspaces, error: fetchError } = await supabase
           .from('user_workspaces')
           .select(`
+            id,
             workspace_id,
             role,
             workspaces:workspace_id (
@@ -100,9 +110,9 @@ function createWorkspaceStore() {
         if (fetchError) throw fetchError;
         
         // Transform the data to get the workspaces array
-        const fetchedWorkspaces = userWorkspaces
-          ?.filter(item => item.workspaces)
-          .map(item => item.workspaces) || [];
+        const fetchedWorkspaces = (userWorkspaces || [])
+          .filter(item => item.workspaces)
+          .map(item => item.workspaces as Workspace);
         
         if (fetchedWorkspaces.length === 0) {
           // Create a default workspace if none exists
@@ -139,14 +149,24 @@ function createWorkspaceStore() {
           return;
         }
         
+        // Get previously selected workspace ID from localStorage
+        const savedWorkspaceId = typeof window !== 'undefined' 
+          ? localStorage.getItem('currentWorkspaceId') 
+          : null;
+        
         // Update store with fetched workspaces
         update(state => {
-          const workspaces = fetchedWorkspaces;
-          const currentWorkspace = workspaces.find(w => state.currentWorkspace && w.id === state.currentWorkspace.id) || workspaces[0] || null;
+          // Try to use: 1. saved ID from localStorage, 2. current ID in state, 3. first workspace
+          const currentId = savedWorkspaceId || 
+            (state.currentWorkspace ? state.currentWorkspace.id : null);
+          
+          const currentWorkspace = currentId
+            ? fetchedWorkspaces.find(w => w.id === currentId)
+            : fetchedWorkspaces[0] || null;
           
           return {
             ...state,
-            workspaces,
+            workspaces: fetchedWorkspaces,
             currentWorkspace,
             isLoading: false
           };
