@@ -3,27 +3,499 @@
   import { onMount } from 'svelte';
   import { writable } from 'svelte/store';
   import { workspaceStore } from '$lib/stores/workspaceStore';
-  import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-  import BusinessFormModal from '$lib/components/BusinessFormModal.svelte';
-  import BusinessDetailsSheet from '$lib/components/businesses/BusinessDetailsSheet.svelte';
   import { toastStore } from '$lib/stores/toastStore';
+  import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
   import type { PageData } from './$types';
+  
+  // Import components
+  import BusinessesViewNavbar from '$lib/components/businesses/BusinessesViewNavbar.svelte';
+  import BusinessesFilterSortBar from '$lib/components/businesses/BusinessesFilterSortBar.svelte';
+  import BusinessesDataGrid from '$lib/components/businesses/BusinessesDataGrid.svelte';
+  import BusinessesViewModals from '$lib/components/businesses/BusinessesViewModals.svelte';
   
   export let data: PageData;
   
-  // State for the business form and details modals
+  // State for modals
   const isBusinessModalOpen = writable(false);
-  const isBusinessDetailsOpen = writable(false);
-  const selectedBusinessId = writable<string | null>(null);
+  const isCreateViewModalOpen = writable(false);
+  const isEditViewModalOpen = writable(false);
+  const isDeleteViewModalOpen = writable(false);
+  
+  // State for view settings popover
+  const isViewSettingsOpen = writable(false);
+  const isViewSelectOpen = writable(false);
+  const isFilterPopoverOpen = writable(false);
+  const isSortPopoverOpen = writable(false);
+  
+  // View management
+  const views = writable<any[]>([]);
+  // Use browser localStorage to persist the current view
+  const createPersistentViewStore = () => {
+    const storedViewId = typeof window !== 'undefined' 
+      ? localStorage.getItem('currentBusinessViewId') 
+      : null;
+    
+    const { subscribe, set, update } = writable<any | null>(null);
+    
+    return {
+      subscribe,
+      set: (view) => {
+        // Store the view ID in localStorage when set
+        if (view && view.id && typeof window !== 'undefined') {
+          localStorage.setItem('currentBusinessViewId', view.id);
+        }
+        set(view);
+      },
+      update
+    };
+  };
+  
+  const currentView = createPersistentViewStore();
+  const newViewName = writable('');
+  const viewsLoading = writable(false);
+  const viewsError = writable<string | null>(null);
+  
+  // Fields that can be displayed/filtered/sorted
+  const availableFields = writable([
+    { id: 'business_name', label: 'Business Name' },
+    { id: 'addresses', label: 'Address' },
+    { id: 'phone_numbers', label: 'Phone' },
+    { id: 'social_media_accounts', label: 'Social Media' },
+    { id: 'employees', label: 'Employees' },
+    { id: 'tags', label: 'Tags' }
+  ]);
+  
+  // Filters state
+  const filters = writable<any[]>([]);
+  
+  // Sort state
+  const sorting = writable<any[]>([]);
+  
+  // Search state
+  const searchQuery = writable('');
   
   // Businesses data
   const businesses = writable<any[]>([]);
   const filteredBusinesses = writable<any[]>([]);
-  const isLoadingBusinesses = writable(true);
+  const isLoadingBusinesses = writable(false);
   const businessesError = writable<string | null>(null);
   
-  // Search and filter state
-  const searchQuery = writable('');
+  // View event handlers
+  function handleSelectView(event) {
+    const view = event.detail;
+    currentView.set(view);
+    filters.set(view.filters || []);
+    sorting.set(view.sorting || []);
+    // Re-apply filters and sorting when view changes
+    applyFiltersAndSorting();
+  }
+  
+  function handleToggleField(event) {
+    toggleField(event.detail);
+  }
+  
+  function handleOpenCreateViewModal() {
+    newViewName.set('');
+    isCreateViewModalOpen.set(true);
+  }
+  
+  function handleOpenEditViewModal() {
+    if ($currentView) {
+      newViewName.set($currentView.view_name);
+      isEditViewModalOpen.set(true);
+    }
+  }
+  
+  function handleOpenDeleteViewModal() {
+    isDeleteViewModalOpen.set(true);
+  }
+  
+  function handleOpenBusinessModal() {
+    isBusinessModalOpen.set(true);
+  }
+  
+  function handleCloseBusinessModal() {
+    isBusinessModalOpen.set(false);
+  }
+  
+  function handleBusinessCreated() {
+    fetchBusinesses();
+  }
+  
+  function handleBusinessUpdated() {
+    fetchBusinesses();
+  }
+  
+  function handleAddFilter() {
+    addFilter();
+  }
+  
+  function handleRemoveFilter(event) {
+    removeFilter(event.detail);
+  }
+  
+  function handleMoveFilter(event) {
+    const { index, direction } = event.detail;
+    moveFilter(index, direction);
+  }
+  
+  function handleAddSort() {
+    addSort();
+  }
+  
+  function handleRemoveSort(event) {
+    removeSort(event.detail);
+  }
+  
+  function handleMoveSort(event) {
+    const { index, direction } = event.detail;
+    moveSort(index, direction);
+  }
+  
+  function handleFilterChanged() {
+    updateView();
+    applyFiltersAndSorting();
+  }
+  
+  function handleSortChanged() {
+    updateView();
+    applyFiltersAndSorting();
+  }
+  
+  function handleSearchChanged(event) {
+    // Update the searchQuery store with the value from the event
+    if (event && event.detail !== undefined) {
+      searchQuery.set(event.detail);
+    }
+    applyFiltersAndSorting();
+  }
+  
+  function handleAddBusiness() {
+    isBusinessModalOpen.set(true);
+  }
+  
+  // Fetch views for the current workspace
+  async function fetchViews(selectViewId = null) {
+    if (!$workspaceStore.currentWorkspace) return;
+    
+    viewsLoading.set(true);
+    viewsError.set(null);
+    
+    try {
+      const { data: fetchedViews, error } = await data.supabase
+        .from('business_views')
+        .select('*')
+        .order('view_name');
+      
+      if (error) throw error;
+      
+      if (fetchedViews && fetchedViews.length > 0) {
+        views.set(fetchedViews);
+        
+        // If a specific view ID is provided, select that view
+        if (selectViewId) {
+          const viewToSelect = fetchedViews.find(view => view.id === selectViewId);
+          if (viewToSelect) {
+            currentView.set(viewToSelect);
+            filters.set(viewToSelect.filters || []);
+            sorting.set(viewToSelect.sorting || []);
+            return;
+          }
+        }
+        
+        // Try to restore the previously selected view from localStorage
+        const storedViewId = typeof window !== 'undefined' 
+          ? localStorage.getItem('currentBusinessViewId') 
+          : null;
+        
+        if (storedViewId) {
+          // Find the view with the stored ID
+          const savedView = fetchedViews.find(view => view.id === storedViewId);
+          if (savedView) {
+            currentView.set(savedView);
+            filters.set(savedView.filters || []);
+            sorting.set(savedView.sorting || []);
+          } else {
+            // If stored view is not found, use the first one
+            currentView.set(fetchedViews[0]);
+            filters.set(fetchedViews[0].filters || []);
+            sorting.set(fetchedViews[0].sorting || []);
+          }
+        } else {
+          // If no stored view, use the first one
+          currentView.set(fetchedViews[0]);
+          filters.set(fetchedViews[0].filters || []);
+          sorting.set(fetchedViews[0].sorting || []);
+        }
+      } else {
+        // Create a default view if none exists
+        await createDefaultView();
+      }
+    } catch (error) {
+      console.error('Error fetching views:', error);
+      viewsError.set('Failed to load views');
+    } finally {
+      viewsLoading.set(false);
+    }
+  }
+  
+  // Create a default view if none exists
+  async function createDefaultView() {
+    if (!$workspaceStore.currentWorkspace) return;
+    
+    try {
+      const defaultView = {
+        view_name: 'Default View',
+        business_name: true,
+        addresses: true,
+        phone_numbers: true,
+        social_media_accounts: false,
+        employees: false,
+        tags: false,
+        filters: [],
+        sorting: []
+      };
+      
+      const { data: newView, error } = await data.supabase
+        .from('business_views')
+        .insert(defaultView)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      views.set([newView]);
+      currentView.set(newView);
+      filters.set([]);
+      sorting.set([]);
+      
+    } catch (error) {
+      console.error('Error creating default view:', error);
+      viewsError.set('Failed to create default view');
+    }
+  }
+  
+  // Create a new view
+  async function createView(event) {
+    const viewName = event.detail;
+    if (!viewName.trim()) return;
+    
+    try {
+      // Create the view with default fields visible
+      const newView = {
+        view_name: viewName.trim(),
+        business_name: true,
+        addresses: true,
+        phone_numbers: true,
+        social_media_accounts: true,
+        employees: true,
+        tags: true,
+        filters: [],
+        sorting: []
+      };
+      
+      const { data: createdView, error } = await data.supabase
+        .from('business_views')
+        .insert(newView)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      // Close modal first to avoid any state issues
+      isCreateViewModalOpen.set(false);
+      newViewName.set('');
+      
+      // Re-fetch all views to ensure consistency
+      await fetchViews();
+      
+      // Find the newly created view in the refreshed list
+      const refreshedView = $views.find(v => v.id === createdView.id);
+      if (refreshedView) {
+        // Set as current view
+        currentView.set(refreshedView);
+        filters.set(refreshedView.filters || []);
+        sorting.set(refreshedView.sorting || []);
+      }
+      
+      toastStore.success('View created successfully');
+      
+    } catch (error) {
+      console.error('Error creating view:', error);
+      toastStore.error('Failed to create view');
+    }
+  }
+  
+  // Update a view
+  async function updateView() {
+    if (!$currentView) return;
+    
+    try {
+      let updatedView = { ...$currentView };
+      
+      // If editing the name
+      if ($isEditViewModalOpen && $newViewName.trim()) {
+        updatedView.view_name = $newViewName.trim();
+      }
+      
+      // Update filters and sorting
+      updatedView.filters = $filters;
+      updatedView.sorting = $sorting;
+      
+      const { error } = await data.supabase
+        .from('business_views')
+        .update(updatedView)
+        .eq('id', $currentView.id);
+      
+      if (error) throw error;
+      
+      // Update the view in the list
+      views.update(v => 
+        v.map(view => view.id === $currentView.id 
+          ? updatedView 
+          : view
+        )
+      );
+      
+      // Update current view
+      currentView.set(updatedView);
+      
+      // Close the edit modal if it's open
+      if ($isEditViewModalOpen) {
+        isEditViewModalOpen.set(false);
+        newViewName.set('');
+        toastStore.success('View updated successfully');
+      }
+      
+    } catch (error) {
+      console.error('Error updating view:', error);
+      toastStore.error('Failed to update view');
+    }
+  }
+  
+  // Delete a view
+  async function deleteView() {
+    if (!$currentView) return;
+    
+    try {
+      const { error } = await data.supabase
+        .from('business_views')
+        .delete()
+        .eq('id', $currentView.id);
+      
+      if (error) throw error;
+      
+      // Remove the view from the list
+      views.update(v => v.filter(view => view.id !== $currentView.id));
+      
+      // Set the first remaining view as current, or create a default if none left
+      if ($views.length > 0) {
+        currentView.set($views[0]);
+        filters.set($views[0].filters || []);
+        sorting.set($views[0].sorting || []);
+      } else {
+        await createDefaultView();
+      }
+      
+      isDeleteViewModalOpen.set(false);
+      toastStore.success('View deleted successfully');
+      
+    } catch (error) {
+      console.error('Error deleting view:', error);
+      toastStore.error('Failed to delete view');
+    }
+  }
+  
+  // Toggle a field's visibility in the current view
+  async function toggleField(fieldId) {
+    if (!$currentView) return;
+    
+    try {
+      const updatedView = { ...$currentView, [fieldId]: !$currentView[fieldId] };
+      
+      const { error } = await data.supabase
+        .from('business_views')
+        .update({ [fieldId]: !$currentView[fieldId] })
+        .eq('id', $currentView.id);
+      
+      if (error) throw error;
+      
+      // Update the current view
+      currentView.set(updatedView);
+      
+      // Update the view in the list
+      views.update(v => 
+        v.map(view => view.id === $currentView.id 
+          ? updatedView 
+          : view
+        )
+      );
+      
+    } catch (error) {
+      console.error('Error toggling field:', error);
+      toastStore.error('Failed to update view');
+    }
+  }
+  
+  // Add a new filter
+  function addFilter() {
+    filters.update(f => [
+      ...f, 
+      { field: Object.keys($currentView).find(key => $currentView[key] === true) || 'business_name', operator: '=', value: '' }
+    ]);
+  }
+  
+  // Remove a filter
+  function removeFilter(index) {
+    filters.update(f => f.filter((_, i) => i !== index));
+    updateView();
+    applyFiltersAndSorting();
+  }
+  
+  // Add a new sort
+  function addSort() {
+    sorting.update(s => [
+      ...s, 
+      { field: Object.keys($currentView).find(key => $currentView[key] === true) || 'business_name', direction: 'asc' }
+    ]);
+  }
+  
+  // Remove a sort
+  function removeSort(index) {
+    sorting.update(s => s.filter((_, i) => i !== index));
+    updateView();
+    applyFiltersAndSorting();
+  }
+  
+  // Move filter up or down
+  function moveFilter(index, direction) {
+    filters.update(f => {
+      const newFilters = [...f];
+      if (direction === 'up' && index > 0) {
+        [newFilters[index], newFilters[index - 1]] = [newFilters[index - 1], newFilters[index]];
+      } else if (direction === 'down' && index < newFilters.length - 1) {
+        [newFilters[index], newFilters[index + 1]] = [newFilters[index + 1], newFilters[index]];
+      }
+      return newFilters;
+    });
+    updateView();
+    applyFiltersAndSorting();
+  }
+  
+  // Move sort up or down
+  function moveSort(index, direction) {
+    sorting.update(s => {
+      const newSorting = [...s];
+      if (direction === 'up' && index > 0) {
+        [newSorting[index], newSorting[index - 1]] = [newSorting[index - 1], newSorting[index]];
+      } else if (direction === 'down' && index < newSorting.length - 1) {
+        [newSorting[index], newSorting[index + 1]] = [newSorting[index + 1], newSorting[index]];
+      }
+      return newSorting;
+    });
+    updateView();
+    applyFiltersAndSorting();
+  }
   
   // Function to fetch businesses
   async function fetchBusinesses() {
@@ -33,123 +505,210 @@
     businessesError.set(null);
     
     try {
-      // First get basic business data
-      const { data: businessData, error: businessError } = await data.supabase
+      // Fetch business data
+      // In a full implementation, we'd use an appropriate view that includes all needed fields
+      const { data: businessData, error } = await data.supabase
         .from('active_businesses')
-        .select('*')
-        .order('business_name');
+        .select('*');
       
-      if (businessError) throw businessError;
+      if (error) throw error;
       
-      // For each business, get additional details like primary address and phone
-      const enrichedBusinesses = await Promise.all((businessData || []).map(async (business) => {
+      // Enhanced business data with addresses, phones, etc. would be fetched here
+      // This is simplified for the implementation
+      const enhancedBusinesses = await Promise.all((businessData || []).map(async (business) => {
+        // Get all related data (simplified)
         try {
-          // Get primary phone
+          // Get phone numbers
           const { data: phones } = await data.supabase
             .from('business_phone_numbers')
-            .select('phone_number, status')
-            .eq('business_id', business.id)
-            .eq('status', 'active')
-            .limit(1);
+            .select('*')
+            .eq('business_id', business.id);
           
-          // Get primary address
+          // Get addresses
           const { data: addresses } = await data.supabase
             .from('business_full_addresses')
-            .select('street_address, city, state_abbreviation, zip_code')
-            .eq('business_id', business.id)
-            .eq('status', 'active')
-            .limit(1);
+            .select('*')
+            .eq('business_id', business.id);
           
-          // Return enriched business object
+          // Get tags
+          const { data: tags } = await data.supabase
+            .from('business_tags')
+            .select('*')
+            .eq('business_id', business.id);
+          
+          // Return enhanced business
           return {
             ...business,
-            phone: phones && phones.length > 0 ? phones[0].phone_number : null,
-            location: addresses && addresses.length > 0 
-              ? `${addresses[0].city}${addresses[0].state_abbreviation ? ', ' + addresses[0].state_abbreviation : ''}`
-              : null
+            phone_numbers: phones || [],
+            addresses: addresses || [],
+            tags: tags || []
           };
-        } catch (error) {
-          console.error(`Error fetching details for business ${business.id}:`, error);
-          return business; // Return the business without the additional details
+        } catch (err) {
+          console.error('Error fetching business details:', err);
+          return business;
         }
       }));
       
-      businesses.set(enrichedBusinesses);
-      applySearch(); // Apply any current search query
-    } catch (err) {
-      console.error('Error fetching businesses:', err);
+      businesses.set(enhancedBusinesses || []);
+      applyFiltersAndSorting();
+    } catch (error) {
+      console.error('Error fetching businesses:', error);
       businessesError.set('Failed to load businesses');
     } finally {
       isLoadingBusinesses.set(false);
     }
   }
   
-  // Apply search to businesses
-  function applySearch() {
-    if (!$searchQuery.trim()) {
-      filteredBusinesses.set($businesses);
-      return;
+  // Apply filters and sorting to businesses
+  function applyFiltersAndSorting() {
+    let result = [...$businesses];
+    
+    // Apply filters
+    if ($filters && $filters.length > 0) {
+      $filters.forEach(filter => {
+        if (filter.field && filter.operator && filter.value) {
+          result = result.filter(business => {
+            // Handle different field types appropriately
+            const businessValue = business[filter.field];
+            
+            // Skip if the value is not available
+            if (businessValue === null || businessValue === undefined) return false;
+            
+            // Handle array fields (like addresses, phone_numbers)
+            if (Array.isArray(businessValue)) {
+              // For arrays, check if any element matches the filter
+              return businessValue.some(item => {
+                // For complex objects like addresses
+                if (typeof item === 'object') {
+                  // Check all properties of the item
+                  return Object.values(item).some(val => 
+                    val && String(val).toLowerCase().includes(String(filter.value).toLowerCase())
+                  );
+                }
+                // For simple values
+                return String(item).toLowerCase().includes(String(filter.value).toLowerCase());
+              });
+            }
+            
+            // Regular string comparison for simple fields
+            switch(filter.operator) {
+              case '=':
+                return String(businessValue).toLowerCase() === String(filter.value).toLowerCase();
+              case '!=':
+                return String(businessValue).toLowerCase() !== String(filter.value).toLowerCase();
+              case 'contains':
+                return String(businessValue).toLowerCase().includes(String(filter.value).toLowerCase());
+              case 'startsWith':
+                return String(businessValue).toLowerCase().startsWith(String(filter.value).toLowerCase());
+              case 'endsWith':
+                return String(businessValue).toLowerCase().endsWith(String(filter.value).toLowerCase());
+              default:
+                return true;
+            }
+          });
+        }
+      });
     }
     
-    const query = $searchQuery.toLowerCase().trim();
-    const filtered = $businesses.filter(business => {
-      // Search in various fields
-      return (
-        (business.business_name && business.business_name.toLowerCase().includes(query)) ||
-        (business.phone && business.phone.toLowerCase().includes(query)) ||
-        (business.location && business.location.toLowerCase().includes(query))
-      );
-    });
+    // Apply search
+    if ($searchQuery.trim()) {
+      const query = $searchQuery.toLowerCase().trim();
+      result = result.filter(business => {
+        // Search in business name
+        if (business.business_name && business.business_name.toLowerCase().includes(query)) {
+          return true;
+        }
+        
+        // Search in addresses
+        if (Array.isArray(business.addresses) && business.addresses.some(address => 
+          Object.values(address).some(val => val && String(val).toLowerCase().includes(query))
+        )) {
+          return true;
+        }
+        
+        // Search in phone numbers
+        if (Array.isArray(business.phone_numbers) && business.phone_numbers.some(phone => 
+          phone.phone_number && phone.phone_number.toLowerCase().includes(query)
+        )) {
+          return true;
+        }
+        
+        // Search in tags
+        if (Array.isArray(business.tags) && business.tags.some(tag => 
+          tag.tag && tag.tag.toLowerCase().includes(query)
+        )) {
+          return true;
+        }
+        
+        return false;
+      });
+    }
     
-    filteredBusinesses.set(filtered);
+    // Apply sorting
+    if ($sorting && $sorting.length > 0) {
+      result.sort((a, b) => {
+        for (const sort of $sorting) {
+          if (!sort.field) continue;
+          
+          let valueA = a[sort.field];
+          let valueB = b[sort.field];
+          
+          // Handle array fields
+          if (Array.isArray(valueA)) {
+            valueA = valueA.length > 0 ? 
+              (typeof valueA[0] === 'object' ? JSON.stringify(valueA[0]) : valueA[0]) : 
+              '';
+          }
+          
+          if (Array.isArray(valueB)) {
+            valueB = valueB.length > 0 ? 
+              (typeof valueB[0] === 'object' ? JSON.stringify(valueB[0]) : valueB[0]) : 
+              '';
+          }
+          
+          // Convert to strings for comparison
+          valueA = valueA || '';
+          valueB = valueB || '';
+          
+          if (String(valueA).toLowerCase() < String(valueB).toLowerCase()) {
+            return sort.direction === 'asc' ? -1 : 1;
+          }
+          if (String(valueA).toLowerCase() > String(valueB).toLowerCase()) {
+            return sort.direction === 'asc' ? 1 : -1;
+          }
+        }
+        return 0;
+      });
+    }
+    
+    filteredBusinesses.set(result);
   }
   
-  // Re-fetch businesses when workspace changes
+  // Watch for changes that should trigger filtering/sorting
+  $: if ($searchQuery !== undefined) {
+    applyFiltersAndSorting();
+  }
+  
+  $: if ($filters !== undefined) {
+    applyFiltersAndSorting();
+  }
+  
+  $: if ($sorting !== undefined) {
+    applyFiltersAndSorting();
+  }
+  
+  // Initialize data on component mount
+  onMount(() => {
+    if ($workspaceStore.currentWorkspace) {
+      fetchViews();
+      fetchBusinesses();
+    }
+  });
+  
+  // Fetch data when workspace changes
   $: if ($workspaceStore.currentWorkspace) {
+    fetchViews();
     fetchBusinesses();
-  }
-  
-  // Reapply search whenever search query or businesses change
-  $: if ($searchQuery !== undefined || $businesses) {
-    applySearch();
-  }
-  
-  // Handle business creation success
-  function handleBusinessCreated() {
-    fetchBusinesses();
-  }
-  
-  // Handle business update
-  function handleBusinessUpdated() {
-    fetchBusinesses();
-  }
-  
-  // Open the business form modal
-  function openBusinessModal() {
-    isBusinessModalOpen.set(true);
-  }
-  
-  // Close the business form modal
-  function closeBusinessModal() {
-    isBusinessModalOpen.set(false);
-  }
-  
-  // View business details
-  function viewBusinessDetails(businessId: string) {
-    selectedBusinessId.set(businessId);
-    isBusinessDetailsOpen.set(true);
-  }
-  
-  // Close business details
-  function closeBusinessDetails() {
-    isBusinessDetailsOpen.set(false);
-    selectedBusinessId.set(null);
-  }
-  
-  // Search businesses
-  function handleSearchInput(event: Event) {
-    const target = event.target as HTMLInputElement;
-    searchQuery.set(target.value);
   }
 </script>
 
@@ -157,188 +716,87 @@
   <title>Businesses | Engagement Portal</title>
 </svelte:head>
 
-<div class="h-full w-full p-6 overflow-y-auto">
+<div class="h-full flex flex-col">
   {#if $workspaceStore.isLoading}
-    <div class="flex justify-center items-center h-64">
+    <div class="flex-1 flex justify-center items-center">
       <LoadingSpinner size="lg" />
     </div>
   {:else if !$workspaceStore.currentWorkspace}
-    <div class="bg-white p-8 rounded-lg shadow-md">
+    <div class="bg-white p-8 rounded-lg shadow-md m-6">
       <h2 class="text-xl font-semibold mb-4 text-gray-700">No Workspace Selected</h2>
       <p class="text-gray-600">
         Please select a workspace from the dropdown in the sidebar to continue.
       </p>
     </div>
   {:else}
-    <div>
-      <div class="flex justify-between items-center mb-6">
-        <div>
-          <h1 class="text-2xl font-bold">Businesses</h1>
-          <p class="text-gray-600">Manage businesses for {$workspaceStore.currentWorkspace.name}</p>
-        </div>
-        <div>
-          <button 
-            class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-            on:click={openBusinessModal}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" class="-ml-1 mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-            </svg>
-            Add Business
-          </button>
-        </div>
-      </div>
-      
-      <!-- Search and Filters -->
-      <div class="bg-white p-4 rounded-lg shadow mb-6">
-        <div class="flex items-center">
-          <div class="flex-1">
-            <div class="relative rounded-md shadow-sm">
-              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-              <input
-                type="text"
-                placeholder="Search businesses..."
-                value={$searchQuery}
-                on:input={handleSearchInput}
-                class="focus:ring-green-500 focus:border-green-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md"
-              />
-            </div>
-          </div>
-          <div class="ml-4">
-            <button
-              type="button"
-              class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" class="-ml-0.5 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-              </svg>
-              Filters
-            </button>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Businesses Table -->
-      <div class="bg-white rounded-lg shadow overflow-hidden">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
-            <tr>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Business Name
-              </th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Location
-              </th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Phone
-              </th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
-              </th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody class="bg-white divide-y divide-gray-200">
-            {#if $isLoadingBusinesses}
-              <tr>
-                <td colspan="5" class="px-6 py-4 text-center">
-                  <div class="flex justify-center">
-                    <LoadingSpinner size="md" />
-                  </div>
-                </td>
-              </tr>
-            {:else if $businessesError}
-              <tr>
-                <td colspan="5" class="px-6 py-4 text-center text-red-500">
-                  {$businessesError}
-                </td>
-              </tr>
-            {:else if $filteredBusinesses.length === 0}
-              <!-- If no businesses, show empty state -->
-              <tr>
-                <td colspan="5" class="px-6 py-12 text-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                  </svg>
-                  <p class="text-gray-500 text-lg">No businesses found</p>
-                  <p class="text-gray-400 mt-1">Add your first business to get started</p>
-                  <button
-                    on:click={openBusinessModal}
-                    class="mt-4 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700"
-                  >
-                    Add a Business
-                  </button>
-                </td>
-              </tr>
-            {:else}
-              <!-- Display business list -->
-              {#each $filteredBusinesses as business (business.id)}
-                <tr class="hover:bg-gray-50 cursor-pointer" on:click={() => viewBusinessDetails(business.id)}>
-                  <td class="px-6 py-4 whitespace-nowrap">
-                    <div class="flex items-center">
-                      <div>
-                        <div class="text-sm font-medium text-gray-900">
-                          {business.business_name}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td class="px-6 py-4 whitespace-nowrap">
-                    <div class="text-sm text-gray-500">{business.location || '—'}</div>
-                  </td>
-                  <td class="px-6 py-4 whitespace-nowrap">
-                    <div class="text-sm text-gray-500">{business.phone || '—'}</div>
-                  </td>
-                  <td class="px-6 py-4 whitespace-nowrap">
-                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                      {business.status.charAt(0).toUpperCase() + business.status.slice(1)}
-                    </span>
-                  </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button 
-                      class="text-blue-600 hover:text-blue-900 mr-3"
-                      on:click|stopPropagation={() => viewBusinessDetails(business.id)}
-                    >
-                      View
-                    </button>
-                    <button 
-                      class="text-gray-600 hover:text-gray-900"
-                      on:click|stopPropagation={() => viewBusinessDetails(business.id)}
-                    >
-                      Edit
-                    </button>
-                  </td>
-                </tr>
-              {/each}
-            {/if}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <!-- Navbar with view selector and settings -->
+    <BusinessesViewNavbar 
+      views={$views}
+      currentView={$currentView}
+      viewsLoading={$viewsLoading}
+      viewsError={$viewsError}
+      isViewSelectOpen={$isViewSelectOpen}
+      isViewSettingsOpen={$isViewSettingsOpen}
+      availableFields={$availableFields}
+      on:selectView={handleSelectView}
+      on:toggleField={handleToggleField}
+      on:openCreateViewModal={handleOpenCreateViewModal}
+      on:openEditViewModal={handleOpenEditViewModal}
+      on:openDeleteViewModal={handleOpenDeleteViewModal}
+      on:openBusinessModal={handleOpenBusinessModal}
+    />
+    
+    <!-- Filter, sort, and search bar -->
+    <BusinessesFilterSortBar 
+      isFilterPopoverOpen={$isFilterPopoverOpen}
+      isSortPopoverOpen={$isSortPopoverOpen}
+      filters={$filters}
+      sorting={$sorting}
+      searchQuery={$searchQuery}
+      availableFields={$availableFields}
+      currentView={$currentView}
+      on:addFilter={handleAddFilter}
+      on:removeFilter={handleRemoveFilter}
+      on:moveFilter={handleMoveFilter}
+      on:addSort={handleAddSort}
+      on:removeSort={handleRemoveSort}
+      on:moveSort={handleMoveSort}
+      on:filterChanged={handleFilterChanged}
+      on:sortChanged={handleSortChanged}
+      on:searchChanged={handleSearchChanged}
+    />
+    
+    <!-- Businesses data grid with details sheet integrated -->
+    <BusinessesDataGrid 
+      businesses={$filteredBusinesses}
+      isLoading={$isLoadingBusinesses}
+      error={$businessesError}
+      visibleColumns={$currentView ? Object.entries($currentView)
+        .filter(([key, value]) => value === true && !key.startsWith('_'))
+        .map(([key]) => key) : []}
+      availableFields={$availableFields}
+      supabase={data.supabase}
+      on:addBusiness={handleAddBusiness}
+      on:businessUpdated={handleBusinessUpdated}
+    />
+    
+    <!-- Modals for business and view management -->
+    <BusinessesViewModals 
+      isBusinessModalOpen={$isBusinessModalOpen}
+      isCreateViewModalOpen={$isCreateViewModalOpen}
+      isEditViewModalOpen={$isEditViewModalOpen}
+      isDeleteViewModalOpen={$isDeleteViewModalOpen}
+      newViewName={$newViewName}
+      currentView={$currentView}
+      supabase={data.supabase}
+      on:closeBusinessModal={handleCloseBusinessModal}
+      on:businessCreated={handleBusinessCreated}
+      on:createView={createView}
+      on:updateView={updateView}
+      on:deleteView={deleteView}
+      on:closeCreateViewModal={() => isCreateViewModalOpen.set(false)}
+      on:closeEditViewModal={() => isEditViewModalOpen.set(false)}
+      on:closeDeleteViewModal={() => isDeleteViewModalOpen.set(false)}
+    />
   {/if}
 </div>
-
-<!-- Business Form Modal -->
-<BusinessFormModal 
-  isOpen={$isBusinessModalOpen} 
-  supabase={data.supabase} 
-  on:close={closeBusinessModal}
-  on:success={handleBusinessCreated}
-/>
-
-<!-- Business Details Sheet -->
-{#if $isBusinessDetailsOpen}
-  <BusinessDetailsSheet 
-    isOpen={$isBusinessDetailsOpen}
-    businessId={$selectedBusinessId}
-    supabase={data.supabase}
-    on:close={closeBusinessDetails}
-    on:updated={handleBusinessUpdated}
-  />
-{/if}
