@@ -276,6 +276,7 @@ export type Database = {
           sorting: Json | null
           updated_at: string | null
           view_name: string
+          workspace_id: string | null
         }
         Insert: {
           addresses?: boolean | null
@@ -289,6 +290,7 @@ export type Database = {
           sorting?: Json | null
           updated_at?: string | null
           view_name: string
+          workspace_id?: string | null
         }
         Update: {
           addresses?: boolean | null
@@ -302,8 +304,17 @@ export type Database = {
           sorting?: Json | null
           updated_at?: string | null
           view_name?: string
+          workspace_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "business_views_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       businesses: {
         Row: {

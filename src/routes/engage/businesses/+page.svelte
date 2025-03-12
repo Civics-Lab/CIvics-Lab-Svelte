@@ -185,6 +185,7 @@
       const { data: fetchedViews, error } = await data.supabase
         .from('business_views')
         .select('*')
+        .eq('workspace_id', $workspaceStore.currentWorkspace.id)
         .order('view_name');
       
       if (error) throw error;
@@ -244,14 +245,16 @@
     if (!$workspaceStore.currentWorkspace) return;
     
     try {
+      // Create a default view with only the fields that exist in the database schema
       const defaultView = {
         view_name: 'Default View',
+        workspace_id: $workspaceStore.currentWorkspace.id,
         business_name: true,
         addresses: true,
         phone_numbers: true,
         social_media_accounts: false,
         employees: false,
-        tags: false,
+        // Remove tags as it doesn't exist in the table
         filters: [],
         sorting: []
       };
@@ -278,18 +281,19 @@
   // Create a new view
   async function createView(event) {
     const viewName = event.detail;
-    if (!viewName.trim()) return;
+    if (!$workspaceStore.currentWorkspace || !viewName.trim()) return;
     
     try {
-      // Create the view with default fields visible
+      // Create the view with only fields that exist in the table schema
       const newView = {
         view_name: viewName.trim(),
+        workspace_id: $workspaceStore.currentWorkspace.id,
         business_name: true,
         addresses: true,
         phone_numbers: true,
         social_media_accounts: true,
         employees: true,
-        tags: true,
+        // Remove tags as it doesn't exist in the table
         filters: [],
         sorting: []
       };
@@ -327,20 +331,24 @@
   }
   
   // Update a view
-  async function updateView() {
+  async function updateView(event = null) {
     if (!$currentView) return;
     
     try {
       let updatedView = { ...$currentView };
       
-      // If editing the name
-      if ($isEditViewModalOpen && $newViewName.trim()) {
+      // If editing the name (from event or from modal)
+      if (event && typeof event.detail === 'string' && event.detail.trim()) {
+        updatedView.view_name = event.detail.trim();
+      } else if ($isEditViewModalOpen && $newViewName.trim()) {
         updatedView.view_name = $newViewName.trim();
       }
       
       // Update filters and sorting
       updatedView.filters = $filters;
       updatedView.sorting = $sorting;
+      
+      console.log('Updating view with:', updatedView);
       
       const { error } = await data.supabase
         .from('business_views')
@@ -359,6 +367,9 @@
       
       // Update current view
       currentView.set(updatedView);
+      
+      // Refetch views to ensure list is updated
+      await fetchViews($currentView.id);
       
       // Close the edit modal if it's open
       if ($isEditViewModalOpen) {
