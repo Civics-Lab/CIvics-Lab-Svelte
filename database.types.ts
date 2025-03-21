@@ -323,6 +323,7 @@ export type Database = {
           id: string
           status: Database["public"]["Enums"]["business_status"] | null
           updated_at: string | null
+          workspace_id: string | null
         }
         Insert: {
           business_name: string
@@ -330,6 +331,7 @@ export type Database = {
           id?: string
           status?: Database["public"]["Enums"]["business_status"] | null
           updated_at?: string | null
+          workspace_id?: string | null
         }
         Update: {
           business_name?: string
@@ -337,8 +339,17 @@ export type Database = {
           id?: string
           status?: Database["public"]["Enums"]["business_status"] | null
           updated_at?: string | null
+          workspace_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "businesses_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       contact_addresses: {
         Row: {

@@ -345,31 +345,67 @@
   }
   
   // Update a view
-  async function updateView() {
-    if (!$currentView) return;
+  async function updateView(event) {
+    if (!$currentView) {
+      console.error('No current view to update');
+      return;
+    }
+    
+    console.log('Received update event:', event?.detail);
     
     try {
-      let updatedView = { ...$currentView };
+      let updatedViewName = '';
       
-      // If editing the name
-      if ($isEditViewModalOpen && $newViewName.trim()) {
-        updatedView.view_name = $newViewName.trim();
+      // Determine the new view name
+      if (event && event.detail) {
+        // Get name from event if available
+        updatedViewName = event.detail.trim();
+        console.log('Using name from event:', updatedViewName);
+      } else if ($isEditViewModalOpen && $newViewName.trim()) {
+        // Get name from store if modal is open
+        updatedViewName = $newViewName.trim();
+        console.log('Using name from store:', updatedViewName);
+      } else {
+        // Fallback to current name
+        updatedViewName = $currentView.view_name;
+        console.log('Using current name:', updatedViewName);
       }
       
-      // Update filters and sorting
-      updatedView.filters = $filters;
-      updatedView.sorting = $sorting;
+      if (!updatedViewName) {
+        console.error('No valid view name for update');
+        return;
+      }
       
-      const { error } = await data.supabase
+      console.log('Updating view with name:', updatedViewName);
+      
+      // Create updated view object
+      const updatedView = {
+        ...$currentView,
+        view_name: updatedViewName,
+        filters: $filters,
+        sorting: $sorting
+      };
+      
+      console.log('Will update view ID:', $currentView.id);
+      console.log('Full updated view:', updatedView);
+      
+      // Update in Supabase
+      const { data: updatedData, error } = await data.supabase
         .from('contact_views')
         .update(updatedView)
-        .eq('id', $currentView.id);
+        .eq('id', $currentView.id)
+        .select();
       
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase update error:', error);
+        throw error;
+      }
       
-      // Update the view in the list
-      views.update(v => 
-        v.map(view => view.id === $currentView.id 
+      console.log('Supabase update result:', updatedData);
+      
+      // Update the views list
+      views.update(viewsList => 
+        viewsList.map(view => view.id === $currentView.id 
           ? updatedView 
           : view
         )
@@ -382,12 +418,16 @@
       if ($isEditViewModalOpen) {
         isEditViewModalOpen.set(false);
         newViewName.set('');
-        toastStore.success('View updated successfully');
       }
+      
+      toastStore.success('View updated successfully');
+      
+      // Refresh views from database to ensure consistency
+      await fetchViews($currentView.id);
       
     } catch (error) {
       console.error('Error updating view:', error);
-      toastStore.error('Failed to update view');
+      toastStore.error('Failed to update view: ' + (error.message || 'Unknown error'));
     }
   }
   

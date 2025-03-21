@@ -109,7 +109,8 @@
               secondary_street_address: address.secondary_street_address || '',
               city: address.city || '',
               state_id: address.state_id || '',
-              zip_code: address.zip_code_id || '',
+              zip_code: address.zip_code || '',
+              zip_code_id: address.zip_code_id || '',
               status: address.status || 'active'
             })) : []);
           } else {
@@ -132,7 +133,17 @@
           
           // Set employees
           if (businessData.employees) {
-            employees.set(Array.isArray(businessData.employees) ? businessData.employees : []);
+            employees.set(Array.isArray(businessData.employees) ? businessData.employees.map(employee => ({
+              id: employee.id,
+              contact_id: employee.employee_id,
+              status: employee.status || 'active',
+              role: employee.role || '',
+              contact: {
+                id: employee.employee_id,
+                first_name: employee.employee_name ? employee.employee_name.split(' ')[0] : 'Unknown',
+                last_name: employee.employee_name ? employee.employee_name.split(' ').slice(1).join(' ') : 'Contact'
+              }
+            })) : []);
           } else {
             employees.set([]);
           }

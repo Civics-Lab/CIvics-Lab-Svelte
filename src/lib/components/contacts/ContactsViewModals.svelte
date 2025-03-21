@@ -33,7 +33,8 @@
     
     function updateView() {
       if (newViewName.trim()) {
-        // Pass the newViewName as the event detail
+        // Pass the new view name as the event detail
+        console.log('Modal sending update event with name:', newViewName);
         dispatch('updateView', newViewName);
       }
     }
