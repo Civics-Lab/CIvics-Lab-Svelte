@@ -1,7 +1,9 @@
 <!-- src/lib/components/donations/DonationsDataGrid.svelte -->
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { writable } from 'svelte/store';
   import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+  import DonationDetailsSheet from './DonationDetailsSheet.svelte';
   
   export let donations: any[] = [];
   export let isLoading: boolean = false;
@@ -9,6 +11,10 @@
   export let visibleColumns: string[] = []; 
   export let availableFields: any[] = []; 
   export let supabase: any;
+
+  // State for donation details sheet
+  const isDetailsSheetOpen = writable(false);
+  const selectedDonationId = writable<string | null>(null);
 
   const dispatch = createEventDispatcher();
   
@@ -56,7 +62,8 @@
   
   // Handle view donation details
   function handleViewDonation(id: string) {
-    dispatch('viewDonation', id);
+    selectedDonationId.set(id);
+    isDetailsSheetOpen.set(true);
   }
   
   // Handle edit donation
@@ -67,6 +74,14 @@
 
 <!-- Data Grid -->
 <div class="flex-1 overflow-hidden flex flex-col bg-white">
+  <!-- Donation Details Sheet -->
+  <DonationDetailsSheet 
+    isOpen={$isDetailsSheetOpen} 
+    donationId={$selectedDonationId} 
+    {supabase} 
+    on:close={() => isDetailsSheetOpen.set(false)} 
+    on:updated={() => dispatch('donationUpdated')}
+  />
   <div class="flex-1 overflow-auto">
     <table class="min-w-full divide-y divide-gray-200">
       <thead class="bg-gray-50">
