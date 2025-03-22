@@ -119,11 +119,13 @@
     isDonationModalOpen.set(true);
   }
   
+  // Handle closing the donation modal from any event
   function handleCloseDonationModal() {
     isDonationModalOpen.set(false);
   }
   
   function handleDonationCreated() {
+    // Modal is already closed in the DonationsViewModals component
     fetchDonations();
   }
   
@@ -798,14 +800,14 @@
     
     <!-- Modals for donation and view management -->
     <DonationsViewModals 
-      isDonationModalOpen={$isDonationModalOpen}
-      isCreateViewModalOpen={$isCreateViewModalOpen}
-      isEditViewModalOpen={$isEditViewModalOpen}
-      isDeleteViewModalOpen={$isDeleteViewModalOpen}
+      bind:isDonationModalOpen={$isDonationModalOpen}
+      bind:isCreateViewModalOpen={$isCreateViewModalOpen}
+      bind:isEditViewModalOpen={$isEditViewModalOpen}
+      bind:isDeleteViewModalOpen={$isDeleteViewModalOpen}
       newViewName={$newViewName}
       currentView={$currentView}
       supabase={data.supabase}
-      on:closeContactModal={handleCloseDonationModal}
+      on:closeDonationModal={handleCloseDonationModal}
       on:donationCreated={handleDonationCreated}
       on:createView={createView}
       on:updateView={updateView}

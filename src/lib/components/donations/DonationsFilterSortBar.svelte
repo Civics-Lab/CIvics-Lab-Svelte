@@ -163,7 +163,7 @@
       
       {#if isFilterPopoverOpen}
         <div 
-          class="origin-top-right absolute right-0 mt-2 w-96 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-20"
+          class="origin-top-right absolute right-0 mt-2 w-96 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-30"
           use:clickOutside={() => isFilterPopoverOpen = false}
         >
           <div class="p-4">
@@ -296,7 +296,7 @@
       
       {#if isSortPopoverOpen}
         <div 
-          class="origin-top-right absolute right-0 mt-2 w-96 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-20"
+          class="origin-top-right absolute right-0 mt-2 w-96 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-30"
           use:clickOutside={() => isSortPopoverOpen = false}
         >
           <div class="p-4">

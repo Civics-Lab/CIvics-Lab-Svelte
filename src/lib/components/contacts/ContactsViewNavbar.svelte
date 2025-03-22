@@ -2,6 +2,7 @@
 <script lang="ts">
     import { createEventDispatcher } from 'svelte';
     import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+    import { clickOutside } from '$lib/actions/clickOutside';
   
     // Props
     export let views = [];
@@ -15,12 +16,32 @@
     const dispatch = createEventDispatcher();
     
     // Event handlers
-    function toggleViewSelect() {
-      isViewSelectOpen = !isViewSelectOpen;
+    function toggleViewSelect(event) {
+      // Close when clicking the button while the dropdown is open
+      if (isViewSelectOpen) {
+        isViewSelectOpen = false;
+        event.stopPropagation();
+        return;
+      }
+      
+      isViewSelectOpen = true;
+      if (isViewSettingsOpen) {
+        isViewSettingsOpen = false; // Close the other popover
+      }
     }
     
-    function toggleViewSettings() {
-      isViewSettingsOpen = !isViewSettingsOpen;
+    function toggleViewSettings(event) {
+      // Close when clicking the button while the dropdown is open
+      if (isViewSettingsOpen) {
+        isViewSettingsOpen = false;
+        event.stopPropagation();
+        return;
+      }
+      
+      isViewSettingsOpen = true;
+      if (isViewSelectOpen) {
+        isViewSelectOpen = false; // Close the other popover
+      }
     }
     
     function selectView(view) {
@@ -50,6 +71,14 @@
     function openContactModal() {
       dispatch('openContactModal');
     }
+    
+    function closeViewSelect() {
+      isViewSelectOpen = false;
+    }
+    
+    function closeViewSettings() {
+      isViewSettingsOpen = false;
+    }
   </script>
   
   <div class="bg-slate-100 border-b border-slate-200 px-6 py-3 flex justify-between items-center">
@@ -74,7 +103,10 @@
         </button>
         
         {#if isViewSelectOpen}
-          <div class="absolute right-0 mt-1 w-64 bg-white border rounded-md shadow-lg z-10">
+          <div 
+            class="absolute right-0 mt-1 w-64 bg-white border rounded-md shadow-lg z-10"
+            use:clickOutside={closeViewSelect}
+          >
             <div class="max-h-64 overflow-y-auto">
               {#if viewsLoading}
                 <div class="p-3 text-center">
@@ -130,7 +162,10 @@
         </button>
         
         {#if isViewSettingsOpen}
-          <div class="absolute right-0 mt-1 w-72 bg-white border rounded-md shadow-lg z-10">
+          <div 
+            class="absolute right-0 mt-1 w-72 bg-white border rounded-md shadow-lg z-10"
+            use:clickOutside={closeViewSettings}
+          >
             <div class="p-3 border-b">
               <h3 class="font-medium">View Settings</h3>
               <p class="text-sm text-gray-500">Configure visible columns</p>

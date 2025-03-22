@@ -71,43 +71,44 @@
     <table class="min-w-full divide-y divide-gray-200">
       <thead class="bg-gray-50">
         <tr>
+          <!-- Lower the z-index from 10 to 5 for all table header cells -->
           <!-- Always show date column -->
-          <th scope="col" class="sticky top-0 z-10 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+          <th scope="col" class="sticky top-0 z-5 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
             Date
           </th>
           
           <!-- Show donor column -->
-          <th scope="col" class="sticky top-0 z-10 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+          <th scope="col" class="sticky top-0 z-5 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
             Donor
           </th>
           
           <!-- Dynamic columns based on visible fields -->
           {#if visibleColumns.includes('amount')}
-            <th scope="col" class="sticky top-0 z-10 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+            <th scope="col" class="sticky top-0 z-5 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
               Amount
             </th>
           {/if}
           
           {#if visibleColumns.includes('status')}
-            <th scope="col" class="sticky top-0 z-10 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+            <th scope="col" class="sticky top-0 z-5 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
               Status
             </th>
           {/if}
           
           {#if visibleColumns.includes('payment_type')}
-            <th scope="col" class="sticky top-0 z-10 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+            <th scope="col" class="sticky top-0 z-5 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
               Payment Type
             </th>
           {/if}
           
           {#if visibleColumns.includes('notes')}
-            <th scope="col" class="sticky top-0 z-10 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+            <th scope="col" class="sticky top-0 z-5 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
               Notes
             </th>
           {/if}
           
           <!-- Actions column always visible -->
-          <th scope="col" class="sticky top-0 z-10 px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
+          <th scope="col" class="sticky top-0 z-5 px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50">
             Actions
           </th>
         </tr>
@@ -206,6 +207,4 @@
       </tbody>
     </table>
   </div>
-  
-  <!-- Button removed as requested -->
 </div>

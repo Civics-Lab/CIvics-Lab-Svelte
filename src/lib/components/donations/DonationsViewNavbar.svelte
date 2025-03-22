@@ -13,6 +13,34 @@
   
   const dispatch = createEventDispatcher();
   
+  function toggleViewSelect(event) {
+    // Close when clicking the button while the dropdown is open
+    if (isViewSelectOpen) {
+      isViewSelectOpen = false;
+      event.stopPropagation();
+      return;
+    }
+    
+    isViewSelectOpen = true;
+    if (isViewSettingsOpen) {
+      isViewSettingsOpen = false; // Close the other popover
+    }
+  }
+  
+  function toggleViewSettings(event) {
+    // Close when clicking the button while the dropdown is open
+    if (isViewSettingsOpen) {
+      isViewSettingsOpen = false;
+      event.stopPropagation();
+      return;
+    }
+    
+    isViewSettingsOpen = true;
+    if (isViewSelectOpen) {
+      isViewSelectOpen = false; // Close the other popover
+    }
+  }
+  
   function handleSelectView(view: any) {
     dispatch('selectView', view);
     isViewSelectOpen = false;
@@ -24,18 +52,29 @@
   
   function handleOpenCreateViewModal() {
     dispatch('openCreateViewModal');
+    isViewSelectOpen = false;
   }
   
   function handleOpenEditViewModal() {
     dispatch('openEditViewModal');
+    isViewSettingsOpen = false;
   }
   
   function handleOpenDeleteViewModal() {
     dispatch('openDeleteViewModal');
+    isViewSettingsOpen = false;
   }
 
   function handleOpenDonationModal() {
     dispatch('openDonationModal');
+  }
+  
+  function closeViewSelect() {
+    isViewSelectOpen = false;
+  }
+  
+  function closeViewSettings() {
+    isViewSettingsOpen = false;
   }
 </script>
 
@@ -50,7 +89,7 @@
       <button
         type="button"
         class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
-        on:click={() => isViewSelectOpen = !isViewSelectOpen}
+        on:click={toggleViewSelect}
       >
         <span>{currentView ? currentView.view_name : 'Select View'}</span>
         <svg xmlns="http://www.w3.org/2000/svg" class="-mr-1 ml-2 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -61,7 +100,7 @@
       {#if isViewSelectOpen}
         <div 
           class="origin-top-left absolute left-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10"
-          use:clickOutside={() => isViewSelectOpen = false}
+          use:clickOutside={closeViewSelect}
         >
           <div class="py-1">
             {#if viewsLoading}
@@ -99,7 +138,7 @@
         <button
           type="button"
           class="inline-flex items-center px-2 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
-          on:click={() => isViewSettingsOpen = !isViewSettingsOpen}
+          on:click={toggleViewSettings}
           aria-label="View settings"
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -111,7 +150,7 @@
         {#if isViewSettingsOpen}
           <div 
             class="origin-top-right absolute right-0 mt-2 w-72 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10"
-            use:clickOutside={() => isViewSettingsOpen = false}
+            use:clickOutside={closeViewSettings}
           >
             <div class="py-1">
               <div class="px-4 py-2 border-b border-gray-100">

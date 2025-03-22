@@ -16,11 +16,13 @@
   
   // Handle donation modal close
   function handleCloseDonationModal() {
-    dispatch('closeContactModal');
+    isDonationModalOpen = false; // Directly modify the prop
+    dispatch('closeDonationModal');
   }
   
   // Handle donation created successfully
   function handleDonationCreated() {
+    isDonationModalOpen = false; // Close the modal after successful creation
     dispatch('donationCreated');
   }
   
@@ -52,6 +54,7 @@
 <DonationFormModal 
   isOpen={isDonationModalOpen} 
   supabase={supabase} 
+  onClose={handleCloseDonationModal}
   on:close={handleCloseDonationModal}
   on:success={handleDonationCreated}
 />
