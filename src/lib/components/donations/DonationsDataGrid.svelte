@@ -65,11 +65,6 @@
     selectedDonationId.set(id);
     isDetailsSheetOpen.set(true);
   }
-  
-  // Handle edit donation
-  function handleEditDonation(id: string) {
-    dispatch('editDonation', id);
-  }
 </script>
 
 <!-- Data Grid -->
@@ -204,16 +199,10 @@
               
               <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                 <button
-                  class="text-blue-600 hover:text-blue-900 mr-3"
+                  class="text-purple-600 hover:text-purple-900"
                   on:click={() => handleViewDonation(donation.id)}
                 >
-                  View
-                </button>
-                <button
-                  class="text-gray-600 hover:text-gray-900"
-                  on:click={() => handleEditDonation(donation.id)}
-                >
-                  Edit
+                  View Details
                 </button>
               </td>
             </tr>

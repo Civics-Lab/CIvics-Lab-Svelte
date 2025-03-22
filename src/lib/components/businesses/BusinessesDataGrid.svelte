@@ -70,14 +70,6 @@
       isBusinessDetailsOpen.set(true);
     }
     
-    function editBusiness(business, e) {
-      // Prevent the event from bubbling up to the tr click handler
-      if (e) e.stopPropagation();
-      
-      selectedBusinessId.set(business.id);
-      isBusinessDetailsOpen.set(true);
-    }
-    
     function addBusiness() {
       dispatch('addBusiness');
     }
@@ -216,16 +208,10 @@
                   {/each}
                   <td class="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button 
-                      class="text-blue-600 hover:text-blue-900 mr-3"
+                      class="text-green-600 hover:text-green-900"
                       on:click={(e) => viewBusiness(business, e)}
                     >
-                      View
-                    </button>
-                    <button 
-                      class="text-gray-600 hover:text-gray-900"
-                      on:click={(e) => editBusiness(business, e)}
-                    >
-                      Edit
+                      View Details
                     </button>
                   </td>
                 </tr>
