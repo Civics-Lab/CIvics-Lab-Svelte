@@ -4,6 +4,7 @@
     import { writable } from 'svelte/store';
     import Modal from './Modal.svelte';
     import { toastStore } from '$lib/stores/toastStore';
+    import { workspaceStore } from '$lib/stores/workspaceStore';
     import LoadingSpinner from './LoadingSpinner.svelte';
     import type { TypedSupabaseClient } from '$lib/types/supabase';
     
@@ -92,12 +93,13 @@
       errors.set({});
       
       try {
-        // Create business
+        // Create business with the current workspace ID
         const { data: business, error: businessError } = await supabase
           .from('businesses')
           .insert({
             business_name: $formData.business_name,
-            status: 'active'
+            status: 'active',
+            workspace_id: $workspaceStore.currentWorkspace?.id
           })
           .select()
           .single();

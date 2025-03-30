@@ -563,13 +563,64 @@
     contactsError.set(null);
     
     try {
+      // Use the get_contacts_by_workspace function to fetch contacts for the current workspace
       const { data: fetchedContacts, error } = await data.supabase
-        .from('active_contacts')
-        .select('*');
+        .rpc('get_contacts_by_workspace', {
+          workspace_id_param: $workspaceStore.currentWorkspace.id
+        });
       
       if (error) throw error;
       
-      contacts.set(fetchedContacts || []);
+      // Add related contact data (emails, phones, etc.)
+      const enhancedContacts = await Promise.all((fetchedContacts || []).map(async (contact) => {
+        try {
+          // Get email addresses
+          const { data: emails } = await data.supabase
+            .from('contact_emails')
+            .select('*')
+            .eq('contact_id', contact.id);
+          
+          // Get phone numbers
+          const { data: phones } = await data.supabase
+            .from('contact_phone_numbers')
+            .select('*')
+            .eq('contact_id', contact.id);
+          
+          // Get addresses
+          const { data: addresses } = await data.supabase
+            .from('contact_full_addresses')
+            .select('*')
+            .eq('contact_id', contact.id);
+          
+          // Get social media accounts
+          const { data: socialMedia } = await data.supabase
+            .from('contact_social_media_accounts')
+            .select('*')
+            .eq('contact_id', contact.id);
+          
+          // Get tags - explicitly filter by workspace
+          const { data: tags } = await data.supabase
+            .from('contact_tags')
+            .select('*')
+            .eq('contact_id', contact.id)
+            .eq('workspace_id', $workspaceStore.currentWorkspace.id);
+          
+          // Return enhanced contact
+          return {
+            ...contact,
+            emails: emails || [],
+            phone_numbers: phones || [],
+            addresses: addresses || [],
+            social_media_accounts: socialMedia || [],
+            tags: tags || []
+          };
+        } catch (err) {
+          console.error('Error fetching contact details:', err);
+          return contact;
+        }
+      }));
+      
+      contacts.set(enhancedContacts || []);
       applyFiltersAndSorting();
     } catch (error) {
       console.error('Error fetching contacts:', error);

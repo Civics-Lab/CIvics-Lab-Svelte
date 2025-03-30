@@ -516,18 +516,16 @@
     businessesError.set(null);
     
     try {
-      // Fetch business data
-      // In a full implementation, we'd use an appropriate view that includes all needed fields
+      // Fetch businesses for the current workspace
       const { data: businessData, error } = await data.supabase
-        .from('active_businesses')
-        .select('*');
+        .from('businesses')
+        .select('*')
+        .eq('workspace_id', $workspaceStore.currentWorkspace.id);
       
       if (error) throw error;
       
-      // Enhanced business data with addresses, phones, etc. would be fetched here
-      // This is simplified for the implementation
+      // Enhanced business data with addresses, phones, etc.
       const enhancedBusinesses = await Promise.all((businessData || []).map(async (business) => {
-        // Get all related data (simplified)
         try {
           // Get phone numbers
           const { data: phones } = await data.supabase
@@ -541,6 +539,23 @@
             .select('*')
             .eq('business_id', business.id);
           
+          // Get social media accounts
+          const { data: socialMedia } = await data.supabase
+            .from('business_social_media_accounts')
+            .select('*')
+            .eq('business_id', business.id);
+          
+          // Get employees - which are contacts from the same workspace
+          const { data: employeeRelations } = await data.supabase
+            .from('business_employees')
+            .select(`
+              id,
+              status,
+              contact_id,
+              contacts:contact_id (id, first_name, last_name)
+            `)
+            .eq('business_id', business.id);
+          
           // Get tags
           const { data: tags } = await data.supabase
             .from('business_tags')
@@ -552,6 +567,8 @@
             ...business,
             phone_numbers: phones || [],
             addresses: addresses || [],
+            social_media_accounts: socialMedia || [],
+            employees: employeeRelations || [],
             tags: tags || []
           };
         } catch (err) {

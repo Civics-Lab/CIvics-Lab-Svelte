@@ -537,7 +537,39 @@
     donationsError.set(null);
     
     try {
-      const { data: fetchedDonations, error } = await data.supabase
+      // Get contacts from the current workspace
+      const { data: workspaceContacts, error: contactsError } = await data.supabase
+        .from('contacts')
+        .select('id')
+        .eq('workspace_id', $workspaceStore.currentWorkspace.id);
+      
+      if (contactsError) throw contactsError;
+      
+      // Get businesses from the current workspace
+      const { data: workspaceBusinesses, error: businessesError } = await data.supabase
+        .from('businesses')
+        .select('id')
+        .eq('workspace_id', $workspaceStore.currentWorkspace.id);
+      
+      if (businessesError) throw businessesError;
+      
+      // Extract IDs for filtering
+      const contactIds = workspaceContacts ? workspaceContacts.map(c => c.id) : [];
+      const businessIds = workspaceBusinesses ? workspaceBusinesses.map(b => b.id) : [];
+      
+      // If there are no contacts or businesses in this workspace, return empty results
+      if (contactIds.length === 0 && businessIds.length === 0) {
+        donations.set([]);
+        donationStats.set({
+          totalAmount: 0,
+          averageAmount: 0,
+          donorCount: 0
+        });
+        return;
+      }
+      
+      // Build the query with filters for current workspace entities
+      let query = data.supabase
         .from('donations')
         .select(`
           id,
@@ -550,6 +582,23 @@
           businesses:business_id (id, business_name)
         `)
         .order('created_at', { ascending: false });
+      
+      // Apply filters for contacts and businesses from this workspace
+      if (contactIds.length > 0) {
+        if (businessIds.length > 0) {
+          // Filter for both contacts and businesses from this workspace
+          query = query.or(`contact_id.in.(${contactIds.join(',')}),business_id.in.(${businessIds.join(',')})`);
+        } else {
+          // Only filter for contacts if there are no businesses
+          query = query.in('contact_id', contactIds);
+        }
+      } else if (businessIds.length > 0) {
+        // Only filter for businesses if there are no contacts
+        query = query.in('business_id', businessIds);
+      }
+      
+      // Execute the query
+      const { data: fetchedDonations, error } = await query;
       
       if (error) throw error;
       
