@@ -157,7 +157,7 @@ The application uses a component-based architecture with reusable UI elements:
 State management is handled through Svelte stores:
 
 - `userStore.ts` - Manages authenticated user information
-- `workspaceStore.ts` - Manages workspace selection and data
+- `workspaceStore.ts` - Manages workspace selection and data (see [Workspace Management](./workspace-management.md) for more details)
 - `toastStore.ts` - Manages toast notifications
 
 ## Database Integration
@@ -219,5 +219,8 @@ Tools for managing organizational workspaces:
 - Workspace creation and configuration
 - User invitation and role management
 - Workspace-specific data isolation
+- Persistent workspace selection across page refreshes
+
+For detailed information on workspace management, including recent fixes to workspace selection persistence, see the [Workspace Management documentation](./workspace-management.md).
 
 The application architecture follows modern best practices for web application development, with a clear separation of concerns, reusable components, and type safety through TypeScript.
