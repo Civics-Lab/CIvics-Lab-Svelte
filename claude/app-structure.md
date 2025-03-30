@@ -109,6 +109,25 @@ The application uses a component-based architecture with reusable UI elements:
 - `WorkspaceSelector.svelte` - Workspace selection UI
 - `WorkspaceContext.svelte` - Context provider for workspace data
 
+### Contact Components
+
+- `ContactsDataGrid.svelte` - Data display for contacts
+- `ContactDetailsSheet.svelte` - Detailed contact information
+- `ContactFormModal.svelte` - Form for creating/editing contacts
+- `ContactsFilterSortBar.svelte` - Filtering and sorting UI
+- `ContactsViewModals.svelte` - View configuration modals
+- `ContactsViewNavbar.svelte` - Navigation for contact views
+
+### Contact Detail Components
+
+- `ContactBasicInfo.svelte` - Basic contact information fields
+- `ContactEmails.svelte` - Email management section
+- `ContactPhones.svelte` - Phone number management section
+- `ContactAddresses.svelte` - Address management section
+- `ContactSocialMedia.svelte` - Social media account management
+- `ContactTags.svelte` - Tag management section
+- `ContactDonations.svelte` - Donation information for contacts
+
 ### Business Components
 
 - `BusinessesDataGrid.svelte` - Data display for businesses
@@ -118,14 +137,15 @@ The application uses a component-based architecture with reusable UI elements:
 - `BusinessesViewModals.svelte` - View configuration modals
 - `BusinessesViewNavbar.svelte` - Navigation for business views
 
-### Contact Components
+### Business Detail Components
 
-- `ContactsDataGrid.svelte` - Data display for contacts
-- `ContactDetailsSheet.svelte` - Detailed contact information
-- `ContactFormModal.svelte` - Form for creating/editing contacts
-- `ContactsFilterSortBar.svelte` - Filtering and sorting UI
-- `ContactsViewModals.svelte` - View configuration modals
-- `ContactsViewNavbar.svelte` - Navigation for contact views
+- `BusinessBasicInfo.svelte` - Basic business information fields
+- `BusinessAddresses.svelte` - Address management section
+- `BusinessPhones.svelte` - Phone number management section
+- `BusinessSocialMedia.svelte` - Social media account management
+- `BusinessEmployees.svelte` - Employee relationship management
+- `BusinessTags.svelte` - Tag management section
+- `BusinessDonations.svelte` - Donation information for businesses
 
 ### Additional Components
 
@@ -191,6 +211,7 @@ Tools for recording and tracking donations:
 - Donation recording
 - Donation status tracking
 - Donation reporting
+- Donation display in contact and business details
 
 ### Workspace Management
 

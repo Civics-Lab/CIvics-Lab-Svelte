@@ -166,6 +166,14 @@ The donation tracking system (`/engage/donations`) allows users to record and ma
 - Status tracking (promise, donated, processing, cleared)
 - Timestamp information
 
+### Donation UI Components
+
+- `ContactDonations.svelte`: Displays donation information in the contact details sheet
+- `BusinessDonations.svelte`: Displays donation information in the business details sheet
+- `DonationFormModal.svelte`: Modal form for recording donations
+
+For more detailed information on the donation tracking system, see the [Donation Tracking Documentation](donation-tracking.md).
+
 ### Donation Operations
 
 - Recording new donations

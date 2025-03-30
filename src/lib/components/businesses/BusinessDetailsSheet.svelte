@@ -15,6 +15,7 @@
     import BusinessSocialMedia from './BusinessDetailsSheet/BusinessSocialMedia.svelte';
     import BusinessTags from './BusinessDetailsSheet/BusinessTags.svelte';
     import BusinessEmployees from './BusinessDetailsSheet/BusinessEmployees.svelte';
+    import BusinessDonations from './BusinessDetailsSheet/BusinessDonations.svelte';
     
     // Props
     export let isOpen = false;
@@ -624,6 +625,15 @@
                     isSaving={$isSaving}
                     on:change={handleMultiItemChange}
                   />
+                  
+                  <!-- Donations Section -->
+                  {#if businessId}
+                    <BusinessDonations
+                      {businessId}
+                      {supabase}
+                      isSaving={$isSaving}
+                    />
+                  {/if}
                 </form>
               {/if}
             </div>

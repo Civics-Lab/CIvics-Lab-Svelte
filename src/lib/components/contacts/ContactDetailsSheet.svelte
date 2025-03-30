@@ -15,6 +15,7 @@
   import ContactAddresses from './ContactDetailsSheet/ContactAddresses.svelte';
   import ContactSocialMedia from './ContactDetailsSheet/ContactSocialMedia.svelte';
   import ContactTags from './ContactDetailsSheet/ContactTags.svelte';
+  import ContactDonations from './ContactDetailsSheet/ContactDonations.svelte';
   
   // Props
   export let isOpen = false;
@@ -660,6 +661,15 @@
                   isSaving={false}
                   on:change={handleMultiItemChange}
                 />
+                
+                <!-- Donations Section -->
+                {#if contactId}
+                  <ContactDonations
+                    {contactId}
+                    {supabase}
+                    isSaving={$isSaving}
+                  />
+                {/if}
               </form>
             {/if}
           </div>
