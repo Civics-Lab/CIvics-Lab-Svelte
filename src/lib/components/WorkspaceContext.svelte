@@ -86,8 +86,16 @@
         
         console.log("Enriched workspaces:", enrichedWorkspaces);
         
-        // Update the store with these workspaces
-        workspaceStore.setWorkspaces(enrichedWorkspaces);
+        // Get current workspace ID if set in localStorage
+        const savedWorkspaceId = typeof window !== 'undefined' 
+          ? localStorage.getItem('currentWorkspaceId') 
+          : null;
+        
+        console.log("Saved workspace ID from localStorage:", savedWorkspaceId);
+        
+        // Update the store with these workspaces and pass the saved workspace ID
+        // to explicitly set the current workspace
+        workspaceStore.setWorkspaces(enrichedWorkspaces, savedWorkspaceId);
       } else {
         console.log("No workspaces found with the IDs:", workspaceIds);
         workspaceStore.setWorkspaces([]);
@@ -140,6 +148,15 @@
   let windowEventListener: any;
   
   onMount(() => {
+    console.log("WorkspaceContext mounted");
+    
+    // Check for saved workspaceId immediately
+    const savedWorkspaceId = typeof window !== 'undefined' 
+      ? localStorage.getItem('currentWorkspaceId') 
+      : null;
+      
+    console.log("Initial savedWorkspaceId from localStorage:", savedWorkspaceId);  
+    
     // Initial data fetch
     fetchUserData();
     fetchUserWorkspaces();

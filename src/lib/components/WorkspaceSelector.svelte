@@ -25,6 +25,12 @@
   }
   
   function selectWorkspace(workspace: Workspace) {
+    console.log("User selected workspace:", workspace.name, workspace.id);
+    // Explicitly store in localStorage first
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('currentWorkspaceId', workspace.id);
+      console.log("Workspace ID saved to localStorage:", workspace.id);
+    }
     workspaceStore.setCurrentWorkspace(workspace.id);
     isOpen.set(false);
   }
