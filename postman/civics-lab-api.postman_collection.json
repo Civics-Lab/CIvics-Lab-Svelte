@@ -1,0 +1,415 @@
+{
+  "info": {
+    "name": "Civics Lab API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Signup",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@example.com\",\n  \"username\": \"testuser\",\n  \"password\": \"password123\",\n  \"displayName\": \"Test User\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/signup",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "signup"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"testuser\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Validate Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/validate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "validate"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "GraphQL",
+      "item": [
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"query { me { id username email role } }\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/graph",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "graph"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Workspace",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"mutation CreateWorkspace($input: WorkspaceInput!) { createWorkspace(input: $input) { id name slug } }\",\n  \"variables\": {\n    \"input\": {\n      \"name\": \"Test Workspace\",\n      \"slug\": \"test-workspace\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/graph",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "graph"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Workspaces",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"query { myWorkspaces { id name slug } }\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/graph",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "graph"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Contact",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"mutation CreateContact($input: ContactInput!) { createContact(input: $input) { id firstName lastName } }\",\n  \"variables\": {\n    \"input\": {\n      \"workspaceId\": \"{{workspaceId}}\",\n      \"firstName\": \"John\",\n      \"lastName\": \"Doe\",\n      \"email\": \"john@example.com\",\n      \"phone\": \"123-456-7890\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/graph",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "graph"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Workspace Contacts",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"query GetContacts($workspaceId: ID!) { workspaceContacts(workspaceId: $workspaceId) { id firstName lastName email phone } }\",\n  \"variables\": {\n    \"workspaceId\": \"{{workspaceId}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/graph",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "graph"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Business",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"mutation CreateBusiness($input: BusinessInput!) { createBusiness(input: $input) { id name } }\",\n  \"variables\": {\n    \"input\": {\n      \"workspaceId\": \"{{workspaceId}}\",\n      \"name\": \"Acme Corp\",\n      \"email\": \"info@acmecorp.com\",\n      \"phone\": \"555-123-4567\",\n      \"industry\": \"Technology\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/graph",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "graph"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Workspace Businesses",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"query GetBusinesses($workspaceId: ID!) { workspaceBusinesses(workspaceId: $workspaceId) { id name email phone industry } }\",\n  \"variables\": {\n    \"workspaceId\": \"{{workspaceId}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/graph",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "graph"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Donation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"mutation CreateDonation($input: DonationInput!) { createDonation(input: $input) { id amount date } }\",\n  \"variables\": {\n    \"input\": {\n      \"workspaceId\": \"{{workspaceId}}\",\n      \"amount\": 1000,\n      \"date\": \"2025-04-05T12:00:00Z\",\n      \"donorType\": \"contact\",\n      \"donorId\": \"{{contactId}}\",\n      \"campaign\": \"Spring Fundraiser\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/graph",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "graph"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Workspace Donations",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"query GetDonations($workspaceId: ID!) { workspaceDonations(workspaceId: $workspaceId) { id amount date donorType donorId campaign } }\",\n  \"variables\": {\n    \"workspaceId\": \"{{workspaceId}}\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/graph",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "graph"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add Workspace Member",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"mutation AddMember($workspaceId: ID!, $input: WorkspaceUserInput!) { addWorkspaceMember(workspaceId: $workspaceId, input: $input) { id role } }\",\n  \"variables\": {\n    \"workspaceId\": \"{{workspaceId}}\",\n    \"input\": {\n      \"userId\": \"{{otherUserId}}\",\n      \"role\": \"member\"\n    }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/graph",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "graph"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "health"]
+        }
+      },
+      "response": []
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Auto-extract token from login/signup responses",
+          "if (pm.response.code === 200) {",
+          "    const jsonData = pm.response.json();",
+          "    if (jsonData.success && jsonData.data && jsonData.data.token) {",
+          "        pm.environment.set('token', jsonData.data.token);",
+          "        console.log('Token saved to environment');",
+          "    }",
+          "    ",
+          "    // Extract workspace ID from create workspace response",
+          "    if (pm.request.url.path[2] === 'graph' && ",
+          "        jsonData.data && jsonData.data.createWorkspace && jsonData.data.createWorkspace.id) {",
+          "        pm.environment.set('workspaceId', jsonData.data.createWorkspace.id);",
+          "        console.log('Workspace ID saved to environment');",
+          "    }",
+          "    ",
+          "    // Extract contact ID from create contact response",
+          "    if (pm.request.url.path[2] === 'graph' && ",
+          "        jsonData.data && jsonData.data.createContact && jsonData.data.createContact.id) {",
+          "        pm.environment.set('contactId', jsonData.data.createContact.id);",
+          "        console.log('Contact ID saved to environment');",
+          "    }",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5173"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "workspaceId",
+      "value": ""
+    },
+    {
+      "key": "contactId",
+      "value": ""
+    },
+    {
+      "key": "otherUserId",
+      "value": ""
+    }
+  ]
+}
