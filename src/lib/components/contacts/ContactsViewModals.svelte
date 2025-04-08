@@ -11,7 +11,6 @@
     export let isDeleteViewModalOpen = false;
     export let newViewName = '';
     export let currentView = null;
-    export let supabase = null;
     
     const dispatch = createEventDispatcher();
     
@@ -59,7 +58,6 @@
   <!-- Contact Form Modal -->
   <ContactFormModal 
     isOpen={isContactModalOpen} 
-    {supabase} 
     on:close={closeContactModal}
     on:success={contactCreated}
   />
@@ -119,7 +117,7 @@
           type="text"
           bind:value={newViewName}
           class="w-full p-2 border rounded focus:ring-blue-500 focus:border-blue-500"
-          placeholder={currentView?.view_name || 'Enter view name'}
+          placeholder={currentView?.viewName || 'Enter view name'}
         />
       </div>
       
@@ -150,7 +148,7 @@
   >
     <div class="p-4">
       <p class="text-gray-700 mb-4">
-        Are you sure you want to delete the view "{currentView?.view_name}"? This action cannot be undone.
+        Are you sure you want to delete the view "{currentView?.viewName}"? This action cannot be undone.
       </p>
       
       <div class="flex justify-end space-x-3 mt-6">

@@ -836,7 +836,7 @@
                 <input 
                   type="text" 
                   id="zip_{i}" 
-                  bind:value={address.zip_code}
+                  bind:value={address.zipCode}
                   class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
                   disabled={$isSubmitting}
                 />
@@ -902,7 +902,7 @@
               <div class="mt-1">
                 <select
                   id="social_service_{i}"
-                  bind:value={social.service_type}
+                  bind:value={social.serviceType}
                   class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
                   disabled={$isSubmitting}
                 >
@@ -919,7 +919,7 @@
                 <input 
                   type="text" 
                   id="social_account_{i}" 
-                  bind:value={social.social_media_account}
+                  bind:value={social.socialMediaAccount}
                   class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
                   disabled={$isSubmitting}
                 />

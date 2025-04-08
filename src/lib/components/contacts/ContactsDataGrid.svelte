@@ -4,7 +4,6 @@
   import { writable } from 'svelte/store';
   import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
   import ContactDetailsSheet from '$lib/components/contacts/ContactDetailsSheet.svelte';
-  import type { TypedSupabaseClient } from '$lib/types/supabase';
   
   // Props
   export let contacts = [];
@@ -12,7 +11,6 @@
   export let error = null;
   export let visibleColumns = [];
   export let availableFields = [];
-  export let supabase: TypedSupabaseClient;
   
   // State
   let columnRefs = {};
@@ -150,17 +148,17 @@
               >
                 {#each visibleColumns as columnId}
                   <td class="px-4 py-4 whitespace-nowrap">
-                    {#if columnId === 'first_name' || columnId === 'middle_name' || columnId === 'last_name'}
+                    {#if columnId === 'firstName' || columnId === 'middleName' || columnId === 'lastName'}
                       <div class="text-sm font-medium text-gray-900">
                         {contact[columnId] || '—'}
                       </div>
-                    {:else if columnId === 'emails' || columnId === 'phone_numbers' || columnId === 'addresses' || columnId === 'social_media_accounts'}
+                    {:else if columnId === 'emails' || columnId === 'phoneNumbers' || columnId === 'addresses' || columnId === 'socialMediaAccounts'}
                       <!-- Show multiple items with badges -->
                       <div class="flex flex-wrap gap-1">
                         {#if contact[columnId] && Array.isArray(contact[columnId]) && contact[columnId].length > 0}
                           {#each contact[columnId].slice(0, 2) as item}
                             <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                              {item}
+                              {item.email || item.phoneNumber || item.streetAddress || item.socialMediaAccount || '—'}
                             </span>
                           {/each}
                           {#if contact[columnId].length > 2}
@@ -201,7 +199,6 @@
   <ContactDetailsSheet 
     isOpen={$isContactDetailsOpen}
     contactId={$selectedContactId}
-    {supabase}
     on:close={closeContactDetails}
     on:updated={handleContactUpdated}
   />

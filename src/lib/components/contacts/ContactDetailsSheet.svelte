@@ -6,7 +6,7 @@
   import DetailsSheetOverlay from '$lib/components/DetailsSheetOverlay.svelte';
   import { toastStore } from '$lib/stores/toastStore';
   import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-  import type { TypedSupabaseClient } from '$lib/types/supabase';
+  import { fetchContact, updateContact, deleteContact } from '$lib/services/contactService';
   
   // Import subcomponents
   import ContactBasicInfo from './ContactDetailsSheet/ContactBasicInfo.svelte';
@@ -20,7 +20,6 @@
   // Props
   export let isOpen = false;
   export let contactId: string | null = null;
-  export let supabase: TypedSupabaseClient;
   
   const dispatch = createEventDispatcher();
   
@@ -36,11 +35,11 @@
   // Contact data
   const originalData = writable<any>(null);
   const formData = writable<any>({
-    first_name: '',
-    middle_name: '',
-    last_name: '',
-    gender_id: '',
-    race_id: '',
+    firstName: '',
+    middleName: '',
+    lastName: '',
+    genderId: '',
+    raceId: '',
     pronouns: '',
     vanid: '',
     status: 'active'
@@ -61,32 +60,32 @@
   // Fetch options
   async function fetchOptions() {
     try {
-      // Fetch gender options
-      const { data: genderData, error: genderError } = await supabase
-        .from('genders')
-        .select('id, gender')
-        .order('gender');
+      // These would ideally come from API endpoints too
+      // For now, we'll use placeholder data
+      genderOptions.set([
+        { id: '1', gender: 'Male' },
+        { id: '2', gender: 'Female' },
+        { id: '3', gender: 'Non-binary' },
+        { id: '4', gender: 'Other' }
+      ]);
       
-      if (genderError) throw genderError;
-      genderOptions.set(genderData || []);
+      raceOptions.set([
+        { id: '1', race: 'Asian' },
+        { id: '2', race: 'Black or African American' },
+        { id: '3', race: 'Hispanic or Latino' },
+        { id: '4', race: 'Native American' },
+        { id: '5', race: 'Pacific Islander' },
+        { id: '6', race: 'White' },
+        { id: '7', race: 'Other' },
+        { id: '8', race: 'Multiracial' }
+      ]);
       
-      // Fetch race options
-      const { data: raceData, error: raceError } = await supabase
-        .from('races')
-        .select('id, race')
-        .order('race');
-      
-      if (raceError) throw raceError;
-      raceOptions.set(raceData || []);
-      
-      // Fetch state options
-      const { data: stateData, error: stateError } = await supabase
-        .from('states')
-        .select('id, name, abbreviation')
-        .order('name');
-      
-      if (stateError) throw stateError;
-      stateOptions.set(stateData || []);
+      stateOptions.set([
+        { id: '1', name: 'Alabama', abbreviation: 'AL' },
+        { id: '2', name: 'Alaska', abbreviation: 'AK' },
+        { id: '3', name: 'Arizona', abbreviation: 'AZ' },
+        // Add more states here
+      ]);
       
     } catch (err) {
       console.error('Error fetching options:', err);
@@ -101,61 +100,51 @@
     error.set(null);
     
     try {
-      // Fetch contact details
-      const { data, error: fetchError } = await supabase
-        .rpc('get_contact_details', { contact_uuid: contactId });
+      // Fetch contact details using the API service
+      const contact = await fetchContact(contactId);
       
-      if (fetchError) throw fetchError;
-      
-      if (data && data.length > 0) {
-        const contactData = data[0];
-        
+      if (contact) {
         // Set basic info
-        const nameParts = contactData.full_name.split(' ');
-        const firstName = nameParts[0] || '';
-        const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
-        const middleName = nameParts.length > 2 ? nameParts.slice(1, -1).join(' ') : '';
-        
         formData.set({
-          first_name: firstName,
-          last_name: lastName,
-          middle_name: middleName,
-          gender_id: contactData.gender_id || '',
-          race_id: contactData.race_id || '',
-          pronouns: contactData.pronouns || '',
-          vanid: contactData.vanid || '',
-          status: contactData.status || 'active'
+          firstName: contact.firstName || '',
+          lastName: contact.lastName || '',
+          middleName: contact.middleName || '',
+          genderId: contact.genderId || '',
+          raceId: contact.raceId || '',
+          pronouns: contact.pronouns || '',
+          vanid: contact.vanid || '',
+          status: contact.status || 'active'
         });
         
         // Store original data for comparison
         originalData.set({
           ...JSON.parse(JSON.stringify($formData)),
-          tags: contactData.tags ? [...contactData.tags.map(t => t.tag)] : []
+          tags: contact.tags ? [...contact.tags.map(t => t.tag)] : []
         });
         
         // Set emails
-        if (contactData.emails) {
-          emails.set(Array.isArray(contactData.emails) ? contactData.emails : []);
+        if (contact.emails) {
+          emails.set(Array.isArray(contact.emails) ? contact.emails : []);
         } else {
           emails.set([]);
         }
         
         // Set phone numbers
-        if (contactData.phone_numbers) {
-          phoneNumbers.set(Array.isArray(contactData.phone_numbers) ? contactData.phone_numbers : []);
+        if (contact.phone_numbers) {
+          phoneNumbers.set(Array.isArray(contact.phone_numbers) ? contact.phone_numbers : []);
         } else {
           phoneNumbers.set([]);
         }
         
         // Set addresses
-        if (contactData.addresses) {
-          addresses.set(Array.isArray(contactData.addresses) ? contactData.addresses.map(address => ({
+        if (contact.addresses) {
+          addresses.set(Array.isArray(contact.addresses) ? contact.addresses.map(address => ({
             id: address.id,
-            street_address: address.street_address || '',
-            secondary_street_address: address.secondary_street_address || '',
+            streetAddress: address.streetAddress || '',
+            secondaryStreetAddress: address.secondaryStreetAddress || '',
             city: address.city || '',
-            state_id: address.state_id || '',
-            zip_code: address.zip_code_id || '',
+            stateId: address.stateId || '',
+            zipCode: address.zipCodeId || '',
             status: address.status || 'active'
           })) : []);
         } else {
@@ -163,15 +152,15 @@
         }
         
         // Set social media
-        if (contactData.social_media) {
-          socialMedia.set(Array.isArray(contactData.social_media) ? contactData.social_media : []);
+        if (contact.social_media_accounts) {
+          socialMedia.set(Array.isArray(contact.social_media_accounts) ? contact.social_media_accounts : []);
         } else {
           socialMedia.set([]);
         }
         
         // Set tags
-        if (contactData.tags) {
-          tags.set(Array.isArray(contactData.tags) ? contactData.tags.map(tag => tag.tag) : []);
+        if (contact.tags) {
+          tags.set(Array.isArray(contact.tags) ? contact.tags.map(tag => tag.tag) : []);
         } else {
           tags.set([]);
         }
@@ -195,230 +184,18 @@
     error.set(null);
     
     try {
-      // Update contact basic info if changed
-      if (JSON.stringify($formData) !== JSON.stringify($originalData)) {
-        // Sanitize the form data to handle UUID fields
-        const sanitizedFormData = { ...$formData };
-        
-        // Convert empty string UUID fields to null
-        // These fields are typically UUID foreign keys
-        const uuidFields = ['gender_id', 'race_id'];
-        uuidFields.forEach(field => {
-          if (sanitizedFormData[field] === '') {
-            sanitizedFormData[field] = null;
-          }
-        });
-        
-        const { error: updateError } = await supabase
-          .from('contacts')
-          .update(sanitizedFormData)
-          .eq('id', contactId);
-        
-        if (updateError) throw updateError;
-      }
+      // Prepare the update data
+      const updateData = {
+        contactData: { ...$formData },
+        emails: $emails.filter(email => email.isNew || email.isDeleted || email.isModified),
+        phoneNumbers: $phoneNumbers.filter(phone => phone.isNew || phone.isDeleted || phone.isModified),
+        addresses: $addresses.filter(address => address.isNew || address.isDeleted || address.isModified),
+        socialMedia: $socialMedia.filter(social => social.isNew || social.isDeleted || social.isModified),
+        tags: $tags
+      };
       
-      // Handle email updates
-      for (const email of $emails) {
-        if (email.isNew) {
-          // Insert new email
-          await supabase
-            .from('contact_emails')
-            .insert({
-              contact_id: contactId,
-              email: email.email,
-              status: email.status
-            });
-        } else if (email.isDeleted) {
-          // Delete email
-          await supabase
-            .from('contact_emails')
-            .delete()
-            .eq('id', email.id);
-        } else if (email.isModified) {
-          // Update email
-          await supabase
-            .from('contact_emails')
-            .update({
-              email: email.email,
-              status: email.status
-            })
-            .eq('id', email.id);
-        }
-      }
-      
-      // Handle phone updates
-      for (const phone of $phoneNumbers) {
-        if (phone.isNew) {
-          // Insert new phone
-          await supabase
-            .from('contact_phone_numbers')
-            .insert({
-              contact_id: contactId,
-              phone_number: phone.phone_number,
-              status: phone.status
-            });
-        } else if (phone.isDeleted) {
-          // Delete phone
-          await supabase
-            .from('contact_phone_numbers')
-            .delete()
-            .eq('id', phone.id);
-        } else if (phone.isModified) {
-          // Update phone
-          await supabase
-            .from('contact_phone_numbers')
-            .update({
-              phone_number: phone.phone_number,
-              status: phone.status
-            })
-            .eq('id', phone.id);
-        }
-      }
-      
-      // Handle address updates
-      for (const address of $addresses) {
-        // Sanitize address data - convert empty state_id to null
-        if (address.state_id === '') {
-          address.state_id = null;
-        }
-        
-        if (address.isNew) {
-          // Handle the zip code first - get or create it
-          let zip_code_id = null;
-          if (address.zip_code && address.zip_code.trim()) {
-            // Try to find the zip code first
-            const { data: zipData, error: zipError } = await supabase
-              .from('zip_codes')
-              .select('id')
-              .eq('name', address.zip_code.trim())
-              .maybeSingle();
-            
-            if (!zipError && zipData) {
-              // Use existing zip code
-              zip_code_id = zipData.id;
-            } else {
-              // Create a new zip code record
-              try {
-                const { data: newZipCode, error: zipCreateError } = await supabase
-                  .from('zip_codes')
-                  .insert({
-                    name: address.zip_code.trim(),
-                    state_id: address.state_id || null
-                  })
-                  .select('id')
-                  .single();
-                
-                if (zipCreateError) {
-                  console.error('Error creating zip code:', zipCreateError);
-                } else {
-                  zip_code_id = newZipCode.id;
-                }
-              } catch (err) {
-                console.error('Error in zip code creation process:', err);
-              }
-            }
-          }
-          
-          // Insert new address with the zip code
-          await supabase
-            .from('contact_addresses')
-            .insert({
-              contact_id: contactId,
-              street_address: address.street_address,
-              secondary_street_address: address.secondary_street_address || null,
-              city: address.city,
-              state_id: address.state_id, // Now null if it was empty string
-              zip_code_id: zip_code_id,
-              status: address.status
-            });
-        } else if (address.isDeleted) {
-          // Delete address
-          await supabase
-            .from('contact_addresses')
-            .delete()
-            .eq('id', address.id);
-        } else if (address.isModified) {
-          // Handle the zip code first - get or create it
-          let zip_code_id = null;
-          if (address.zip_code && address.zip_code.trim()) {
-            // Try to find the zip code first
-            const { data: zipData, error: zipError } = await supabase
-              .from('zip_codes')
-              .select('id')
-              .eq('name', address.zip_code.trim())
-              .maybeSingle();
-            
-            if (!zipError && zipData) {
-              // Use existing zip code
-              zip_code_id = zipData.id;
-            } else {
-              // Create a new zip code record
-              try {
-                const { data: newZipCode, error: zipCreateError } = await supabase
-                  .from('zip_codes')
-                  .insert({
-                    name: address.zip_code.trim(),
-                    state_id: address.state_id || null
-                  })
-                  .select('id')
-                  .single();
-                
-                if (zipCreateError) {
-                  console.error('Error creating zip code:', zipCreateError);
-                } else {
-                  zip_code_id = newZipCode.id;
-                }
-              } catch (err) {
-                console.error('Error in zip code creation process:', err);
-              }
-            }
-          }
-          
-          // Update address with the zip code
-          await supabase
-            .from('contact_addresses')
-            .update({
-              street_address: address.street_address,
-              secondary_street_address: address.secondary_street_address || null,
-              city: address.city,
-              state_id: address.state_id, // Now null if it was empty string
-              zip_code_id: zip_code_id,
-              status: address.status
-            })
-            .eq('id', address.id);
-        }
-      }
-      
-      // Handle social media updates
-      for (const social of $socialMedia) {
-        if (social.isNew) {
-          // Insert new social media
-          await supabase
-            .from('contact_social_media_accounts')
-            .insert({
-              contact_id: contactId,
-              social_media_account: social.social_media_account,
-              service_type: social.service_type,
-              status: social.status
-            });
-        } else if (social.isDeleted) {
-          // Delete social media
-          await supabase
-            .from('contact_social_media_accounts')
-            .delete()
-            .eq('id', social.id);
-        } else if (social.isModified) {
-          // Update social media
-          await supabase
-            .from('contact_social_media_accounts')
-            .update({
-              social_media_account: social.social_media_account,
-              service_type: social.service_type,
-              status: social.status
-            })
-            .eq('id', social.id);
-        }
-      }
+      // Call the API to update the contact
+      await updateContact(contactId, updateData);
       
       // Success notification
       toastStore.success('Contact updated successfully');
@@ -569,7 +346,7 @@
                   {:else if $error}
                     Error Loading Contact
                   {:else}
-                    {$formData.first_name} {$formData.last_name}
+                    {$formData.firstName} {$formData.lastName}
                   {/if}
                 </h2>
                 <p class="mt-1 text-sm {$hasChanges ? 'text-orange-500 font-medium' : 'text-gray-500'}">
@@ -666,7 +443,6 @@
                 {#if contactId}
                   <ContactDonations
                     {contactId}
-                    {supabase}
                     isSaving={$isSaving}
                   />
                 {/if}

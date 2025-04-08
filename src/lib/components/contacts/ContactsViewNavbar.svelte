@@ -96,7 +96,7 @@
           class="px-3 py-2 border rounded-md bg-white flex items-center space-x-2 text-sm hover:bg-gray-50"
           on:click={toggleViewSelect}
         >
-          <span>{currentView?.view_name || 'Select View'}</span>
+          <span>{currentView?.viewName || 'Select View'}</span>
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
           </svg>
@@ -126,7 +126,7 @@
                     class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 {currentView?.id === view.id ? 'bg-blue-50 text-blue-700' : ''}"
                     on:click={() => selectView(view)}
                   >
-                    {view.view_name}
+                    {view.viewName}
                   </button>
                 {/each}
               {/if}

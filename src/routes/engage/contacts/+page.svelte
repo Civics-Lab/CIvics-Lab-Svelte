@@ -1,6 +1,8 @@
 <!-- src/routes/engage/contacts/+page.svelte -->
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { fetchContacts, createContact, updateContact, deleteContact } from '$lib/services/contactService';
+  import { fetchContactViews, createContactView, updateContactView, deleteContactView, createDefaultContactView } from '$lib/services/contactViewService';
   import { writable } from 'svelte/store';
   import { workspaceStore } from '$lib/stores/workspaceStore';
   import { toastStore } from '$lib/stores/toastStore';
@@ -57,16 +59,16 @@
   
   // Fields that can be displayed/filtered/sorted
   const availableFields = writable([
-    { id: 'first_name', label: 'First Name' },
-    { id: 'last_name', label: 'Last Name' },
-    { id: 'middle_name', label: 'Middle Name' },
+    { id: 'firstName', label: 'First Name' },
+    { id: 'lastName', label: 'Last Name' },
+    { id: 'middleName', label: 'Middle Name' },
     { id: 'gender', label: 'Gender' },
     { id: 'race', label: 'Race' },
     { id: 'pronouns', label: 'Pronouns' },
     { id: 'emails', label: 'Email' },
-    { id: 'phone_numbers', label: 'Phone' },
+    { id: 'phoneNumbers', label: 'Phone' },
     { id: 'addresses', label: 'Address' },
-    { id: 'social_media_accounts', label: 'Social Media' },
+    { id: 'socialMediaAccounts', label: 'Social Media' },
     { id: 'vanid', label: 'VAN ID' },
   ]);
   
@@ -106,7 +108,7 @@
   
   function handleOpenEditViewModal() {
     if ($currentView) {
-      newViewName.set($currentView.view_name);
+      newViewName.set($currentView.viewName);
       isEditViewModalOpen.set(true);
     }
   }
@@ -124,11 +126,11 @@
   }
   
   function handleContactCreated() {
-    fetchContacts();
+    fetchContactsData();
   }
   
   function handleContactUpdated() {
-    fetchContacts();
+    fetchContactsData();
   }
   
   function handleAddFilter() {
@@ -187,13 +189,7 @@
     viewsError.set(null);
     
     try {
-      const { data: fetchedViews, error } = await data.supabase
-        .from('contact_views')
-        .select('*')
-        .eq('workspace_id', $workspaceStore.currentWorkspace.id)
-        .order('view_name');
-      
-      if (error) throw error;
+      const fetchedViews = await fetchContactViews($workspaceStore.currentWorkspace.id);
       
       if (fetchedViews && fetchedViews.length > 0) {
         views.set(fetchedViews);
@@ -250,31 +246,7 @@
     if (!$workspaceStore.currentWorkspace) return;
     
     try {
-      const defaultView = {
-        view_name: 'Default View',
-        workspace_id: $workspaceStore.currentWorkspace.id,
-        first_name: true,
-        last_name: true,
-        middle_name: false,
-        emails: true,
-        phone_numbers: true,
-        addresses: false,
-        gender: false,
-        race: false,
-        pronouns: false,
-        social_media_accounts: false,
-        vanid: false,
-        filters: [],
-        sorting: []
-      };
-      
-      const { data: newView, error } = await data.supabase
-        .from('contact_views')
-        .insert(defaultView)
-        .select()
-        .single();
-      
-      if (error) throw error;
+      const newView = await createDefaultContactView($workspaceStore.currentWorkspace.id);
       
       views.set([newView]);
       currentView.set(newView);
@@ -294,31 +266,23 @@
     
     try {
       // Create the view with default fields visible
-      const newView = {
-        view_name: viewName.trim(),
-        workspace_id: $workspaceStore.currentWorkspace.id,
-        first_name: true,
-        last_name: true,
-        middle_name: true,
+      const newView = await createContactView({
+        viewName: viewName.trim(),
+        workspaceId: $workspaceStore.currentWorkspace.id,
+        firstName: true,
+        lastName: true,
+        middleName: true,
         emails: true,
-        phone_numbers: true,
+        phoneNumbers: true,
         addresses: true,
         gender: true,
         race: true,
         pronouns: true,
-        social_media_accounts: true,
+        socialMediaAccounts: true,
         vanid: true,
         filters: [],
         sorting: []
-      };
-      
-      const { data: createdView, error } = await data.supabase
-        .from('contact_views')
-        .insert(newView)
-        .select()
-        .single();
-      
-      if (error) throw error;
+      });
       
       // Close modal first to avoid any state issues
       isCreateViewModalOpen.set(false);
@@ -328,7 +292,7 @@
       await fetchViews();
       
       // Find the newly created view in the refreshed list
-      const refreshedView = $views.find(v => v.id === createdView.id);
+      const refreshedView = $views.find(v => v.id === newView.id);
       if (refreshedView) {
         // Set as current view
         currentView.set(refreshedView);
@@ -367,7 +331,7 @@
         console.log('Using name from store:', updatedViewName);
       } else {
         // Fallback to current name
-        updatedViewName = $currentView.view_name;
+        updatedViewName = $currentView.viewName;
         console.log('Using current name:', updatedViewName);
       }
       
@@ -378,10 +342,9 @@
       
       console.log('Updating view with name:', updatedViewName);
       
-      // Create updated view object
+      // Create updated view object with proper property names
       const updatedView = {
-        ...$currentView,
-        view_name: updatedViewName,
+        viewName: updatedViewName,
         filters: $filters,
         sorting: $sorting
       };
@@ -389,30 +352,21 @@
       console.log('Will update view ID:', $currentView.id);
       console.log('Full updated view:', updatedView);
       
-      // Update in Supabase
-      const { data: updatedData, error } = await data.supabase
-        .from('contact_views')
-        .update(updatedView)
-        .eq('id', $currentView.id)
-        .select();
+      // Update using API
+      const result = await updateContactView($currentView.id, updatedView);
       
-      if (error) {
-        console.error('Supabase update error:', error);
-        throw error;
-      }
-      
-      console.log('Supabase update result:', updatedData);
+      console.log('API update result:', result);
       
       // Update the views list
       views.update(viewsList => 
         viewsList.map(view => view.id === $currentView.id 
-          ? updatedView 
+          ? { ...view, ...updatedView } 
           : view
         )
       );
       
       // Update current view
-      currentView.set(updatedView);
+      currentView.update(view => ({ ...view, ...updatedView }));
       
       // Close the edit modal if it's open
       if ($isEditViewModalOpen) {
@@ -436,12 +390,7 @@
     if (!$currentView) return;
     
     try {
-      const { error } = await data.supabase
-        .from('contact_views')
-        .delete()
-        .eq('id', $currentView.id);
-      
-      if (error) throw error;
+      await deleteContactView($currentView.id);
       
       // Remove the view from the list
       views.update(v => v.filter(view => view.id !== $currentView.id));
@@ -469,22 +418,22 @@
     if (!$currentView) return;
     
     try {
-      const updatedView = { ...$currentView, [fieldId]: !$currentView[fieldId] };
+      // Create the field update object with the toggled field
+      const fieldUpdate = { [fieldId]: !$currentView[fieldId] };
       
-      const { error } = await data.supabase
-        .from('contact_views')
-        .update({ [fieldId]: !$currentView[fieldId] })
-        .eq('id', $currentView.id);
-      
-      if (error) throw error;
+      // Update the view via the API
+      await updateContactView($currentView.id, fieldUpdate);
       
       // Update the current view
-      currentView.set(updatedView);
+      currentView.update(view => ({
+        ...view,
+        [fieldId]: !view[fieldId]
+      }));
       
       // Update the view in the list
       views.update(v => 
         v.map(view => view.id === $currentView.id 
-          ? updatedView 
+          ? { ...view, [fieldId]: !view[fieldId] } 
           : view
         )
       );
@@ -556,71 +505,18 @@
   }
   
   // Function to fetch contacts
-  async function fetchContacts() {
+  async function fetchContactsData() {
     if (!$workspaceStore.currentWorkspace) return;
     
     isLoadingContacts.set(true);
     contactsError.set(null);
     
     try {
-      // Use the get_contacts_by_workspace function to fetch contacts for the current workspace
-      const { data: fetchedContacts, error } = await data.supabase
-        .rpc('get_contacts_by_workspace', {
-          workspace_id_param: $workspaceStore.currentWorkspace.id
-        });
+      // Fetch contacts using the API service
+      const contactsData = await fetchContacts($workspaceStore.currentWorkspace.id);
       
-      if (error) throw error;
-      
-      // Add related contact data (emails, phones, etc.)
-      const enhancedContacts = await Promise.all((fetchedContacts || []).map(async (contact) => {
-        try {
-          // Get email addresses
-          const { data: emails } = await data.supabase
-            .from('contact_emails')
-            .select('*')
-            .eq('contact_id', contact.id);
-          
-          // Get phone numbers
-          const { data: phones } = await data.supabase
-            .from('contact_phone_numbers')
-            .select('*')
-            .eq('contact_id', contact.id);
-          
-          // Get addresses
-          const { data: addresses } = await data.supabase
-            .from('contact_full_addresses')
-            .select('*')
-            .eq('contact_id', contact.id);
-          
-          // Get social media accounts
-          const { data: socialMedia } = await data.supabase
-            .from('contact_social_media_accounts')
-            .select('*')
-            .eq('contact_id', contact.id);
-          
-          // Get tags - explicitly filter by workspace
-          const { data: tags } = await data.supabase
-            .from('contact_tags')
-            .select('*')
-            .eq('contact_id', contact.id)
-            .eq('workspace_id', $workspaceStore.currentWorkspace.id);
-          
-          // Return enhanced contact
-          return {
-            ...contact,
-            emails: emails || [],
-            phone_numbers: phones || [],
-            addresses: addresses || [],
-            social_media_accounts: socialMedia || [],
-            tags: tags || []
-          };
-        } catch (err) {
-          console.error('Error fetching contact details:', err);
-          return contact;
-        }
-      }));
-      
-      contacts.set(enhancedContacts || []);
+      // Set contacts in the store
+      contacts.set(contactsData || []);
       applyFiltersAndSorting();
     } catch (error) {
       console.error('Error fetching contacts:', error);
@@ -697,18 +593,18 @@
         
         // Check all possible fields
         return (
-          fieldIncludes(contact.first_name) ||
-          fieldIncludes(contact.last_name) ||
-          fieldIncludes(contact.middle_name) || 
+          fieldIncludes(contact.firstName) ||
+          fieldIncludes(contact.lastName) ||
+          fieldIncludes(contact.middleName) || 
           fieldIncludes(contact.email) ||
           fieldIncludes(contact.emails) ||
           fieldIncludes(contact.phone) ||
-          fieldIncludes(contact.phone_number) ||
-          fieldIncludes(contact.phone_numbers) ||
+          fieldIncludes(contact.phoneNumber) ||
+          fieldIncludes(contact.phoneNumbers) ||
           fieldIncludes(contact.gender) ||
-          fieldIncludes(contact.gender_name) ||
+          fieldIncludes(contact.genderName) ||
           fieldIncludes(contact.race) ||
-          fieldIncludes(contact.race_name) ||
+          fieldIncludes(contact.raceName) ||
           fieldIncludes(contact.pronouns) ||
           fieldIncludes(contact.address) || 
           fieldIncludes(contact.addresses) ||
@@ -753,14 +649,14 @@
   onMount(() => {
     if ($workspaceStore.currentWorkspace) {
       fetchViews();
-      fetchContacts();
+      fetchContactsData();
     }
   });
   
   // Fetch data when workspace changes
   $: if ($workspaceStore.currentWorkspace) {
     fetchViews();
-    fetchContacts();
+    fetchContactsData();
   }
 </script>
 
@@ -824,10 +720,9 @@
       isLoading={$isLoadingContacts}
       error={$contactsError}
       visibleColumns={$currentView ? Object.entries($currentView)
-        .filter(([key, value]) => value === true && !key.startsWith('_'))
+        .filter(([key, value]) => value === true && key !== 'id' && key !== 'viewName' && key !== 'workspaceId' && key !== 'filters' && key !== 'sorting' && key !== 'createdById' && key !== 'createdAt' && key !== 'updatedAt')
         .map(([key]) => key) : []}
       availableFields={$availableFields}
-      supabase={data.supabase}
       on:addContact={handleAddContact}
       on:contactUpdated={handleContactUpdated}
     />
@@ -840,7 +735,6 @@
       isDeleteViewModalOpen={$isDeleteViewModalOpen}
       newViewName={$newViewName}
       currentView={$currentView}
-      supabase={data.supabase}
       on:closeContactModal={handleCloseContactModal}
       on:contactCreated={handleContactCreated}
       on:createView={createView}
