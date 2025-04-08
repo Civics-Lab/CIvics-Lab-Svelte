@@ -12,6 +12,7 @@ export const donationStatusEnum = pgEnum('donation_status', ['promise', 'donated
 export const socialMediaServiceEnum = pgEnum('social_media_service', ['facebook', 'twitter', 'bluesky', 'tiktok', 'instagram', 'threads', 'youtube']);
 export const socialMediaStatusEnum = pgEnum('social_media_status', ['active', 'inactive', 'blocked', 'deleted']);
 export const workspaceRoleEnum = pgEnum('workspace_role', ['Super Admin', 'Admin', 'Basic User', 'Volunteer']);
+export const inviteStatusEnum = pgEnum('invite_status', ['Pending', 'Accepted', 'Declined', 'Expired']);
 
 // Users Table - For Hono Auth
 export const users = pgTable('users', {
@@ -288,6 +289,20 @@ export const workspacePayments = pgTable('workspace_payments', {
   updatedAt: timestamp('updated_at').defaultNow()
 });
 
+// User Invites table for workspace invitations
+export const userInvites = pgTable('user_invites', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  email: text('email').notNull(),
+  workspaceId: uuid('workspace_id').references(() => workspaces.id),
+  role: workspaceRoleEnum('role').default('Basic User'),
+  status: inviteStatusEnum('status').default('Pending'),
+  invitedById: uuid('invited_by').references(() => users.id),
+  invitedAt: timestamp('invited_at').defaultNow(),
+  expiresAt: timestamp('expires_at'),
+  acceptedAt: timestamp('accepted_at'),
+  token: text('token').notNull().unique()
+});
+
 // Define relations
 export const usersRelations = relations(users, ({ many }) => ({
   userWorkspaces: many(userWorkspaces),
@@ -302,7 +317,8 @@ export const usersRelations = relations(users, ({ many }) => ({
   updatedContactAddresses: many(contactAddresses, { relationName: 'userUpdatedContactAddresses' }),
   createdContactSocialMediaAccounts: many(contactSocialMediaAccounts, { relationName: 'userCreatedContactSocialMediaAccounts' }),
   updatedContactSocialMediaAccounts: many(contactSocialMediaAccounts, { relationName: 'userUpdatedContactSocialMediaAccounts' }),
-  createdContactViews: many(contactViews, { relationName: 'userCreatedContactViews' })
+  createdContactViews: many(contactViews, { relationName: 'userCreatedContactViews' }),
+  sentInvites: many(userInvites, { relationName: 'userSentInvites' })
 }));
 
 export const workspacesRelations = relations(workspaces, ({ one, many }) => ({
@@ -318,7 +334,8 @@ export const workspacesRelations = relations(workspaces, ({ one, many }) => ({
   businesses: many(businesses),
   businessViews: many(businessViews),
   subscriptions: many(workspaceSubscriptions),
-  payments: many(workspacePayments)
+  payments: many(workspacePayments),
+  userInvites: many(userInvites)
 }));
 
 export const userWorkspacesRelations = relations(userWorkspaces, ({ one }) => ({
@@ -385,5 +402,18 @@ export const donationsRelations = relations(donations, ({ one }) => ({
   business: one(businesses, {
     fields: [donations.businessId],
     references: [businesses.id]
+  })
+}));
+
+// User Invites Relations
+export const userInvitesRelations = relations(userInvites, ({ one }) => ({
+  workspace: one(workspaces, {
+    fields: [userInvites.workspaceId],
+    references: [workspaces.id]
+  }),
+  invitedBy: one(users, {
+    fields: [userInvites.invitedById],
+    references: [users.id],
+    relationName: 'userSentInvites'
   })
 }));

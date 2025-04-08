@@ -1,5 +1,6 @@
 <!-- src/routes/engage/+page.svelte -->
 <script lang="ts">
+    import { onMount } from 'svelte';
     import { workspaceStore } from '$lib/stores/workspaceStore';
     import { userStore } from '$lib/stores/userStore';
     import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
@@ -7,6 +8,22 @@
     
     export let data: PageData;
     $: ({ supabase } = data);
+    
+    // When page loads, ensure workspaces are loaded and select the first one if needed
+    onMount(() => {
+      const refreshAndSelect = async () => {
+        // If no workspaces are loaded yet, refresh them
+        if (!$workspaceStore.workspaces || $workspaceStore.workspaces.length === 0) {
+          await workspaceStore.refreshWorkspaces();
+        } 
+        // If no workspace is selected but we have workspaces, select the first one
+        else if (!$workspaceStore.currentWorkspace && $workspaceStore.workspaces.length > 0) {
+          workspaceStore.setCurrentWorkspace($workspaceStore.workspaces[0].id);
+        }
+      };
+      
+      refreshAndSelect();
+    });
 </script>
   
 <svelte:head>

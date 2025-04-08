@@ -21,18 +21,18 @@
   
       <!-- Right - Social Icons -->
       <div class="flex items-center gap-4">
-        <a href="https://facebook.com" class="text-gray-400 hover:text-gray-600">
+        <a href="https://facebook.com" class="text-gray-400 hover:text-gray-600" aria-label="Facebook">
           <FacebookIcon class="w-5 h-5" />
         </a>
-        <a href="https://bsky.app" class="text-gray-400 hover:text-gray-600">
+        <a href="https://bsky.app" class="text-gray-400 hover:text-gray-600" aria-label="Bluesky">
           <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 2L1 21h22L12 2zm0 4.5l7.5 13H4.5L12 6.5z"/>
           </svg>
         </a>
-        <a href="https://instagram.com" class="text-gray-400 hover:text-gray-600">
+        <a href="https://instagram.com" class="text-gray-400 hover:text-gray-600" aria-label="Instagram">
           <InstagramIcon class="w-5 h-5" />
         </a>
-        <a href="https://youtube.com" class="text-gray-400 hover:text-gray-600">
+        <a href="https://youtube.com" class="text-gray-400 hover:text-gray-600" aria-label="YouTube">
           <YoutubeIcon class="w-5 h-5" />
         </a>
       </div>

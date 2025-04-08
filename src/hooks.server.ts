@@ -1,53 +1,44 @@
 // src/hooks.server.ts
-import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public'
-import { createServerClient } from '@supabase/ssr'
-import type { Handle } from '@sveltejs/kit'
+import { verify } from 'hono/jwt';
+import type { Handle } from '@sveltejs/kit';
+import { env } from '$env/dynamic/private';
 
 export const handle: Handle = async ({ event, resolve }) => {
-  event.locals.supabase = createServerClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
-    cookies: {
-      getAll: () => event.cookies.getAll(),
-      /**
-       * SvelteKit's cookies API requires `path` to be explicitly set in
-       * the cookie options. Setting `path` to `/` replicates previous/
-       * standard behavior.
-       */
-      setAll: (cookiesToSet) => {
-        cookiesToSet.forEach(({ name, value, options }) => {
-          event.cookies.set(name, value, { ...options, path: '/' })
-        })
-      },
-    },
-  })
+  // Initialize user auth state
+  event.locals.user = undefined;
+  event.locals.token = undefined;
 
-  /**
-   * Unlike `supabase.auth.getSession()`, which returns the session _without_
-   * validating the JWT, this function also calls `getUser()` to validate the
-   * JWT before returning the session.
-   */
-  event.locals.safeGetSession = async () => {
-    const {
-      data: { session },
-    } = await event.locals.supabase.auth.getSession()
-    if (!session) {
-      return { session: null, user: null }
+  // First check for JWT token in Authorization header
+  let token;
+  const authHeader = event.request.headers.get('Authorization');
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.substring(7);
+  }
+  
+  // Then check for token in cookies if not found in header
+  if (!token) {
+    token = event.cookies.get('auth_token');
+  }
+  
+  if (token) {
+    try {
+      // Verify the JWT token
+      const payload = await verify(token, env.JWT_SECRET);
+      
+      // Set user and token in locals
+      event.locals.user = {
+        id: payload.id,
+        username: payload.username,
+        email: payload.email,
+        role: payload.role
+      };
+      event.locals.token = token;
+    } catch (error) {
+      // Invalid token, continue as unauthenticated
+      console.error('Invalid JWT token:', error);
     }
-
-    const {
-      data: { user },
-      error,
-    } = await event.locals.supabase.auth.getUser()
-    if (error) {
-      // JWT validation has failed
-      return { session: null, user: null }
-    }
-
-    return { session, user }
   }
 
-  return resolve(event, {
-    filterSerializedResponseHeaders(name) {
-      return name === 'content-range' || name === 'x-supabase-api-version'
-    },
-  })
+  // Continue with request
+  return resolve(event);
 }

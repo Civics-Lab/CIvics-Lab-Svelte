@@ -2,6 +2,7 @@
 import { writable } from 'svelte/store';
 import type { Workspace } from '$lib/types/supabase';
 import type { TypedSupabaseClient } from '$lib/types/supabase';
+import { fetchUserWorkspaces } from '$lib/services/workspaceService';
 
 interface WorkspaceState {
   currentWorkspace: Workspace | null;
@@ -113,74 +114,16 @@ function createWorkspaceStore() {
       set(initialState);
     },
     
-    // Refresh workspaces from the database
-    refreshWorkspaces: async (supabase: TypedSupabaseClient) => {
+    // Refresh workspaces from the database using the API
+    refreshWorkspaces: async (supabase?: TypedSupabaseClient) => {
       update(state => ({ ...state, isLoading: true, error: null }));
       
       try {
-        // Get the current user
-        const { data: { user } } = await supabase.auth.getUser();
+        // Fetch workspaces from the API
+        const fetchedWorkspaces = await fetchUserWorkspaces();
         
-        if (!user) {
-          throw new Error('User not authenticated');
-        }
-        
-        // Get all workspaces the user has access to
-        const { data: userWorkspaces, error: fetchError } = await supabase
-          .from('user_workspaces')
-          .select(`
-            id,
-            workspace_id,
-            role,
-            workspaces:workspace_id (
-              id,
-              name,
-              created_at
-            )
-          `)
-          .eq('user_id', user.id);
-        
-        if (fetchError) throw fetchError;
-        
-        // Transform the data to get the workspaces array
-        const fetchedWorkspaces = (userWorkspaces || [])
-          .filter(item => item.workspaces)
-          .map(item => item.workspaces as Workspace);
-        
-        if (fetchedWorkspaces.length === 0) {
-          // Create a default workspace if none exists
-          const { data: newWorkspace, error: createError } = await supabase
-            .from('workspaces')
-            .insert({
-              name: 'My Workspace',
-              created_by: user.id
-            })
-            .select()
-            .single();
-          
-          if (createError) throw createError;
-          
-          // Add user to workspace with Super Admin role
-          const { error: userWorkspaceError } = await supabase
-            .from('user_workspaces')
-            .insert({
-              user_id: user.id,
-              workspace_id: newWorkspace.id,
-              role: 'Super Admin'
-            });
-          
-          if (userWorkspaceError) throw userWorkspaceError;
-          
-          // Return with the new workspace
-          update(state => ({
-            ...state,
-            workspaces: [newWorkspace],
-            currentWorkspace: newWorkspace,
-            isLoading: false
-          }));
-          
-          return;
-        }
+        // If no workspaces, we'll just set an empty array
+        // The API or backend should handle creating a default workspace if needed
         
         // Get previously selected workspace ID from localStorage
         const savedWorkspaceId = typeof window !== 'undefined' 

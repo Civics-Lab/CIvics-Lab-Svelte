@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
-import { eq } from 'drizzle-orm';
-import { db, users } from '$lib/db/drizzle';
+import { eq, or, and } from 'drizzle-orm';
+import { db, users, userInvites, userWorkspaces } from '$lib/db/drizzle';
 import { env } from '$env/dynamic/private';
 import { sign, verify } from 'hono/jwt';
 
@@ -77,8 +77,10 @@ export const authService = {
   async signup({ email, username, password, displayName }: SignupData) {
     // Check if username or email already exists
     const existingUser = await db.select().from(users)
-      .where(eq(users.username, username))
-      .or(eq(users.email, email));
+      .where(or(
+        eq(users.username, username),
+        eq(users.email, email)
+      ));
       
     if (existingUser.length > 0) {
       throw new Error('Username or email already exists');
@@ -104,6 +106,37 @@ export const authService = {
         role: users.role
       });
     
+    // Check for pending invites for this email
+    const pendingInvites = await db.select()
+      .from(userInvites)
+      .where(
+        and(
+          eq(userInvites.email, email),
+          eq(userInvites.status, 'Pending')
+        )
+      );
+    
+    // If invites exist, accept them and link user to workspaces
+    if (pendingInvites.length > 0) {
+      for (const invite of pendingInvites) {
+        // Update invite status to accepted
+        await db.update(userInvites)
+          .set({ 
+            status: 'Accepted',
+            acceptedAt: new Date()
+          })
+          .where(eq(userInvites.id, invite.id));
+        
+        // Create user-workspace relationship
+        await db.insert(userWorkspaces)
+          .values({
+            userId: newUser.id,
+            workspaceId: invite.workspaceId,
+            role: invite.role
+          });
+      }
+    }
+    
     // Generate JWT
     const payload = {
       id: newUser.id,
@@ -116,7 +149,9 @@ export const authService = {
     
     return {
       token,
-      user: newUser
+      user: newUser,
+      invites: pendingInvites,
+      hasAcceptedInvites: pendingInvites.length > 0
     };
   },
   

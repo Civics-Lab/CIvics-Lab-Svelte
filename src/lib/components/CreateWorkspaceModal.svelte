@@ -4,9 +4,9 @@
     import { workspaceStore } from '$lib/stores/workspaceStore';
     import { userStore } from '$lib/stores/userStore';
     import type { TypedSupabaseClient } from '$lib/types/supabase';
+    import { createWorkspace as apiCreateWorkspace } from '$lib/services/workspaceService';
     import LoadingSpinner from './LoadingSpinner.svelte';
     
-    export let supabase: TypedSupabaseClient;
     export let isOpen = false;
     export let onClose = () => {};
     
@@ -24,57 +24,12 @@
       error.set(null);
       
       try {
-        // Get current user
-        if (!$userStore.user) {
-          throw new Error('User not authenticated');
-        }
+        // Call the API to create a workspace
+        const workspace = await apiCreateWorkspace($workspaceName.trim());
         
-        // Start a Supabase transaction
-        const { data: workspace, error: workspaceError } = await supabase
-          .from('workspaces')
-          .insert({
-            name: $workspaceName.trim(),
-            created_by: $userStore.user.id
-          })
-          .select()
-          .single();
-        
-        if (workspaceError) throw workspaceError;
-        
-        // Add user to workspace with Super Admin role
-        const { error: userWorkspaceError } = await supabase
-          .from('user_workspaces')
-          .insert({
-            user_id: $userStore.user.id,
-            workspace_id: workspace.id,
-            role: 'Super Admin'
-          });
-        
-        if (userWorkspaceError) throw userWorkspaceError;
-        
-        // Fetch updated workspaces
-        const { data: userWorkspaces, error: fetchError } = await supabase
-          .from('user_workspaces')
-          .select(`
-            workspace_id,
-            role,
-            workspaces:workspace_id (
-              id,
-              name,
-              created_at
-            )
-          `)
-          .eq('user_id', $userStore.user.id);
-        
-        if (fetchError) throw fetchError;
-        
-        // Transform the data to get the workspaces array
-        const fetchedWorkspaces = userWorkspaces
-          .filter(item => item.workspaces)
-          .map(item => item.workspaces);
-        
-        // Update workspace store
-        workspaceStore.setWorkspaces(fetchedWorkspaces, workspace.id);
+        // Refresh workspaces and select the new one
+        await workspaceStore.refreshWorkspaces();
+        workspaceStore.setCurrentWorkspace(workspace.id);
         
         // Reset and close modal
         workspaceName.set('');

@@ -2,12 +2,15 @@
 import { redirect } from '@sveltejs/kit'
 import type { PageServerLoad } from './$types'
 
-export const load: PageServerLoad = async ({ locals: { safeGetSession } }) => {
-  const { session, user } = await safeGetSession()
+export const load: PageServerLoad = async ({ locals }) => {
+  const user = locals.user
 
-  if (!session) {
+  if (!user) {
     redirect(303, '/login')
   }
 
-  return { session, user }
+  return { 
+    session: { active: true },
+    user 
+  }
 }

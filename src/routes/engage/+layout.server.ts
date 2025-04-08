@@ -3,12 +3,15 @@ import { redirect } from '@sveltejs/kit'
 import type { LayoutServerLoad } from './$types'
 
 // This protects all routes under /engage/*
-export const load: LayoutServerLoad = async ({ locals: { safeGetSession } }) => {
-  const { session, user } = await safeGetSession()
+export const load: LayoutServerLoad = async ({ locals }) => {
+  const user = locals.user
 
-  if (!session) {
+  if (!user) {
     redirect(303, '/login')
   }
 
-  return { session, user }
+  return { 
+    session: { active: true },
+    user 
+  }
 }
