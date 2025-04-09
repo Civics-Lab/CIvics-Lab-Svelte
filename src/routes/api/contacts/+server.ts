@@ -117,7 +117,19 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   try {
     // Get the contact data from the request body
     const requestData = await request.json();
+    console.log('API received request data:', JSON.stringify(requestData, null, 2));
+    
     const { workspaceId, contact, emails, phoneNumbers, addresses, socialMedia, tags } = requestData;
+    
+    console.log('API destructured data:', {
+      workspaceId,
+      contact,
+      emailsCount: emails?.length,
+      phoneNumbersCount: phoneNumbers?.length,
+      addressesCount: addresses?.length,
+      socialMediaCount: socialMedia?.length,
+      tagsCount: tags?.length
+    });
     
     if (!workspaceId) {
       throw error(400, 'Workspace ID is required');
@@ -179,21 +191,33 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     
     // Create phone numbers if provided
     if (phoneNumbers && phoneNumbers.length > 0) {
-      await db.insert(contactPhoneNumbers).values(
-        phoneNumbers.map((phone) => ({
-          contactId: newContact.id,
-          phoneNumber: phone.phoneNumber,
-          status: phone.status || 'active',
-          createdById: user.id,
-          updatedById: user.id,
-        }))
-      );
+      // Validate phoneNumbers to avoid undefined errors
+      const validPhones = phoneNumbers.filter(phone => phone && phone.phoneNumber);
+      if (validPhones.length > 0) {
+        await db.insert(contactPhoneNumbers).values(
+          validPhones.map((phone) => ({
+            contactId: newContact.id,
+            phoneNumber: phone.phoneNumber,
+            status: phone.status || 'active',
+            createdById: user.id,
+            updatedById: user.id,
+          }))
+        );
+      } else {
+        console.log('No valid phone numbers to insert');
+      }
     }
     
-    // Create addresses if provided
+    // Process addresses if provided
     if (addresses && addresses.length > 0) {
       // Process each address individually to handle zipCode creation
       for (const address of addresses) {
+        // Validate address properties to avoid undefined errors
+        if (!address || !address.streetAddress) {
+          console.error('Invalid address data:', address);
+          continue; // Skip this address
+        }
+        
         let zipCodeId = address.zipCodeId;
 
         // If zipCodeId is not provided but zipCode is, find or create the zipCode
@@ -241,16 +265,23 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     
     // Create social media accounts if provided
     if (socialMedia && socialMedia.length > 0) {
-      await db.insert(contactSocialMediaAccounts).values(
-        socialMedia.map((account) => ({
-          contactId: newContact.id,
-          serviceType: account.serviceType,
-          socialMediaAccount: account.socialMediaAccount,
-          status: account.status || 'active',
-          createdById: user.id,
-          updatedById: user.id,
-        }))
-      );
+      // Validate social media entries
+      const validSocial = socialMedia.filter(account => account && account.socialMediaAccount && account.serviceType);
+      
+      if (validSocial.length > 0) {
+        await db.insert(contactSocialMediaAccounts).values(
+          validSocial.map((account) => ({
+            contactId: newContact.id,
+            serviceType: account.serviceType,
+            socialMediaAccount: account.socialMediaAccount,
+            status: account.status || 'active',
+            createdById: user.id,
+            updatedById: user.id,
+          }))
+        );
+      } else {
+        console.log('No valid social media accounts to insert');
+      }
     }
     
     // Create tags if provided
@@ -265,27 +296,31 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     }
     
     // Fetch the complete contact with all related data
-    const contactEmails = await db
+    const emailsList = await db
       .select()
       .from(contactEmails)
       .where(eq(contactEmails.contactId, newContact.id));
+      
+    if (!emailsList) {
+      console.error('Failed to fetch emails for contact:', newContact.id);
+    }
     
-    const contactPhoneNumbers = await db
+    const phonesList = await db
       .select()
       .from(contactPhoneNumbers)
       .where(eq(contactPhoneNumbers.contactId, newContact.id));
     
-    const fetchedAddresses = await db
+    const addressesList = await db
       .select()
       .from(contactAddresses)
       .where(eq(contactAddresses.contactId, newContact.id));
     
-    const socialMediaAccounts = await db
+    const socialMediaList = await db
       .select()
       .from(contactSocialMediaAccounts)
       .where(eq(contactSocialMediaAccounts.contactId, newContact.id));
     
-    const contactTags = await db
+    const tagsList = await db
       .select()
       .from(contactTags)
       .where(
@@ -299,20 +334,29 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     return json({
       contact: {
         ...newContact,
-        emails: contactEmails || [],
-        phoneNumbers: contactPhoneNumbers || [],
-        addresses: fetchedAddresses || [],
-        socialMediaAccounts: socialMediaAccounts || [],
-        tags: contactTags || [],
+        emails: emailsList || [],
+        phoneNumbers: phonesList || [],
+        addresses: addressesList || [],
+        socialMediaAccounts: socialMediaList || [],
+        tags: tagsList || [],
       }
     }, { status: 201 });
   } catch (err) {
     console.error('Error creating contact:', err);
     
+    // Log more detailed error information
+    if (err instanceof Error) {
+      console.error('Error details:', {
+        name: err.name,
+        message: err.message,
+        stack: err.stack
+      });
+    }
+    
     if (err instanceof Response) {
       throw err;
     }
     
-    throw error(500, 'Failed to create contact');
+    throw error(500, `Failed to create contact: ${err.message || 'Unknown error'}`);
   }
 };

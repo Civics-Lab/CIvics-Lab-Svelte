@@ -28,8 +28,9 @@
       social_media_account: '', 
       service_type: 'facebook', 
       status: 'active',
-      isNew: true 
+      isNew: true  // This flag will ensure it's treated as a new entry for the API
     }]);
+    console.log('Added new social media entry');
     handleChange();
   }
   
@@ -61,7 +62,14 @@
         item.isModified = true;
       }
       
-      item[field] = value;
+      // For social_media_account field, ensure it's not null
+      if (field === 'social_media_account') {
+        // Trim the value and store it, or empty string if null/undefined
+        item[field] = value ? value.trim() : '';
+      } else {
+        item[field] = value;
+      }
+      
       return updatedItems;
     });
     handleChange();

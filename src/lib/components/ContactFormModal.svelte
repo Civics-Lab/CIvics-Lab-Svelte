@@ -6,10 +6,10 @@
   import { toastStore } from '$lib/stores/toastStore';
   import { workspaceStore } from '$lib/stores/workspaceStore';
   import LoadingSpinner from './LoadingSpinner.svelte';
-  import type { TypedSupabaseClient } from '$lib/types/supabase';
+  import { createContact } from '$lib/services/contactService';
+  import { fetchFormOptions } from '$lib/services/optionsService';
   
   export let isOpen = false;
-  export let supabase: TypedSupabaseClient;
   
   const dispatch = createEventDispatcher();
   
@@ -182,43 +182,18 @@
   
   async function fetchOptions() {
     try {
-      // Fetch gender options
-      const { data: genderData, error: genderError } = await supabase
-        .from('genders')
-        .select('id, gender')
-        .order('gender');
+      if (!$workspaceStore.currentWorkspace) {
+        throw new Error('No workspace selected');
+      }
       
-      if (genderError) throw genderError;
-      genderOptions.set(genderData || []);
+      // Fetch all options via API
+      const options = await fetchFormOptions($workspaceStore.currentWorkspace.id);
       
-      // Fetch race options
-      const { data: raceData, error: raceError } = await supabase
-        .from('races')
-        .select('id, race')
-        .order('race');
-      
-      if (raceError) throw raceError;
-      raceOptions.set(raceData || []);
-      
-      // Fetch state options
-      const { data: stateData, error: stateError } = await supabase
-        .from('states')
-        .select('id, name, abbreviation')
-        .order('name');
-      
-      if (stateError) throw stateError;
-      stateOptions.set(stateData || []);
-      
-      // Fetch existing tags
-      const { data: tagData, error: tagError } = await supabase
-        .from('contact_tags')
-        .select('tag')
-        .order('tag');
-      
-      if (tagError) throw tagError;
-      const uniqueTags = [...new Set(tagData?.map(t => t.tag) || [])];
-      existingTags.set(uniqueTags);
-      
+      // Set options in stores
+      genderOptions.set(options.genders || []);
+      raceOptions.set(options.races || []);
+      stateOptions.set(options.states || []);
+      existingTags.set(options.tags || []);
     } catch (error) {
       console.error('Error fetching options:', error);
       toastStore.error('Failed to load form options');
@@ -231,175 +206,69 @@
     isSubmitting.set(true);
     errors.set({});
     
+    console.log('Form data being submitted:', {
+      formData: $formData,
+      emails: $emails,
+      phoneNumbers: $phoneNumbers,
+      addresses: $addresses,
+      socialMedia: $socialMedia,
+      tags: $tags
+    });
+    
     try {
-      // Create contact
+      if (!$workspaceStore.currentWorkspace?.id) {
+        throw new Error('No workspace selected');
+      }
+      
+      // Prepare contact data for the API
       const contactData = {
-        ...$formData,
-        workspace_id: $workspaceStore.currentWorkspace?.id
+        workspaceId: $workspaceStore.currentWorkspace.id,
+        contact: {
+          firstName: $formData.first_name,
+          lastName: $formData.last_name,
+          middleName: $formData.middle_name,
+          genderId: $formData.gender_id,
+          raceId: $formData.race_id,
+          pronouns: $formData.pronouns,
+          vanid: $formData.vanid,
+          status: $formData.status
+        },
+        emails: $emails
+          .filter(item => item.email.trim())
+          .map(item => ({
+            email: item.email.trim(),
+            status: item.status
+          })),
+        phoneNumbers: $phoneNumbers
+          .filter(item => item.phone_number.trim())
+          .map(item => ({
+            phoneNumber: item.phone_number.trim(),
+            status: item.status
+          })),
+        addresses: $addresses
+          .filter(addr => addr.street_address.trim() && addr.city.trim())
+          .map(addr => ({
+            streetAddress: addr.street_address.trim(),
+            secondaryStreetAddress: addr.secondary_street_address?.trim() || null,
+            city: addr.city.trim(),
+            stateId: addr.state_id || null,
+            zipCode: addr.zip_code?.trim() || null,
+            status: addr.status
+          })),
+        socialMedia: $socialMedia
+          .filter(item => item.social_media_account.trim())
+          .map(item => ({
+            socialMediaAccount: item.social_media_account.trim(),
+            serviceType: item.service_type,
+            status: item.status
+          })),
+        tags: $tags
       };
       
-      const { data: contact, error: contactError } = await supabase
-        .from('contacts')
-        .insert(contactData)
-        .select()
-        .single();
+      // Create contact using the API service
+      const contact = await createContact(contactData);
       
-      if (contactError) throw contactError;
-      
-      // Add emails
-      const validEmails = $emails.filter(item => item.email.trim());
-      if (validEmails.length > 0) {
-        const emailPromises = validEmails.map(item => {
-          return supabase
-            .from('contact_emails')
-            .insert({
-              contact_id: contact.id,
-              email: item.email.trim(),
-              status: item.status
-            });
-        });
-        
-        const emailResults = await Promise.all(emailPromises);
-        const emailErrors = emailResults.filter(result => result.error);
-        
-        if (emailErrors.length > 0) {
-          console.error('Some emails could not be added:', emailErrors);
-        }
-      }
-      
-      // Add phone numbers
-      const validPhones = $phoneNumbers.filter(item => item.phone_number.trim());
-      if (validPhones.length > 0) {
-        const phonePromises = validPhones.map(item => {
-          return supabase
-            .from('contact_phone_numbers')
-            .insert({
-              contact_id: contact.id,
-              phone_number: item.phone_number.trim(),
-              status: item.status
-            });
-        });
-        
-        const phoneResults = await Promise.all(phonePromises);
-        const phoneErrors = phoneResults.filter(result => result.error);
-        
-        if (phoneErrors.length > 0) {
-          console.error('Some phone numbers could not be added:', phoneErrors);
-        }
-      }
-      
-      // Add addresses
-      const validAddresses = $addresses.filter(addr => addr.street_address.trim() && addr.city.trim());
-      if (validAddresses.length > 0) {
-        // Process addresses one by one
-        for (const addr of validAddresses) {
-          let zip_code_id = null;
-          
-          // Get or create zip code if provided
-          if (addr.zip_code && addr.zip_code.trim()) {
-            // Try to find the zip code first
-            const { data: zipData, error: zipError } = await supabase
-              .from('zip_codes')
-              .select('id')
-              .eq('name', addr.zip_code.trim())
-              .maybeSingle();
-            
-            if (!zipError && zipData) {
-              // Use existing zip code
-              zip_code_id = zipData.id;
-            } else {
-              // Create a new zip code
-              try {
-                // First get the state info if available
-                let state_id = addr.state_id || null;
-                
-                // Create a new zip code record
-                const { data: newZipCode, error: zipCreateError } = await supabase
-                  .from('zip_codes')
-                  .insert({
-                    name: addr.zip_code.trim(),
-                    state_id: state_id
-                  })
-                  .select('id')
-                  .single();
-                
-                if (zipCreateError) {
-                  console.error('Error creating zip code:', zipCreateError);
-                } else {
-                  zip_code_id = newZipCode.id;
-                }
-              } catch (err) {
-                console.error('Error in zip code creation process:', err);
-              }
-            }
-          }
-          
-          // Now create the address with the zip code
-          try {
-            const { error: addressError } = await supabase
-              .from('contact_addresses')
-              .insert({
-                contact_id: contact.id,
-                street_address: addr.street_address.trim(),
-                secondary_street_address: addr.secondary_street_address.trim() || null,
-                city: addr.city.trim(),
-                state_id: addr.state_id || null,
-                zip_code_id: zip_code_id,
-                status: addr.status
-              });
-              
-            if (addressError) {
-              console.error('Error adding address:', addressError);
-            }
-          } catch (addressErr) {
-            console.error('Error in address creation process:', addressErr);
-          }
-        }
-      }
-      
-      // Add social media accounts
-      const validSocial = $socialMedia.filter(item => item.social_media_account.trim());
-      if (validSocial.length > 0) {
-        const socialPromises = validSocial.map(item => {
-          return supabase
-            .from('contact_social_media_accounts')
-            .insert({
-              contact_id: contact.id,
-              social_media_account: item.social_media_account.trim(),
-              service_type: item.service_type,
-              status: item.status
-            });
-        });
-        
-        const socialResults = await Promise.all(socialPromises);
-        const socialErrors = socialResults.filter(result => result.error);
-        
-        if (socialErrors.length > 0) {
-          console.error('Some social media accounts could not be added:', socialErrors);
-        }
-      }
-      
-      // Add tags
-      if ($tags.length > 0) {
-        const tagPromises = $tags.map(tag => {
-          return supabase
-            .from('contact_tags')
-            .insert({
-              contact_id: contact.id,
-              tag: tag,
-              workspace_id: $workspaceStore.currentWorkspace?.id
-            });
-        });
-        
-        const tagResults = await Promise.all(tagPromises);
-        const tagErrors = tagResults.filter(result => result.error);
-        
-        if (tagErrors.length > 0) {
-          console.error('Some tags could not be added:', tagErrors);
-        }
-      }
-      
-      // Success toast with view contact button
+      // Success toast
       toastStore.success(`Contact ${$formData.first_name} ${$formData.last_name} created successfully!`, 5000);
       
       resetForm();
@@ -412,7 +281,12 @@
       
     } catch (error) {
       console.error('Error creating contact:', error);
-      toastStore.error('Failed to create contact');
+      // Show a more specific error message if available
+      if (error instanceof Error) {
+        toastStore.error(`Failed to create contact: ${error.message}`);
+      } else {
+        toastStore.error('Failed to create contact');
+      }
     } finally {
       isSubmitting.set(false);
     }
@@ -836,7 +710,7 @@
                 <input 
                   type="text" 
                   id="zip_{i}" 
-                  bind:value={address.zipCode}
+                  bind:value={address.zip_code}
                   class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
                   disabled={$isSubmitting}
                 />
@@ -902,7 +776,7 @@
               <div class="mt-1">
                 <select
                   id="social_service_{i}"
-                  bind:value={social.serviceType}
+                  bind:value={social.service_type}
                   class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
                   disabled={$isSubmitting}
                 >
@@ -919,7 +793,7 @@
                 <input 
                   type="text" 
                   id="social_account_{i}" 
-                  bind:value={social.socialMediaAccount}
+                  bind:value={social.social_media_account}
                   class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
                   disabled={$isSubmitting}
                 />

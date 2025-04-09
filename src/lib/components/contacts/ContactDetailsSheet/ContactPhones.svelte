@@ -13,11 +13,13 @@
   }
   
   function addPhone() {
+    // Create a new empty phone number entry with isNew flag
     phoneNumbers.update(items => [...items, { 
-      phone_number: '', 
+      phone_number: '', // Start with empty string, not null
       status: 'active',
-      isNew: true 
+      isNew: true  // This flag will ensure it's treated as a new entry for the API
     }]);
+    console.log('Added new phone number entry');
     handleChange();
   }
   
@@ -49,7 +51,14 @@
         item.isModified = true;
       }
       
-      item[field] = value;
+      // For phone_number field, ensure it's not null
+      if (field === 'phone_number') {
+        // Trim the value and store it, or empty string if null/undefined
+        item[field] = value ? value.trim() : '';
+      } else {
+        item[field] = value;
+      }
+      
       return updatedItems;
     });
     handleChange();

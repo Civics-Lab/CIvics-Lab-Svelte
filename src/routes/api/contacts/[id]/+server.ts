@@ -45,6 +45,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
   }
   
   const contactId = params.id;
+  console.log('API: GET contact request for ID:', contactId);
   
   try {
     // Check workspace access and get contact
@@ -55,24 +56,28 @@ export const GET: RequestHandler = async ({ params, locals }) => {
       .select()
       .from(contactEmails)
       .where(eq(contactEmails.contactId, contactId));
+    console.log(`API: Found ${emails.length} emails for contact:`, emails);
     
     // Get phone numbers
     const phoneNumbers = await db
       .select()
       .from(contactPhoneNumbers)
       .where(eq(contactPhoneNumbers.contactId, contactId));
+    console.log(`API: Found ${phoneNumbers.length} phone numbers for contact:`, phoneNumbers);
     
     // Get addresses
     const addresses = await db
       .select()
       .from(contactAddresses)
       .where(eq(contactAddresses.contactId, contactId));
+    console.log(`API: Found ${addresses.length} addresses for contact:`, addresses);
     
     // Get social media accounts
     const socialMedia = await db
       .select()
       .from(contactSocialMediaAccounts)
       .where(eq(contactSocialMediaAccounts.contactId, contactId));
+    console.log(`API: Found ${socialMedia.length} social media accounts for contact:`, socialMedia);
     
     // Get tags
     const tags = await db
@@ -85,8 +90,9 @@ export const GET: RequestHandler = async ({ params, locals }) => {
         )
       );
     
-    // Return enhanced contact with related data
-    return json({
+    
+    // Build the response object
+    const responseData = {
       contact: {
         ...contact,
         emails: emails || [],
@@ -95,7 +101,22 @@ export const GET: RequestHandler = async ({ params, locals }) => {
         socialMediaAccounts: socialMedia || [],
         tags: tags || [],
       }
+    };
+    
+    console.log('API: Contact response built with the following structure:', {
+      hasEmails: (emails || []).length > 0,
+      hasPhoneNumbers: (phoneNumbers || []).length > 0,
+      hasAddresses: (addresses || []).length > 0,
+      hasSocialMedia: (socialMedia || []).length > 0,
+      hasTags: (tags || []).length > 0,
+      // Show first few characters of each array for debugging
+      emailsPreview: JSON.stringify(emails || []).substring(0, 100),
+      phoneNumbersPreview: JSON.stringify(phoneNumbers || []).substring(0, 100),
+      addressesPreview: JSON.stringify(addresses || []).substring(0, 100),
+      socialMediaPreview: JSON.stringify(socialMedia || []).substring(0, 100)
     });
+    
+    return json(responseData);
   } catch (err) {
     console.error('Error fetching contact:', err);
     
@@ -144,132 +165,233 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
         .where(eq(contacts.id, contactId));
     }
     
-    // Handle emails: remove existing ones and add new ones if provided
+    // Handle emails: keep existing ones and add/update/delete as needed
     if (emails) {
-      // Delete existing emails
-      await db
-        .delete(contactEmails)
-        .where(eq(contactEmails.contactId, contactId));
+      console.log('Processing email updates:', emails);
       
-      // Add new emails
-      if (emails.length > 0) {
-        await db.insert(contactEmails).values(
-          emails.map((email) => ({
-            contactId: contactId,
-            email: email.email,
-            status: email.status || 'active',
-            createdById: user.id,
-            updatedById: user.id,
-          }))
-        );
-      }
-    }
-    
-    // Handle phone numbers: remove existing ones and add new ones if provided
-    if (phoneNumbers) {
-      // Delete existing phone numbers
-      await db
-        .delete(contactPhoneNumbers)
-        .where(eq(contactPhoneNumbers.contactId, contactId));
+      // Filter out valid emails
+      const validEmails = emails.filter(email => email.email && email.email.trim() !== '');
       
-      // Add new phone numbers
-      if (phoneNumbers.length > 0) {
-        await db.insert(contactPhoneNumbers).values(
-          phoneNumbers.map((phone) => ({
-            contactId: contactId,
-            phoneNumber: phone.phoneNumber,
-            status: phone.status || 'active',
-            createdById: user.id,
-            updatedById: user.id,
-          }))
-        );
-      }
-    }
-    
-    // Handle addresses: remove existing ones and add new ones if provided
-    if (addresses) {
-      // Delete existing addresses
-      await db
-        .delete(contactAddresses)
-        .where(eq(contactAddresses.contactId, contactId));
-      
-      // Add new addresses
-      if (addresses.length > 0) {
-        // Process each address individually to handle zipCode creation
-        for (const address of addresses) {
-          let zipCodeId = address.zipCodeId;
-
-          // If zipCodeId is not provided but zipCode is, find or create the zipCode
-          if (!zipCodeId && address.zipCode) {
-            // Try to find existing zipCode
-            const existingZipCode = await db
-              .select()
-              .from(zipCodes)
-              .where(eq(zipCodes.name, address.zipCode.trim()))
-              .limit(1);
-
-            if (existingZipCode && existingZipCode.length > 0) {
-              // Use existing zipCode
-              zipCodeId = existingZipCode[0].id;
-            } else {
-              // Create new zipCode
-              const [newZipCode] = await db
-                .insert(zipCodes)
-                .values({
-                  name: address.zipCode.trim(),
-                  stateId: address.stateId || null,
-                })
-                .returning();
-
-              if (newZipCode) {
-                zipCodeId = newZipCode.id;
-              }
-            }
+      if (validEmails.length > 0) {
+        // For each email, check if it's new, modified or deleted
+        for (const email of validEmails) {
+          if (email.isNew) {
+            // Add new email
+            console.log('Adding new email:', email.email);
+            await db.insert(contactEmails).values({
+              contactId: contactId,
+              email: email.email,
+              status: email.status || 'active',
+              createdById: user.id,
+              updatedById: user.id,
+            });
+          } else if (email.isModified && email.id) {
+            // Update existing email
+            console.log('Updating email with ID:', email.id);
+            await db
+              .update(contactEmails)
+              .set({
+                email: email.email,
+                status: email.status || 'active',
+                updatedById: user.id,
+                updatedAt: new Date(),
+              })
+              .where(eq(contactEmails.id, email.id));
+          } else if (email.isDeleted && email.id) {
+            // Delete email
+            console.log('Deleting email with ID:', email.id);
+            await db
+              .delete(contactEmails)
+              .where(eq(contactEmails.id, email.id));
           }
-
-          // Create the address with the zipCodeId
-          await db.insert(contactAddresses).values({
-            contactId: contactId,
-            streetAddress: address.streetAddress,
-            secondaryStreetAddress: address.secondaryStreetAddress || null,
-            city: address.city,
-            stateId: address.stateId,
-            zipCodeId: zipCodeId,
-            status: address.status || 'active',
-            createdById: user.id,
-            updatedById: user.id,
-          });
         }
       }
     }
     
-    // Handle social media accounts: remove existing ones and add new ones if provided
-    if (socialMedia) {
-      // Delete existing social media accounts
-      await db
-        .delete(contactSocialMediaAccounts)
-        .where(eq(contactSocialMediaAccounts.contactId, contactId));
+    // Handle phone numbers: keep existing ones and add new ones
+    if (phoneNumbers) {
+      console.log('Processing phone numbers update:', phoneNumbers);
       
-      // Add new social media accounts
-      if (socialMedia.length > 0) {
-        await db.insert(contactSocialMediaAccounts).values(
-          socialMedia.map((account) => ({
-            contactId: contactId,
-            serviceType: account.serviceType,
-            socialMediaAccount: account.socialMediaAccount,
-            status: account.status || 'active',
-            createdById: user.id,
-            updatedById: user.id,
-          }))
-        );
+      // Filter out valid phone numbers
+      const validPhoneNumbers = phoneNumbers.filter(phone => phone.phoneNumber && phone.phoneNumber.trim() !== '');
+      
+      if (validPhoneNumbers.length > 0) {
+        // For each phone number, check if it's new, modified or deleted
+        for (const phone of validPhoneNumbers) {
+          if (phone.isNew) {
+            // Add new phone number
+            console.log('Adding new phone number:', phone.phoneNumber);
+            await db.insert(contactPhoneNumbers).values({
+              contactId: contactId,
+              phoneNumber: phone.phoneNumber,
+              status: phone.status || 'active',
+              createdById: user.id,
+              updatedById: user.id,
+            });
+          } else if (phone.isModified && phone.id) {
+            // Update existing phone number
+            console.log('Updating phone number with ID:', phone.id);
+            await db
+              .update(contactPhoneNumbers)
+              .set({
+                phoneNumber: phone.phoneNumber,
+                status: phone.status || 'active',
+                updatedById: user.id,
+                updatedAt: new Date(),
+              })
+              .where(eq(contactPhoneNumbers.id, phone.id));
+          } else if (phone.isDeleted && phone.id) {
+            // Delete phone number
+            console.log('Deleting phone number with ID:', phone.id);
+            await db
+              .delete(contactPhoneNumbers)
+              .where(eq(contactPhoneNumbers.id, phone.id));
+          }
+        }
       }
     }
     
-    // Handle tags: remove existing ones and add new ones if provided
+    // Handle addresses: keep existing ones and add/update/delete as needed
+    if (addresses) {
+      console.log('Processing address updates:', addresses);
+      
+      // Filter out valid addresses
+      const validAddresses = addresses.filter(address => 
+        address.streetAddress && address.streetAddress.trim() !== '' &&
+        address.city && address.city.trim() !== '');
+      
+      if (validAddresses.length > 0) {
+        // For each address, check if it's new, modified or deleted
+        for (const address of validAddresses) {
+          if (address.isDeleted && address.id) {
+            // Delete address
+            console.log('Deleting address with ID:', address.id);
+            await db
+              .delete(contactAddresses)
+              .where(eq(contactAddresses.id, address.id));
+          } else if (address.isNew || (address.isModified && address.id)) {
+            // Handle zip code retrieval or creation
+            let zipCodeId = address.zipCodeId;
+
+            // If zipCodeId is not provided but zipCode is, find or create the zipCode
+            if (!zipCodeId && address.zipCode) {
+              // Try to find existing zipCode
+              const existingZipCode = await db
+                .select()
+                .from(zipCodes)
+                .where(eq(zipCodes.name, address.zipCode.trim()))
+                .limit(1);
+
+              if (existingZipCode && existingZipCode.length > 0) {
+                // Use existing zipCode
+                zipCodeId = existingZipCode[0].id;
+              } else {
+                // Create new zipCode
+                const [newZipCode] = await db
+                  .insert(zipCodes)
+                  .values({
+                    name: address.zipCode.trim(),
+                    stateId: address.stateId || null,
+                  })
+                  .returning();
+
+                if (newZipCode) {
+                  zipCodeId = newZipCode.id;
+                }
+              }
+            }
+
+            if (address.isNew) {
+              // Add new address
+              console.log('Adding new address:', address.streetAddress);
+              await db.insert(contactAddresses).values({
+                contactId: contactId,
+                streetAddress: address.streetAddress,
+                secondaryStreetAddress: address.secondaryStreetAddress || null,
+                city: address.city,
+                stateId: address.stateId,
+                zipCodeId: zipCodeId,
+                status: address.status || 'active',
+                createdById: user.id,
+                updatedById: user.id,
+              });
+            } else if (address.isModified && address.id) {
+              // Update existing address
+              console.log('Updating address with ID:', address.id);
+              await db
+                .update(contactAddresses)
+                .set({
+                  streetAddress: address.streetAddress,
+                  secondaryStreetAddress: address.secondaryStreetAddress || null,
+                  city: address.city,
+                  stateId: address.stateId,
+                  zipCodeId: zipCodeId,
+                  status: address.status || 'active',
+                  updatedById: user.id,
+                  updatedAt: new Date(),
+                })
+                .where(eq(contactAddresses.id, address.id));
+            }
+          }
+        }
+      }
+    }
+    
+    // Handle social media accounts: keep existing ones and add/update/delete as needed
+    if (socialMedia) {
+      console.log('Processing social media updates:', socialMedia);
+      
+      // Filter out valid social media accounts
+      const validSocialMedia = socialMedia.filter(account => 
+        account.socialMediaAccount && account.socialMediaAccount.trim() !== '' &&
+        account.serviceType);
+      
+      if (validSocialMedia.length > 0) {
+        // For each social media account, check if it's new, modified or deleted
+        for (const account of validSocialMedia) {
+          if (account.isNew) {
+            // Add new social media account
+            console.log('Adding new social media account:', account.socialMediaAccount);
+            await db.insert(contactSocialMediaAccounts).values({
+              contactId: contactId,
+              serviceType: account.serviceType,
+              socialMediaAccount: account.socialMediaAccount,
+              status: account.status || 'active',
+              createdById: user.id,
+              updatedById: user.id,
+            });
+          } else if (account.isModified && account.id) {
+            // Update existing social media account
+            console.log('Updating social media account with ID:', account.id);
+            await db
+              .update(contactSocialMediaAccounts)
+              .set({
+                serviceType: account.serviceType,
+                socialMediaAccount: account.socialMediaAccount,
+                status: account.status || 'active',
+                updatedById: user.id,
+                updatedAt: new Date(),
+              })
+              .where(eq(contactSocialMediaAccounts.id, account.id));
+          } else if (account.isDeleted && account.id) {
+            // Delete social media account
+            console.log('Deleting social media account with ID:', account.id);
+            await db
+              .delete(contactSocialMediaAccounts)
+              .where(eq(contactSocialMediaAccounts.id, account.id));
+          }
+        }
+      }
+    }
+    
+    // Handle tags specially: compare existing vs new tags and make minimal changes
     if (tags) {
-      // Delete existing tags
-      await db
-        .delete(contactTags)
+      console.log('Processing tag updates:', tags);
+      
+      // Get existing tags
+      const existingTags = await db
+        .select()
+        .from(contactTags)
         .where(
           and(
             eq(contactTags.contactId, contactId),
@@ -277,15 +399,37 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
           )
         );
       
+      // Extract tag values
+      const existingTagValues = existingTags.map(t => t.tag);
+      
+      // Find tags to add (in new list but not in existing)
+      const tagsToAdd = tags.filter(tag => !existingTagValues.includes(tag));
+      
+      // Find tags to remove (in existing but not in new list)
+      const tagsToRemove = existingTags.filter(existingTag => 
+        !tags.includes(existingTag.tag)
+      );
+      
       // Add new tags
-      if (tags.length > 0) {
+      if (tagsToAdd.length > 0) {
+        console.log('Adding new tags:', tagsToAdd);
         await db.insert(contactTags).values(
-          tags.map((tag) => ({
+          tagsToAdd.map(tag => ({
             contactId: contactId,
             workspaceId: contact.workspaceId,
             tag: tag,
           }))
         );
+      }
+      
+      // Remove tags that are no longer needed
+      if (tagsToRemove.length > 0) {
+        console.log('Removing tags:', tagsToRemove.map(t => t.tag));
+        for (const tagToRemove of tagsToRemove) {
+          await db
+            .delete(contactTags)
+            .where(eq(contactTags.id, tagToRemove.id));
+        }
       }
     }
     

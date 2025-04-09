@@ -29,14 +29,31 @@ export async function fetchContacts(workspaceId: string): Promise<Contact[]> {
  */
 export async function fetchContact(contactId: string): Promise<Contact> {
   try {
+    console.log('Fetching contact with ID:', contactId);
+    
     const response = await fetch(`/api/contacts/${contactId}`);
+    console.log('Contact API response status:', response.status);
     
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to fetch contact');
+      try {
+        const error = await response.json();
+        console.error('API error response:', error);
+        throw new Error(error.message || 'Failed to fetch contact');
+      } catch (jsonError) {
+        // If the response body isn't valid JSON
+        console.error('Failed to parse error response:', jsonError);
+        throw new Error(`Failed to fetch contact: ${response.status} ${response.statusText}`);
+      }
     }
     
     const data = await response.json();
+    console.log('Contact API response data:', data);
+    
+    if (!data.contact) {
+      console.error('No contact data in API response');
+      throw new Error('Failed to fetch contact: No contact data in response');
+    }
+    
     return data.contact;
   } catch (error) {
     console.error('Error in fetchContact:', error);
@@ -57,9 +74,14 @@ export async function createContact(contactData: {
   tags?: string[];
 }): Promise<Contact> {
   try {
-    // Map the client-side schema to the API schema
+    // Log inputs for debugging
+    console.log('Contact service received data:', contactData);
+    
+    // Create a clean payload mapping all snake_case to camelCase correctly
     const apiPayload = {
       workspaceId: contactData.workspaceId,
+      
+      // Map contact basic info
       contact: {
         firstName: contactData.contact.firstName,
         lastName: contactData.contact.lastName,
@@ -70,24 +92,41 @@ export async function createContact(contactData: {
         vanid: contactData.contact.vanid,
         status: contactData.contact.status
       },
-      emails: contactData.emails?.map(email => ({ email: email.email, status: email.status })),
-      phoneNumbers: contactData.phoneNumbers?.map(phone => ({ phoneNumber: phone.phoneNumber, status: phone.status })),
+      
+      // Map emails (these usually don't have issues)
+      emails: contactData.emails?.map(email => ({
+        email: email.email,
+        status: email.status
+      })),
+      
+      // Map phone numbers from snake_case to camelCase
+      phoneNumbers: contactData.phoneNumbers?.map(phone => ({
+        phoneNumber: phone.phone_number,
+        status: phone.status
+      })),
+      
+      // Map addresses from snake_case to camelCase
       addresses: contactData.addresses?.map(address => ({
-        streetAddress: address.streetAddress,
-        secondaryStreetAddress: address.secondaryStreetAddress,
+        streetAddress: address.street_address,
+        secondaryStreetAddress: address.secondary_street_address,
         city: address.city,
-        stateId: address.stateId,
-        zipCodeId: null, // API handles zipCode creation
-        zipCode: address.zipCode, // Pass zipCode as a separate field for the API to process
+        stateId: address.state_id,
+        zipCode: address.zip_code,
         status: address.status
       })),
+      
+      // Map social media from snake_case to camelCase
       socialMedia: contactData.socialMedia?.map(social => ({
-        socialMediaAccount: social.socialMediaAccount,
-        serviceType: social.serviceType,
+        socialMediaAccount: social.social_media_account,
+        serviceType: social.service_type,
         status: social.status
       })),
+      
+      // Tags don't need mapping
       tags: contactData.tags
     };
+    
+    console.log('Sending API payload:', apiPayload);
     
     const response = await fetch('/api/contacts', {
       method: 'POST',
@@ -97,9 +136,18 @@ export async function createContact(contactData: {
       body: JSON.stringify(apiPayload)
     });
     
+    console.log('API response status:', response.status);
+    
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to create contact');
+      try {
+        const error = await response.json();
+        console.error('API error response:', error);
+        throw new Error(error.message || 'Failed to create contact');
+      } catch (jsonError) {
+        // If the response body isn't valid JSON
+        console.error('Failed to parse error response:', jsonError);
+        throw new Error(`Failed to create contact: ${response.status} ${response.statusText}`);
+      }
     }
     
     const data = await response.json();
@@ -122,7 +170,7 @@ export async function updateContact(contactId: string, updateData: {
   tags?: string[];
 }): Promise<Contact> {
   try {
-    // Map the client-side schema to the API schema
+    // Create a clean payload mapping all snake_case to camelCase correctly
     const apiPayload = {
       contactData: updateData.contactData ? {
         firstName: updateData.contactData.firstName,
@@ -134,24 +182,70 @@ export async function updateContact(contactId: string, updateData: {
         vanid: updateData.contactData.vanid,
         status: updateData.contactData.status
       } : undefined,
-      emails: updateData.emails?.map(email => ({ email: email.email, status: email.status })),
-      phoneNumbers: updateData.phoneNumbers?.map(phone => ({ phoneNumber: phone.phoneNumber, status: phone.status })),
-      addresses: updateData.addresses?.map(address => ({
-        streetAddress: address.streetAddress,
-        secondaryStreetAddress: address.secondaryStreetAddress,
-        city: address.city,
-        stateId: address.stateId,
-        zipCodeId: null, // API handles zipCode creation
-        zipCode: address.zipCode, // Pass zipCode as a separate field for the API to process
-        status: address.status
-      })),
-      socialMedia: updateData.socialMedia?.map(social => ({
-        socialMediaAccount: social.socialMediaAccount,
-        serviceType: social.serviceType,
-        status: social.status
-      })),
+      
+      // Map emails from snake_case to camelCase
+      // Also preserve isNew, isModified, and isDeleted flags for server-side logic
+      emails: updateData.emails
+        ?.filter(email => email.email && email.email.trim() !== '')
+        .map(email => ({
+          id: email.id, // Preserve ID for existing emails
+          email: email.email, 
+          status: email.status,
+          isNew: email.isNew,
+          isModified: email.isModified,
+          isDeleted: email.isDeleted
+        })),
+      
+      // Map phone numbers from snake_case to camelCase
+      // Also filter out any invalid phone numbers to prevent DB errors
+      // Preserve isNew, isModified, and isDeleted flags for server-side logic
+      phoneNumbers: updateData.phoneNumbers
+        ?.filter(phone => phone.phoneNumber && phone.phoneNumber.trim() !== '')
+        .map(phone => ({
+          id: phone.id, // Preserve ID for existing phone numbers
+          phoneNumber: phone.phoneNumber, // Already mapped in ContactDetailsSheet
+          status: phone.status,
+          isNew: phone.isNew,
+          isModified: phone.isModified,
+          isDeleted: phone.isDeleted
+        })),
+      
+      // Map addresses from snake_case to camelCase
+      // Also preserve isNew, isModified, and isDeleted flags for server-side logic
+      addresses: updateData.addresses
+        ?.filter(address => address.street_address && address.street_address.trim() !== '')
+        .map(address => ({
+          id: address.id, // Preserve ID for existing addresses
+          streetAddress: address.street_address,
+          secondaryStreetAddress: address.secondary_street_address,
+          city: address.city,
+          stateId: address.state_id,
+          zipCode: address.zip_code,
+          status: address.status,
+          isNew: address.isNew,
+          isModified: address.isModified,
+          isDeleted: address.isDeleted
+        })),
+      
+      // Map social media from snake_case to camelCase
+      // Also preserve isNew, isModified, and isDeleted flags for server-side logic
+      socialMedia: updateData.socialMedia
+        ?.filter(social => social.social_media_account && social.social_media_account.trim() !== '')
+        .map(social => ({
+          id: social.id, // Preserve ID for existing social media accounts
+          socialMediaAccount: social.social_media_account,
+          serviceType: social.service_type,
+          status: social.status,
+          isNew: social.isNew,
+          isModified: social.isModified,
+          isDeleted: social.isDeleted
+        })),
+      
+      // Tags don't need mapping
       tags: updateData.tags
     };
+    
+    console.log('Sending update payload:', apiPayload);
     
     const response = await fetch(`/api/contacts/${contactId}`, {
       method: 'PUT',
@@ -161,9 +255,18 @@ export async function updateContact(contactId: string, updateData: {
       body: JSON.stringify(apiPayload)
     });
     
+    console.log('Update API response status:', response.status);
+    
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to update contact');
+      try {
+        const error = await response.json();
+        console.error('API update error response:', error);
+        throw new Error(error.message || 'Failed to update contact');
+      } catch (jsonError) {
+        // If the response body isn't valid JSON
+        console.error('Failed to parse update error response:', jsonError);
+        throw new Error(`Failed to update contact: ${response.status} ${response.statusText}`);
+      }
     }
     
     const data = await response.json();

@@ -2,6 +2,8 @@
 
 This document provides a comprehensive overview of the Customer Relationship Management (CRM) portion of the Civics Lab application, which is located in the `/engage` route.
 
+For detailed information on the contact management system's API and interface updates, see the [CRM Updates Documentation](crm-updates.md) and [Database Updates Documentation](database-updates.md).
+
 ## Table of Contents
 
 1. [Overview](#overview)
@@ -98,7 +100,7 @@ The CRM dashboard (`/engage/+page.svelte`) serves as the central hub for users t
 
 ## Contact Management
 
-The contact management system (`/engage/contacts`) provides comprehensive tools for managing individual relationships.
+The contact management system (`/engage/contacts`) provides comprehensive tools for managing individual relationships. The system uses a granular CRUD approach to manage related records, allowing multiple phone numbers, emails, addresses, and social media accounts for each contact.
 
 ### Contact Data Model
 
@@ -299,6 +301,57 @@ The CRM system integrates with other parts of the Civics Lab application:
 This CRM system provides a robust foundation for civic engagement organizations to manage their relationships with constituents, businesses, and donors in an organized and efficient manner.
 
 ## Known Issues and Fixes
+
+### Multiple Contact-Related Records Issue
+
+**Issue**: The contact management system only showed one phone number, email, address, or social media account per contact. When adding a new item, it would replace any existing ones instead of adding to the collection.
+
+**Root Cause**: The backend API was using a "replace-all" approach for contact-related records. When updating, it would first delete all existing records (e.g., phone numbers) for a contact and then insert all new ones. This meant when adding a new phone number, all existing phone numbers would be deleted and only the new one would remain.
+
+**Fix Implementation**:
+
+1. Updated the API endpoint (`PUT /api/contacts/[id]`) to handle contact-related records individually with a granular CRUD approach:
+   ```typescript
+   // For each phone number, check if it's new, modified or deleted
+   for (const phone of validPhoneNumbers) {
+     if (phone.isNew) {
+       // Add new phone number
+       await db.insert(contactPhoneNumbers).values({
+         contactId: contactId,
+         phoneNumber: phone.phoneNumber,
+         status: phone.status || 'active',
+         createdById: user.id,
+         updatedById: user.id,
+       });
+     } else if (phone.isModified && phone.id) {
+       // Update existing phone number
+       await db
+         .update(contactPhoneNumbers)
+         .set({
+           phoneNumber: phone.phoneNumber,
+           status: phone.status || 'active',
+           updatedById: user.id,
+           updatedAt: new Date(),
+         })
+         .where(eq(contactPhoneNumbers.id, phone.id));
+     } else if (phone.isDeleted && phone.id) {
+       // Delete phone number
+       await db
+         .delete(contactPhoneNumbers)
+         .where(eq(contactPhoneNumbers.id, phone.id));
+     }
+   }
+   ```
+
+2. Updated all contact detail components to properly mark items with `isNew`, `isModified`, or `isDeleted` flags
+
+3. Enhanced input validation to prevent nulls and properly format data
+
+4. Improved the service layer (`contactService.ts`) to preserve necessary flags and IDs when sending data to the API
+
+This fix enables users to add multiple phone numbers, email addresses, addresses, and social media accounts to a contact without losing existing data.
+
+For complete implementation details, see the [CRM Updates Documentation](crm-updates.md) and [Database Updates Documentation](database-updates.md).
 
 ### Business Form Modal Structure Error
 

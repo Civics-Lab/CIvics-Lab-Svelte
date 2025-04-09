@@ -49,7 +49,14 @@
         item.isModified = true;
       }
       
-      item[field] = value;
+      // For email field, ensure it's not null
+      if (field === 'email') {
+        // Trim the value and store it, or empty string if null/undefined
+        item[field] = value ? value.trim() : '';
+      } else {
+        item[field] = value;
+      }
+      
       return updatedItems;
     });
     handleChange();

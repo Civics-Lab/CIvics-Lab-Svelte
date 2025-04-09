@@ -5,8 +5,10 @@
   import { fly } from 'svelte/transition';
   import DetailsSheetOverlay from '$lib/components/DetailsSheetOverlay.svelte';
   import { toastStore } from '$lib/stores/toastStore';
+  import { workspaceStore } from '$lib/stores/workspaceStore';
   import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
   import { fetchContact, updateContact, deleteContact } from '$lib/services/contactService';
+  import { fetchFormOptions } from '$lib/services/optionsService';
   
   // Import subcomponents
   import ContactBasicInfo from './ContactDetailsSheet/ContactBasicInfo.svelte';
@@ -60,36 +62,24 @@
   // Fetch options
   async function fetchOptions() {
     try {
-      // These would ideally come from API endpoints too
-      // For now, we'll use placeholder data
-      genderOptions.set([
-        { id: '1', gender: 'Male' },
-        { id: '2', gender: 'Female' },
-        { id: '3', gender: 'Non-binary' },
-        { id: '4', gender: 'Other' }
-      ]);
+      // Get the current workspace ID
+      const workspaceId = $workspaceStore.currentWorkspace?.id;
       
-      raceOptions.set([
-        { id: '1', race: 'Asian' },
-        { id: '2', race: 'Black or African American' },
-        { id: '3', race: 'Hispanic or Latino' },
-        { id: '4', race: 'Native American' },
-        { id: '5', race: 'Pacific Islander' },
-        { id: '6', race: 'White' },
-        { id: '7', race: 'Other' },
-        { id: '8', race: 'Multiracial' }
-      ]);
+      if (!workspaceId) {
+        console.error('No workspace selected');
+        return;
+      }
       
-      stateOptions.set([
-        { id: '1', name: 'Alabama', abbreviation: 'AL' },
-        { id: '2', name: 'Alaska', abbreviation: 'AK' },
-        { id: '3', name: 'Arizona', abbreviation: 'AZ' },
-        // Add more states here
-      ]);
+      // Fetch options via API
+      const options = await fetchFormOptions(workspaceId);
       
+      // Set options in stores
+      genderOptions.set(options.genders || []);
+      raceOptions.set(options.races || []);
+      stateOptions.set(options.states || []);
     } catch (err) {
       console.error('Error fetching options:', err);
-      error.set('Failed to load form options');
+      error.set('Failed to load form options: ' + (err.message || 'Unknown error'));
     }
   }
   
@@ -100,17 +90,42 @@
     error.set(null);
     
     try {
+      console.log('Fetching contact details for ID:', contactId);
+      
       // Fetch contact details using the API service
       const contact = await fetchContact(contactId);
       
       if (contact) {
+        console.log('Contact fetched successfully:', contact);
+        
+        // Dump full contact object for debugging
+        console.log('Full contact object from API:', JSON.stringify(contact, null, 2));
+        
+        // Check for alternative property names
+        const possiblePhoneNumbers = contact.phoneNumbers || contact.phone_numbers || [];
+        const possibleEmails = contact.emails || contact.email_addresses || [];
+        const possibleAddresses = contact.addresses || contact.contact_addresses || [];
+        const possibleSocialMedia = contact.socialMediaAccounts || contact.social_media_accounts || [];
+        
+        console.log('Alternative property checks:', {
+          phoneNumbersFound: !!contact.phoneNumbers,
+          phone_numbersFound: !!contact.phone_numbers,
+          emailsFound: !!contact.emails,
+          email_addressesFound: !!contact.email_addresses,
+          addressesFound: !!contact.addresses,
+          contact_addressesFound: !!contact.contact_addresses,
+          socialMediaAccountsFound: !!contact.socialMediaAccounts,
+          social_media_accountsFound: !!contact.social_media_accounts
+        });
+        
         // Set basic info
         formData.set({
-          firstName: contact.firstName || '',
-          lastName: contact.lastName || '',
-          middleName: contact.middleName || '',
-          genderId: contact.genderId || '',
-          raceId: contact.raceId || '',
+          // Map camelCase from API to snake_case for form
+          first_name: contact.firstName || '',
+          last_name: contact.lastName || '',
+          middle_name: contact.middleName || '',
+          gender_id: contact.genderId || '',
+          race_id: contact.raceId || '',
           pronouns: contact.pronouns || '',
           vanid: contact.vanid || '',
           status: contact.status || 'active'
@@ -122,39 +137,63 @@
           tags: contact.tags ? [...contact.tags.map(t => t.tag)] : []
         });
         
-        // Set emails
-        if (contact.emails) {
-          emails.set(Array.isArray(contact.emails) ? contact.emails : []);
+        // Set emails - try both property names
+        if (possibleEmails.length > 0) {
+          console.log('Email data found:', possibleEmails);
+          emails.set(possibleEmails.map(email => ({
+            id: email.id,
+            email: email.email || '',
+            status: email.status || 'active'
+          })));
         } else {
+          console.log('No email data found');
           emails.set([]);
         }
         
-        // Set phone numbers
-        if (contact.phone_numbers) {
-          phoneNumbers.set(Array.isArray(contact.phone_numbers) ? contact.phone_numbers : []);
+        // Set phone numbers - try both property names
+        if (possiblePhoneNumbers.length > 0) {
+          console.log('Phone data found:', possiblePhoneNumbers);
+          phoneNumbers.set(possiblePhoneNumbers.map(phone => ({
+            id: phone.id,
+            phone_number: phone.phoneNumber || phone.phone_number || '',
+            status: phone.status || 'active'
+          })));
+          
+          // Debug the mapped phone numbers
+          console.log('Mapped phone numbers for UI:', $phoneNumbers);
         } else {
+          console.log('No phone data found');
           phoneNumbers.set([]);
         }
         
-        // Set addresses
-        if (contact.addresses) {
-          addresses.set(Array.isArray(contact.addresses) ? contact.addresses.map(address => ({
+        // Set addresses - try both property names
+        if (possibleAddresses.length > 0) {
+          console.log('Address data found:', possibleAddresses);
+          addresses.set(possibleAddresses.map(address => ({
             id: address.id,
-            streetAddress: address.streetAddress || '',
-            secondaryStreetAddress: address.secondaryStreetAddress || '',
+            street_address: address.streetAddress || address.street_address || '',
+            secondary_street_address: address.secondaryStreetAddress || address.secondary_street_address || '',
             city: address.city || '',
-            stateId: address.stateId || '',
-            zipCode: address.zipCodeId || '',
+            state_id: address.stateId || address.state_id || '',
+            zip_code: address.zipCode || address.zip_code || '',
             status: address.status || 'active'
-          })) : []);
+          })));
         } else {
+          console.log('No address data found');
           addresses.set([]);
         }
         
-        // Set social media
-        if (contact.social_media_accounts) {
-          socialMedia.set(Array.isArray(contact.social_media_accounts) ? contact.social_media_accounts : []);
+        // Set social media - try both property names
+        if (possibleSocialMedia.length > 0) {
+          console.log('Social media data found:', possibleSocialMedia);
+          socialMedia.set(possibleSocialMedia.map(social => ({
+            id: social.id,
+            social_media_account: social.socialMediaAccount || social.social_media_account || '',
+            service_type: social.serviceType || social.service_type || 'facebook',
+            status: social.status || 'active'
+          })));
         } else {
+          console.log('No social media data found');
           socialMedia.set([]);
         }
         
@@ -184,15 +223,60 @@
     error.set(null);
     
     try {
+      console.log('Preparing to save contact changes');
+      
+      // Extracting only phone numbers that need to be sent to the API
+      const phonesToSend = $phoneNumbers
+        .filter(phone => phone.isNew || phone.isDeleted || phone.isModified);
+      console.log('Phone numbers to be sent:', phonesToSend); 
+
       // Prepare the update data
       const updateData = {
-        contactData: { ...$formData },
-        emails: $emails.filter(email => email.isNew || email.isDeleted || email.isModified),
-        phoneNumbers: $phoneNumbers.filter(phone => phone.isNew || phone.isDeleted || phone.isModified),
-        addresses: $addresses.filter(address => address.isNew || address.isDeleted || address.isModified),
-        socialMedia: $socialMedia.filter(social => social.isNew || social.isDeleted || social.isModified),
+        contactData: {
+          // Map snake_case to camelCase for API
+          firstName: $formData.first_name,
+          lastName: $formData.last_name,
+          middleName: $formData.middle_name,
+          genderId: $formData.gender_id,
+          raceId: $formData.race_id,
+          pronouns: $formData.pronouns,
+          vanid: $formData.vanid,
+          status: $formData.status
+        },
+        emails: $emails
+          .filter(email => email.isNew || email.isDeleted || email.isModified)
+          .map(email => ({
+            // Keep properties as-is since service will map them
+            ...email
+          })),
+        phoneNumbers: phonesToSend.map(phone => ({
+            // Explicitly map phone_number to phoneNumber for API
+            id: phone.id,
+            phoneNumber: phone.phone_number || '', // Ensure empty string instead of null
+            status: phone.status,
+            isNew: phone.isNew,
+            isDeleted: phone.isDeleted,
+            isModified: phone.isModified
+          })),
+        addresses: $addresses
+          .filter(address => address.isNew || address.isDeleted || address.isModified)
+          .map(address => ({
+            // Properties will be mapped in service
+            ...address
+          })),
+        socialMedia: $socialMedia
+          .filter(social => social.isNew || social.isDeleted || social.isModified)
+          .map(social => ({
+            // Properties will be mapped in service
+            ...social
+          })),
         tags: $tags
       };
+      
+      // Debug the phone numbers data
+      console.log('Phone numbers to be sent:', updateData.phoneNumbers);
+      
+      console.log('Sending update data:', updateData);
       
       // Call the API to update the contact
       await updateContact(contactId, updateData);
@@ -211,8 +295,8 @@
       
     } catch (err) {
       console.error('Error saving contact changes:', err);
-      error.set('Failed to save changes');
-      toastStore.error('Failed to save changes');
+      error.set('Failed to save changes: ' + (err.message || 'Unknown error'));
+      toastStore.error('Failed to save changes: ' + (err.message || 'Unknown error'));
     } finally {
       isSaving.set(false);
     }
@@ -321,6 +405,7 @@
   
   // Watch for contact ID changes
   $: if (contactId && isOpen) {
+    console.log('Contact ID or isOpen changed, fetching details and options');
     fetchContactDetails();
     fetchOptions();
   }

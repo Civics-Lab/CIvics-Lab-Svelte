@@ -4,11 +4,10 @@
   import { formatCurrency } from '$lib/utils/formatters';
   import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
   import { toastStore } from '$lib/stores/toastStore';
-  import type { TypedSupabaseClient } from '$lib/types/supabase';
+  import { fetchContactDonations } from '$lib/services/donationService';
   
   // Props
   export let contactId: string;
-  export let supabase: TypedSupabaseClient;
   export let isSaving: boolean = false;
   
   const dispatch = createEventDispatcher();
@@ -47,56 +46,52 @@
     error.set(null);
     
     try {
-      // Fetch donations for this contact
-      const { data, error: fetchError } = await supabase
-        .from('donations')
-        .select('*')
-        .eq('contact_id', contactId)
-        .order('created_at', { ascending: false });
+      console.log('Fetching donations for contact:', contactId);
       
-      if (fetchError) throw fetchError;
+      // Fetch donations using the API service
+      const data = await fetchContactDonations(contactId);
       
-      if (data) {
-        const donationsWithFormattedDates = data.map(donation => ({
-          ...donation,
-          formattedDate: formatDate(donation.created_at),
-          formattedAmount: formatCurrency(donation.amount)
-        }));
-        
-        donations.set(donationsWithFormattedDates);
-        
-        // Calculate total donation amount
-        const total = donationsWithFormattedDates.reduce((sum, donation) => sum + donation.amount, 0);
-        totalDonationAmount.set(total);
-        
-        // Calculate average donation amount
-        averageDonationAmount.set(donationsWithFormattedDates.length > 0 
-          ? total / donationsWithFormattedDates.length 
-          : 0);
-        
-        // Calculate donations this month
-        const now = new Date();
-        const thisMonth = now.getMonth();
-        const thisYear = now.getFullYear();
-        
-        const thisMonthDonations = donationsWithFormattedDates.filter(donation => {
-          const donationDate = new Date(donation.created_at);
-          return donationDate.getMonth() === thisMonth && donationDate.getFullYear() === thisYear;
-        });
-        
-        donationsThisMonth.set(thisMonthDonations.length);
-        donationsThisMonthAmount.set(thisMonthDonations.reduce((sum, donation) => sum + donation.amount, 0));
-      } else {
-        donations.set([]);
-        totalDonationAmount.set(0);
-        averageDonationAmount.set(0);
-        donationsThisMonth.set(0);
-        donationsThisMonthAmount.set(0);
-      }
+      // Format donations for display
+      const donationsWithFormattedDates = data.map(donation => ({
+        ...donation,
+        formattedDate: formatDate(donation.createdAt || donation.created_at),
+        formattedAmount: formatCurrency(donation.amount)
+      }));
+      
+      donations.set(donationsWithFormattedDates);
+      
+      // Calculate total donation amount
+      const total = donationsWithFormattedDates.reduce((sum, donation) => sum + donation.amount, 0);
+      totalDonationAmount.set(total);
+      
+      // Calculate average donation amount
+      averageDonationAmount.set(donationsWithFormattedDates.length > 0 
+        ? total / donationsWithFormattedDates.length 
+        : 0);
+      
+      // Calculate donations this month
+      const now = new Date();
+      const thisMonth = now.getMonth();
+      const thisYear = now.getFullYear();
+      
+      const thisMonthDonations = donationsWithFormattedDates.filter(donation => {
+        const donationDate = new Date(donation.createdAt || donation.created_at);
+        return donationDate.getMonth() === thisMonth && donationDate.getFullYear() === thisYear;
+      });
+      
+      donationsThisMonth.set(thisMonthDonations.length);
+      donationsThisMonthAmount.set(thisMonthDonations.reduce((sum, donation) => sum + donation.amount, 0));
       
     } catch (err) {
       console.error('Error fetching donations:', err);
       error.set('Failed to load donations');
+      
+      // Set default values in case of error
+      donations.set([]);
+      totalDonationAmount.set(0);
+      averageDonationAmount.set(0);
+      donationsThisMonth.set(0);
+      donationsThisMonthAmount.set(0);
     } finally {
       isLoading.set(false);
     }

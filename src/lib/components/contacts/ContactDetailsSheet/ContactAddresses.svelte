@@ -21,8 +21,9 @@
       state_id: '', 
       zip_code: '', 
       status: 'active',
-      isNew: true 
+      isNew: true  // This flag will ensure it's treated as a new entry for the API
     }]);
+    console.log('Added new address entry');
     handleChange();
   }
   
@@ -54,7 +55,14 @@
         item.isModified = true;
       }
       
-      item[field] = value;
+      // Ensure string fields are not null
+      if (['street_address', 'secondary_street_address', 'city', 'zip_code'].includes(field)) {
+        // Trim the value and store it, or empty string if null/undefined
+        item[field] = value ? value.trim() : '';
+      } else {
+        item[field] = value;
+      }
+      
       return updatedItems;
     });
     handleChange();
