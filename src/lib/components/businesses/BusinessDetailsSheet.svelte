@@ -7,6 +7,8 @@
     import { toastStore } from '$lib/stores/toastStore';
     import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
     import type { TypedSupabaseClient } from '$lib/types/supabase';
+    import { fetchBusiness, updateBusiness } from '$lib/services/businessService';
+    import { fetchStateOptions, fetchContactOptions } from '$lib/services/formOptionsService';
     
     // Import subcomponents
     import BusinessBasicInfo from './BusinessDetailsSheet/BusinessBasicInfo.svelte';
@@ -29,6 +31,7 @@
     const isSaving = writable(false);
     const hasChanges = writable(false);
     const error = writable<string | null>(null);
+    const isLoadingContacts = writable(false);
     
     // State for unsaved changes confirmation dialog
     const showUnsavedChangesDialog = writable(false);
@@ -49,22 +52,45 @@
     
     // Options for dropdowns
     const stateOptions = writable<{id: string, name: string, abbreviation: string}[]>([]);
+    const contactOptions = writable<{id: string, name: string}[]>([]);
     
     // Fetch options
     async function fetchOptions() {
       try {
-        // Fetch state options
-        const { data: stateData, error: stateError } = await supabase
-          .from('states')
-          .select('id, name, abbreviation')
-          .order('name');
-        
-        if (stateError) throw stateError;
-        stateOptions.set(stateData || []);
-        
+        // Fetch state options using the form options service
+        const states = await fetchStateOptions();
+        stateOptions.set(states);
+        console.log("Fetched states for business details:", states.length);
       } catch (err) {
         console.error('Error fetching options:', err);
         error.set('Failed to load form options');
+      }
+    }
+    
+    // Function to fetch contacts based on search term
+    async function searchContacts(searchTerm: string, workspaceId: string) {
+      try {
+        if (!workspaceId) {
+          console.error('Missing workspace ID for contacts search');
+          isLoadingContacts.set(false);
+          return;
+        }
+
+        if (searchTerm.trim().length > 1) {
+          isLoadingContacts.set(true);
+          console.log('Searching contacts with term:', searchTerm, 'in workspace:', workspaceId);
+          const contacts = await fetchContactOptions(workspaceId, searchTerm);
+          contactOptions.set(contacts);
+          console.log("Fetched contacts for search:", searchTerm, contacts.length);
+          isLoadingContacts.set(false);
+        } else {
+          contactOptions.set([]);
+          isLoadingContacts.set(false);
+        }
+      } catch (error) {
+        console.error('Error searching contacts:', error);
+        toastStore.error('Failed to search contacts');
+        isLoadingContacts.set(false);
       }
     }
     
@@ -75,77 +101,85 @@
       error.set(null);
       
       try {
-        // Fetch business details using the RPC function
-        const { data, error: fetchError } = await supabase
-          .rpc('get_business_details', { business_uuid: businessId });
+        // Use the business service to fetch business details via API endpoint
+        const businessData = await fetchBusiness(businessId);
+        console.log('Fetched business data:', businessData);
         
-        if (fetchError) throw fetchError;
-        
-        if (data && data.length > 0) {
-          const businessData = data[0];
-          
+        if (businessData) {
           // Set basic info
           formData.set({
-            business_name: businessData.business_name,
+            business_name: businessData.businessName,
             status: businessData.status || 'active'
           });
           
           // Store original data for comparison
           originalData.set({
             ...JSON.parse(JSON.stringify($formData)),
-            tags: businessData.tags ? [...businessData.tags.map(t => t.tag)] : []
+            tags: businessData.tags ? [...businessData.tags.map(t => typeof t === 'string' ? t : t.tag)] : [],
+            workspaceId: businessData.workspaceId // Store workspace ID for later use
           });
           
+          // Convert API data format to component format
+          
           // Set phone numbers
-          if (businessData.phone_numbers) {
-            phoneNumbers.set(Array.isArray(businessData.phone_numbers) ? businessData.phone_numbers : []);
+          if (businessData.phoneNumbers) {
+            phoneNumbers.set(Array.isArray(businessData.phoneNumbers) ? 
+              businessData.phoneNumbers.map(phone => ({
+                id: phone.id,
+                phone_number: phone.phoneNumber,
+                status: phone.status || 'active'
+              })) : []);
           } else {
             phoneNumbers.set([]);
           }
           
           // Set addresses
           if (businessData.addresses) {
-            addresses.set(Array.isArray(businessData.addresses) ? businessData.addresses.map(address => ({
-              id: address.id,
-              street_address: address.street_address || '',
-              secondary_street_address: address.secondary_street_address || '',
-              city: address.city || '',
-              state_id: address.state_id || '',
-              zip_code: address.zip_code || '',
-              zip_code_id: address.zip_code_id || '',
-              status: address.status || 'active'
-            })) : []);
+            addresses.set(Array.isArray(businessData.addresses) ? 
+              businessData.addresses.map(address => ({
+                id: address.id,
+                street_address: address.streetAddress || '',
+                secondary_street_address: address.secondaryStreetAddress || '',
+                city: address.city || '',
+                state_id: address.stateId || '',
+                zip_code: address.zipCode || '',
+                status: address.status || 'active'
+              })) : []);
           } else {
             addresses.set([]);
           }
           
           // Set social media
-          if (businessData.social_media) {
-            socialMedia.set(Array.isArray(businessData.social_media) ? businessData.social_media : []);
+          if (businessData.socialMediaAccounts) {
+            socialMedia.set(Array.isArray(businessData.socialMediaAccounts) ? 
+              businessData.socialMediaAccounts.map(account => ({
+                id: account.id,
+                social_media_account: account.socialMediaAccount,
+                service_type: account.serviceType,
+                status: account.status || 'active'
+              })) : []);
           } else {
             socialMedia.set([]);
           }
           
           // Set tags
           if (businessData.tags) {
-            tags.set(Array.isArray(businessData.tags) ? businessData.tags.map(tag => tag.tag) : []);
+            tags.set(Array.isArray(businessData.tags) ? 
+              businessData.tags.map(tag => typeof tag === 'string' ? tag : tag.tag) : []);
           } else {
             tags.set([]);
           }
           
           // Set employees
           if (businessData.employees) {
-            employees.set(Array.isArray(businessData.employees) ? businessData.employees.map(employee => ({
-              id: employee.id,
-              contact_id: employee.employee_id,
-              status: employee.status || 'active',
-              role: employee.role || '',
-              contact: {
-                id: employee.employee_id,
-                first_name: employee.employee_name ? employee.employee_name.split(' ')[0] : 'Unknown',
-                last_name: employee.employee_name ? employee.employee_name.split(' ').slice(1).join(' ') : 'Contact'
-              }
-            })) : []);
+            employees.set(Array.isArray(businessData.employees) ? 
+              businessData.employees.map(employee => ({
+                id: employee.id,
+                contact_id: employee.contactId,
+                status: employee.status || 'active',
+                contact_name: employee.contactName || 'Unknown Contact',
+                role: employee.role || '' // Map the role field from API
+              })) : []);
           } else {
             employees.set([]);
           }
@@ -169,233 +203,117 @@
       error.set(null);
       
       try {
-        // Update business basic info if changed
+        // Prepare update data for API call
+        const updateData: any = {};
+        
+        // Add basic info if changed
         if (JSON.stringify($formData) !== JSON.stringify($originalData)) {
-          const { error: updateError } = await supabase
-            .from('businesses')
-            .update($formData)
-            .eq('id', businessId);
-          
-          if (updateError) throw updateError;
+          updateData.businessData = {
+            business_name: $formData.business_name,
+            status: $formData.status
+          };
         }
         
-        // Handle phone updates
-        for (const phone of $phoneNumbers) {
-          if (phone.isNew) {
-            // Insert new phone
-            await supabase
-              .from('business_phone_numbers')
-              .insert({
-                business_id: businessId,
-                phone_number: phone.phone_number,
-                status: phone.status
-              });
-          } else if (phone.isDeleted) {
-            // Delete phone
-            await supabase
-              .from('business_phone_numbers')
-              .delete()
-              .eq('id', phone.id);
-          } else if (phone.isModified) {
-            // Update phone
-            await supabase
-              .from('business_phone_numbers')
-              .update({
-                phone_number: phone.phone_number,
-                status: phone.status
-              })
-              .eq('id', phone.id);
-          }
+        // Add phone numbers with flags for modification
+        const phonesToUpdate = $phoneNumbers.map(phone => ({
+          ...phone,
+          isNew: phone.isNew || (!phone.id && phone.phone_number), // Mark as new if it's a new entry
+          isModified: phone.isModified, // Keep modified flag
+          isDeleted: phone.isDeleted // Keep deleted flag
+        })).filter(phone => phone.isNew || phone.isModified || phone.isDeleted);
+        
+        if (phonesToUpdate.length > 0) {
+          updateData.phoneNumbers = phonesToUpdate;
         }
         
-        // Handle address updates
-        for (const address of $addresses) {
-          // Sanitize address data - convert empty state_id to null
-          if (address.state_id === '') {
-            address.state_id = null;
+        // Add addresses with flags for modification
+        const addressesToUpdate = $addresses.map(address => ({
+          ...address,
+          isNew: address.isNew || (!address.id && address.street_address), // Mark as new if it's a new entry
+          isModified: address.isModified, // Keep modified flag
+          isDeleted: address.isDeleted // Keep deleted flag
+        })).filter(address => address.isNew || address.isModified || address.isDeleted);
+        
+        if (addressesToUpdate.length > 0) {
+          updateData.addresses = addressesToUpdate;
+        }
+        
+        // Add social media with flags for modification
+        const socialMediaToUpdate = $socialMedia.map(social => ({
+          ...social,
+          isNew: social.isNew || (!social.id && social.social_media_account), // Mark as new if it's a new entry
+          isModified: social.isModified, // Keep modified flag
+          isDeleted: social.isDeleted // Keep deleted flag
+        })).filter(social => social.isNew || social.isModified || social.isDeleted);
+        
+        if (socialMediaToUpdate.length > 0) {
+          updateData.socialMedia = socialMediaToUpdate;
+        }
+        
+        // Add employees with flags for modification
+        const employeesToUpdate = $employees.map(employee => ({
+          ...employee,
+          isNew: employee.isNew || (!employee.id && employee.contact_id), // Mark as new if it's a new entry
+          isModified: employee.isModified, // Keep modified flag
+          isDeleted: employee.isDeleted // Keep deleted flag
+        })).filter(employee => employee.isNew || employee.isModified || employee.isDeleted);
+        
+        if (employeesToUpdate.length > 0) {
+          updateData.employees = employeesToUpdate;
+        }
+        
+        // Add tags if changed
+        let originalTags = [];
+        try {
+          if ($originalData && $originalData.tags) {
+            originalTags = $originalData.tags;
           }
-          
-          if (address.isNew) {
-            // Handle the zip code first - get or create it
-            let zip_code_id = null;
-            if (address.zip_code && address.zip_code.trim()) {
-              // Try to find the zip code first
-              const { data: zipData, error: zipError } = await supabase
-                .from('zip_codes')
-                .select('id')
-                .eq('name', address.zip_code.trim())
-                .maybeSingle();
-              
-              if (!zipError && zipData) {
-                // Use existing zip code
-                zip_code_id = zipData.id;
-              } else {
-                // Create a new zip code record
-                try {
-                  const { data: newZipCode, error: zipCreateError } = await supabase
-                    .from('zip_codes')
-                    .insert({
-                      name: address.zip_code.trim(),
-                      state_id: address.state_id || null
-                    })
-                    .select('id')
-                    .single();
-                  
-                  if (zipCreateError) {
-                    console.error('Error creating zip code:', zipCreateError);
-                  } else {
-                    zip_code_id = newZipCode.id;
-                  }
-                } catch (err) {
-                  console.error('Error in zip code creation process:', err);
-                }
-              }
-            }
+        } catch (err) {
+          console.log('Error getting original tags:', err);
+        }
+        
+        // Compare current tags with original ones
+        let hasTagChanges = false;
+        if ($tags.length !== originalTags.length) {
+          hasTagChanges = true;
+        } else {
+          // Check if any tags were added or removed
+          hasTagChanges = $tags.some(tag => !originalTags.includes(tag)) || 
+                        originalTags.some(tag => !$tags.includes(tag));
+        }
+        
+        if (hasTagChanges) {
+          updateData.tags = $tags;
+        }
+        
+        console.log('Sending update data via API:', updateData);
+        
+        // Use the business service to update via API endpoint
+        if (Object.keys(updateData).length > 0) {
+          try {
+            const updatedBusiness = await updateBusiness(businessId, updateData);
+            console.log('API update response:', updatedBusiness);
             
-            // Insert new address with the zip code
-            await supabase
-              .from('business_addresses')
-              .insert({
-                business_id: businessId,
-                street_address: address.street_address,
-                secondary_street_address: address.secondary_street_address || null,
-                city: address.city,
-                state_id: address.state_id, // Now null if it was empty string
-                zip_code_id: zip_code_id,
-                status: address.status
-              });
-          } else if (address.isDeleted) {
-            // Delete address
-            await supabase
-              .from('business_addresses')
-              .delete()
-              .eq('id', address.id);
-          } else if (address.isModified) {
-            // Handle the zip code first - get or create it
-            let zip_code_id = null;
-            if (address.zip_code && address.zip_code.trim()) {
-              // Try to find the zip code first
-              const { data: zipData, error: zipError } = await supabase
-                .from('zip_codes')
-                .select('id')
-                .eq('name', address.zip_code.trim())
-                .maybeSingle();
-              
-              if (!zipError && zipData) {
-                // Use existing zip code
-                zip_code_id = zipData.id;
-              } else {
-                // Create a new zip code record
-                try {
-                  const { data: newZipCode, error: zipCreateError } = await supabase
-                    .from('zip_codes')
-                    .insert({
-                      name: address.zip_code.trim(),
-                      state_id: address.state_id || null
-                    })
-                    .select('id')
-                    .single();
-                  
-                  if (zipCreateError) {
-                    console.error('Error creating zip code:', zipCreateError);
-                  } else {
-                    zip_code_id = newZipCode.id;
-                  }
-                } catch (err) {
-                  console.error('Error in zip code creation process:', err);
-                }
-              }
-            }
+            // Success notification
+            toastStore.success('Business updated successfully');
             
-            // Update address with the zip code
-            await supabase
-              .from('business_addresses')
-              .update({
-                street_address: address.street_address,
-                secondary_street_address: address.secondary_street_address || null,
-                city: address.city,
-                state_id: address.state_id, // Now null if it was empty string
-                zip_code_id: zip_code_id,
-                status: address.status
-              })
-              .eq('id', address.id);
+            // Refresh business data
+            await fetchBusinessDetails();
+            
+            // Reset has changes flag
+            hasChanges.set(false);
+            
+            // Notify parent about changes
+            dispatch('updated');
+          } catch (updateError) {
+            console.error('Error during API update:', updateError);
+            error.set('Failed to save changes: ' + (updateError.message || 'API error'));
+            toastStore.error('Failed to save changes: ' + (updateError.message || 'API error'));
           }
+        } else {
+          console.log('No changes to update');
+          toastStore.info('No changes to update');
         }
-        
-        // Handle social media updates
-        for (const social of $socialMedia) {
-          if (social.isNew) {
-            // Insert new social media
-            await supabase
-              .from('business_social_media_accounts')
-              .insert({
-                business_id: businessId,
-                social_media_account: social.social_media_account,
-                service_type: social.service_type,
-                status: social.status
-              });
-          } else if (social.isDeleted) {
-            // Delete social media
-            await supabase
-              .from('business_social_media_accounts')
-              .delete()
-              .eq('id', social.id);
-          } else if (social.isModified) {
-            // Update social media
-            await supabase
-              .from('business_social_media_accounts')
-              .update({
-                social_media_account: social.social_media_account,
-                service_type: social.service_type,
-                status: social.status
-              })
-              .eq('id', social.id);
-          }
-        }
-        
-        // Handle tags updates
-        // First get existing tags
-        const { data: existingTags, error: existingTagsError } = await supabase
-          .from('business_tags')
-          .select('id, tag')
-          .eq('business_id', businessId);
-        
-        if (existingTagsError) throw existingTagsError;
-        
-        // Delete tags that are no longer in the current tags list
-        for (const existingTag of existingTags || []) {
-          if (!$tags.includes(existingTag.tag)) {
-            await supabase
-              .from('business_tags')
-              .delete()
-              .eq('id', existingTag.id);
-          }
-        }
-        
-        // Add new tags
-        const existingTagValues = (existingTags || []).map(t => t.tag);
-        const newTags = $tags.filter(tag => !existingTagValues.includes(tag));
-        
-        for (const newTag of newTags) {
-          await supabase
-            .from('business_tags')
-            .insert({
-              business_id: businessId,
-              tag: newTag
-            });
-        }
-        
-        // Success notification
-        toastStore.success('Business updated successfully');
-        
-        // Refresh business data
-        fetchBusinessDetails();
-        
-        // Reset has changes flag
-        hasChanges.set(false);
-        
-        // Notify parent about changes
-        dispatch('updated');
         
       } catch (err) {
         console.error('Error saving business changes:', err);
@@ -465,7 +383,7 @@
       const hasSocialChanges = $socialMedia.some(social => social.isNew || social.isDeleted || social.isModified);
       const hasEmployeeChanges = $employees.some(employee => employee.isNew || employee.isDeleted || employee.isModified);
       
-      // Original tags is an array of strings, we need to compare differently
+      // Compare with original tags
       let originalTags = [];
       try {
         if ($originalData && $originalData.tags) {
@@ -511,6 +429,11 @@
     $: if (businessId && isOpen) {
       fetchBusinessDetails();
       fetchOptions();
+    }
+
+    // Watch for contact option changes to update loading state
+    $: if (contactOptions) {
+      isLoadingContacts.set(false);
     }
   </script>
   
@@ -614,9 +537,12 @@
                   <!-- Employees Section -->
                   <BusinessEmployees 
                     {employees}
+                    {contactOptions}
                     {supabase}
                     isSaving={$isSaving}
+                    isLoadingContacts={$isLoadingContacts}
                     on:change={handleMultiItemChange}
+                    on:searchContacts={(e) => searchContacts(e.detail, $originalData?.workspaceId)}
                   />
                   
                   <!-- Tags Section -->

@@ -3,54 +3,18 @@ import { db } from '$lib/db/drizzle';
 import { donations, contacts, userWorkspaces } from '$lib/db/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
+import { verifyResourceAccess } from '$lib/utils/auth';
 
-// Helper function to check access to the contact
-async function checkContactAccess(userId: string, contactId: string) {
-  // Get contact to find workspace
-  const contact = await db
-    .select()
-    .from(contacts)
-    .where(eq(contacts.id, contactId))
-    .limit(1);
-  
-  if (!contact || contact.length === 0) {
-    throw error(404, 'Contact not found');
-  }
-  
-  // Check user access to workspace
-  const userWorkspace = await db
-    .select()
-    .from(userWorkspaces)
-    .where(
-      and(
-        eq(userWorkspaces.userId, userId),
-        eq(userWorkspaces.workspaceId, contact[0].workspaceId)
-      )
-    )
-    .limit(1);
-  
-  if (!userWorkspace || userWorkspace.length === 0) {
-    throw error(403, 'You do not have access to this contact');
-  }
-  
-  return contact[0];
-}
+
 
 // GET /api/contacts/[id]/donations - Get donations for a contact
 export const GET: RequestHandler = async ({ params, locals }) => {
-  // Check authentication
-  const user = locals.user;
-  
-  if (!user) {
-    throw error(401, 'Authentication required');
-  }
-  
   const contactId = params.id;
   console.log('API: GET donations for contact ID:', contactId);
   
   try {
     // Check access to the contact
-    await checkContactAccess(user.id, contactId);
+    const { resource: contact } = await verifyResourceAccess(locals.user, contactId, contacts);
     
     // Get donations for the contact
     const donationsList = await db
@@ -61,8 +25,21 @@ export const GET: RequestHandler = async ({ params, locals }) => {
     
     console.log(`API: Found ${donationsList.length} donations for contact ID ${contactId}`);
     
+    // Get simplified contact information
+    const contactInfo = {
+      id: contact.id,
+      firstName: contact.firstName,
+      lastName: contact.lastName
+    };
+    
+    // Add contact info to each donation
+    const donationsWithContact = donationsList.map(donation => ({
+      ...donation,
+      contact: contactInfo
+    }));
+    
     return json({
-      donations: donationsList
+      donations: donationsWithContact
     });
   } catch (err) {
     console.error('Error fetching donations:', err);
@@ -77,18 +54,11 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 
 // POST /api/contacts/[id]/donations - Create a donation for a contact
 export const POST: RequestHandler = async ({ params, request, locals }) => {
-  // Check authentication
-  const user = locals.user;
-  
-  if (!user) {
-    throw error(401, 'Authentication required');
-  }
-  
   const contactId = params.id;
   
   try {
     // Check access to the contact
-    await checkContactAccess(user.id, contactId);
+    const { resource: contact } = await verifyResourceAccess(locals.user, contactId, contacts);
     
     // Get donation data from request
     const donationData = await request.json();
@@ -98,18 +68,42 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
       throw error(400, 'Valid donation amount is required');
     }
     
+    // Create donation object
+    const newDonationValues = {
+      contactId: contactId,
+      businessId: null, // Ensure no business is associated
+      amount: Number(donationData.amount),
+      status: donationData.status || 'promise',
+      notes: donationData.notes || null,
+      paymentType: donationData.paymentType || null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
     // Create the donation
     const [newDonation] = await db
       .insert(donations)
-      .values({
-        contactId: contactId,
-        amount: Number(donationData.amount),
-        status: donationData.status || 'donated'
-      })
+      .values(newDonationValues)
       .returning();
     
+    // Fetch contact details to include in response
+    const contactResult = await db
+      .select({
+        id: contacts.id,
+        firstName: contacts.firstName,
+        lastName: contacts.lastName
+      })
+      .from(contacts)
+      .where(eq(contacts.id, contactId))
+      .limit(1);
+    
+    const donationWithContact = {
+      ...newDonation,
+      contact: contactResult[0]
+    };
+    
     return json({
-      donation: newDonation
+      donation: donationWithContact
     }, { status: 201 });
   } catch (err) {
     console.error('Error creating donation:', err);

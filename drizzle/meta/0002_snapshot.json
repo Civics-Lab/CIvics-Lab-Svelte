@@ -1,0 +1,74 @@
+{
+  "version": "6",
+  "dialect": "postgresql",
+  "id": "e58b66e5-ab34-4c1c-98ff-01754d3b5a6e",
+  "prevId": "f43f43f7-eaed-4a1a-b3d0-5bf7f38d0a9e",
+  "tables": {
+    "donation_tags": {
+      "name": "donation_tags",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "donation_id": {
+          "name": "donation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false,
+          "default": null
+        },
+        "tag": {
+          "name": "tag",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "donation_tags_donation_id_idx": {
+          "name": "donation_tags_donation_id_idx",
+          "columns": [
+            "donation_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "donation_tags_donation_id_donations_id_fk": {
+          "name": "donation_tags_donation_id_donations_id_fk",
+          "tableFrom": "donation_tags",
+          "tableTo": "donations",
+          "columnsFrom": [
+            "donation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

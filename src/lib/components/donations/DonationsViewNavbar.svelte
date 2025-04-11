@@ -92,6 +92,11 @@
         on:click={toggleViewSelect}
       >
         <span>{currentView ? currentView.view_name : 'Select View'}</span>
+        {#if currentView?.temporary}
+          <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
+            Local Only
+          </span>
+        {/if}
         <svg xmlns="http://www.w3.org/2000/svg" class="-mr-1 ml-2 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 011.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
         </svg>
@@ -104,9 +109,17 @@
         >
           <div class="py-1">
             {#if viewsLoading}
-              <div class="px-4 py-2 text-sm text-gray-500">Loading...</div>
+              <div class="px-4 py-2 text-sm text-gray-500">Loading views...</div>
             {:else if viewsError}
-              <div class="px-4 py-2 text-sm text-red-500">{viewsError}</div>
+              <div class="px-4 py-2 text-sm text-red-500">
+                <p class="mb-2">{viewsError}</p>
+                <button 
+                  class="text-purple-600 hover:text-purple-800 text-xs font-medium"
+                  on:click={() => dispatch('retryFetchViews')}
+                >
+                  Retry Loading Views
+                </button>
+              </div>
             {:else if views.length === 0}
               <div class="px-4 py-2 text-sm text-gray-500">No views available</div>
             {:else}

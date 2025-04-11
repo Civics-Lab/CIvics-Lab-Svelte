@@ -70,15 +70,23 @@
         return;
       }
       
-      // Fetch options via API
-      const options = await fetchFormOptions(workspaceId);
-      
-      // Set options in stores
-      genderOptions.set(options.genders || []);
-      raceOptions.set(options.races || []);
-      stateOptions.set(options.states || []);
+      // Fetch all form options at once
+      try {
+        console.log('Fetching all form options...');
+        const options = await fetchFormOptions(workspaceId);
+        
+        console.log('Form options fetched:', options);
+        
+        // Set options in stores
+        genderOptions.set(options.genders || []);
+        raceOptions.set(options.races || []);
+        stateOptions.set(options.states || []);
+      } catch (err) {
+        console.error('Error fetching all form options:', err);
+        error.set('Error loading form options. Some dropdowns may not be populated.');
+      }
     } catch (err) {
-      console.error('Error fetching options:', err);
+      console.error('Error in fetchOptions:', err);
       error.set('Failed to load form options: ' + (err.message || 'Unknown error'));
     }
   }

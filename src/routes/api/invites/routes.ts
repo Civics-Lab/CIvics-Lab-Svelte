@@ -3,6 +3,7 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { inviteService } from './service';
 import { workspaceRoleEnum } from '$lib/db/drizzle';
+import { verifyWorkspaceAccess } from './middleware';
 
 // Define validation schemas
 const createInviteSchema = z.object({
@@ -32,18 +33,12 @@ export const invitesRouter = new Hono()
         }))
       }, 400);
     }
-  }), async (c) => {
+  }), verifyWorkspaceAccess, async (c) => {
     try {
       const { email, workspaceId, role } = c.req.valid('json');
       
-      // Get the current user from context (set in auth middleware)
+      // Get the current user from context (set in auth middleware) - already verified by middleware
       const user = c.get('user');
-      if (!user) {
-        return c.json({
-          success: false,
-          error: 'Unauthorized'
-        }, 401);
-      }
       
       const invite = await inviteService.createInvite({
         email,
@@ -65,7 +60,7 @@ export const invitesRouter = new Hono()
   })
   
   // Get all invites for a workspace
-  .get('/workspace/:workspaceId', async (c) => {
+  .get('/workspace/:workspaceId', verifyWorkspaceAccess, async (c) => {
     try {
       const workspaceId = c.req.param('workspaceId');
       

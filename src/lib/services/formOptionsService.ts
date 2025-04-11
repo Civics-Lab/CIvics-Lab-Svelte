@@ -1,88 +1,43 @@
 /**
- * Service for fetching form options
+ * Service for retrieving form options
  */
-
-import type { Gender, Race, State } from '$lib/types/contact';
-
-interface FormOptions {
-  genders: Gender[];
-  races: Race[];
-  states: State[];
-  tags: string[];
-}
 
 /**
- * Fetch all form options
+ * Fetch state options for dropdowns
  */
-export async function fetchFormOptions(workspaceId?: string): Promise<FormOptions> {
+export async function fetchStateOptions(): Promise<{id: string, name: string, abbreviation: string}[]> {
   try {
-    const url = workspaceId 
-      ? `/api/form-options?workspace_id=${workspaceId}`
-      : '/api/form-options';
-      
-    const response = await fetch(url);
+    const response = await fetch(`/api/form-options?type=states`);
     
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.message || 'Failed to fetch form options');
+      throw new Error(error.message || 'Failed to fetch state options');
     }
     
     const data = await response.json();
-    return data;
+    return data.states || [];
   } catch (error) {
-    console.error('Error in fetchFormOptions:', error);
+    console.error('Error in fetchStateOptions:', error);
     throw error;
   }
 }
 
 /**
- * Fetch genders
+ * Fetch contact options for employee selection
  */
-export async function fetchGenders(): Promise<Gender[]> {
+export async function fetchContactOptions(workspaceId: string, searchTerm: string = ''): Promise<{id: string, name: string}[]> {
   try {
-    const options = await fetchFormOptions();
-    return options.genders;
+    const response = await fetch(`/api/form-options?type=contacts&workspace_id=${workspaceId}&search=${encodeURIComponent(searchTerm)}`);
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to fetch contact options');
+    }
+    
+    const data = await response.json();
+    return data.contacts || [];
   } catch (error) {
-    console.error('Error in fetchGenders:', error);
-    throw error;
-  }
-}
-
-/**
- * Fetch races
- */
-export async function fetchRaces(): Promise<Race[]> {
-  try {
-    const options = await fetchFormOptions();
-    return options.races;
-  } catch (error) {
-    console.error('Error in fetchRaces:', error);
-    throw error;
-  }
-}
-
-/**
- * Fetch states
- */
-export async function fetchStates(): Promise<State[]> {
-  try {
-    const options = await fetchFormOptions();
-    return options.states;
-  } catch (error) {
-    console.error('Error in fetchStates:', error);
-    throw error;
-  }
-}
-
-/**
- * Fetch tags for a workspace
- */
-export async function fetchTags(workspaceId: string): Promise<string[]> {
-  try {
-    const options = await fetchFormOptions(workspaceId);
-    return options.tags;
-  } catch (error) {
-    console.error('Error in fetchTags:', error);
+    console.error('Error in fetchContactOptions:', error);
     throw error;
   }
 }

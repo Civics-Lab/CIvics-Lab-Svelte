@@ -1,0 +1,246 @@
+import { json, error } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
+import { db } from '$lib/db/drizzle';
+import { userWorkspaces, donations, contacts, businesses } from '$lib/db/drizzle/schema';
+import { eq, and, like, ilike, inArray } from 'drizzle-orm';
+
+// Since donation_tags is not in the schema.ts file, let's define it here as a custom table
+// This is necessary because it appears to be directly accessed via Supabase in the current code
+const donationTags = {
+  tableName: 'donation_tags',
+  // We'll use raw SQL queries for operations since we don't have a schema definition
+};
+
+// Helper function to check access to donations
+async function checkDonationAccess(userId: string, donationId: string) {
+  // Get donation
+  const donation = await db
+    .select()
+    .from(donations)
+    .where(eq(donations.id, donationId))
+    .limit(1);
+  
+  if (!donation || donation.length === 0) {
+    throw error(404, 'Donation not found');
+  }
+  
+  // Check access to workspace based on contact or business
+  let workspaceId = null;
+  
+  // If it's a contact donation
+  if (donation[0].contactId) {
+    const contact = await db
+      .select()
+      .from(contacts)
+      .where(eq(contacts.id, donation[0].contactId))
+      .limit(1);
+    
+    if (!contact || contact.length === 0) {
+      throw error(404, 'Contact not found');
+    }
+    
+    workspaceId = contact[0].workspaceId;
+  } 
+  // If it's a business donation
+  else if (donation[0].businessId) {
+    const business = await db
+      .select()
+      .from(businesses)
+      .where(eq(businesses.id, donation[0].businessId))
+      .limit(1);
+    
+    if (!business || business.length === 0) {
+      throw error(404, 'Business not found');
+    }
+    
+    workspaceId = business[0].workspaceId;
+  }
+  
+  if (!workspaceId) {
+    throw error(404, 'Workspace not found for this donation');
+  }
+  
+  // Check user access to workspace
+  const userWorkspace = await db
+    .select()
+    .from(userWorkspaces)
+    .where(
+      and(
+        eq(userWorkspaces.userId, userId),
+        eq(userWorkspaces.workspaceId, workspaceId)
+      )
+    )
+    .limit(1);
+  
+  if (!userWorkspace || userWorkspace.length === 0) {
+    throw error(403, 'You do not have access to this donation');
+  }
+  
+  return donation[0];
+}
+
+// GET /api/donation-tags?donation_id=[id] - Get tags for a donation
+// GET /api/donation-tags?query=[search] - Get tag suggestions
+export const GET: RequestHandler = async ({ url, locals }) => {
+  // Check authentication
+  const user = locals.user;
+  
+  if (!user) {
+    throw error(401, 'Authentication required');
+  }
+  
+  try {
+    const donationId = url.searchParams.get('donation_id');
+    const query = url.searchParams.get('query');
+    
+    // Case 1: Get tags for a specific donation
+    if (donationId) {
+      // Check access to the donation first
+      await checkDonationAccess(user.id, donationId);
+      
+      // Use raw SQL query to get tags
+      try {
+        const result = await db.execute(`
+          SELECT id, tag, donation_id
+          FROM donation_tags
+          WHERE donation_id = $1
+          ORDER BY tag
+        `, [donationId]);
+        
+        const tags = result.rows || [];
+        
+        return json({ tags });
+      } catch (sqlError) {
+        console.error('SQL error when fetching donation tags:', sqlError);
+        // In case the table doesn't exist, return an empty array instead of error
+        // This allows the UI to still function even if the table is missing
+        return json({ tags: [] });
+      }
+    }
+    
+    // Case 2: Get tag suggestions based on a search query
+    else if (query) {
+      // Use raw SQL to get tag suggestions
+      try {
+        const result = await db.execute(`
+          SELECT DISTINCT tag
+          FROM donation_tags
+          WHERE tag ILIKE $1
+          ORDER BY tag
+          LIMIT 10
+        `, [`%${query}%`]);
+        
+        const suggestions = result.rows || [];
+        
+        return json({ suggestions });
+      } catch (sqlError) {
+        console.error('SQL error when fetching tag suggestions:', sqlError);
+        // In case the table doesn't exist, return an empty array
+        return json({ suggestions: [] });
+      }
+    }
+    
+    // Neither donation_id nor query provided
+    else {
+      throw error(400, 'Either donation_id or query parameter is required');
+    }
+  } catch (err) {
+    console.error('Error fetching donation tags:', err);
+    
+    if (err instanceof Response) {
+      throw err;
+    }
+    
+    throw error(500, `Failed to fetch donation tags: ${err.message || 'Unknown error'}`);
+  }
+};
+
+// POST /api/donation-tags - Create a new tag for a donation
+export const POST: RequestHandler = async ({ request, locals }) => {
+  // Check authentication
+  const user = locals.user;
+  
+  if (!user) {
+    throw error(401, 'Authentication required');
+  }
+  
+  try {
+    const requestData = await request.json();
+    const { donationId, tag } = requestData;
+    
+    if (!donationId) {
+      throw error(400, 'Donation ID is required');
+    }
+    
+    if (!tag || typeof tag !== 'string') {
+      throw error(400, 'Tag is required and must be a string');
+    }
+    
+    // Check access to the donation
+    await checkDonationAccess(user.id, donationId);
+    
+    // Use raw SQL to create the tag
+    try {
+      const result = await db.execute(`
+        INSERT INTO donation_tags (donation_id, tag)
+        VALUES ($1, $2)
+        RETURNING id, donation_id, tag
+      `, [donationId, tag]);
+      
+      if (!result.rows || result.rows.length === 0) {
+        throw error(500, 'Failed to create donation tag');
+      }
+      
+      const createdTag = result.rows[0];
+      
+      return json({ tag: createdTag }, { status: 201 });
+    } catch (sqlError) {
+      console.error('SQL error when creating donation tag:', sqlError);
+      
+      // If the error is about the table not existing, create it
+      if (sqlError.message && sqlError.message.includes('relation "donation_tags" does not exist')) {
+        try {
+          // Create the donation_tags table
+          await db.execute(`
+            CREATE TABLE IF NOT EXISTS donation_tags (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              donation_id UUID REFERENCES donations(id) ON DELETE CASCADE,
+              tag TEXT NOT NULL,
+              created_at TIMESTAMP DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS donation_tags_donation_id_idx ON donation_tags(donation_id);
+          `);
+          
+          // Try the insert again
+          const result = await db.execute(`
+            INSERT INTO donation_tags (donation_id, tag)
+            VALUES ($1, $2)
+            RETURNING id, donation_id, tag
+          `, [donationId, tag]);
+          
+          if (!result.rows || result.rows.length === 0) {
+            throw error(500, 'Failed to create donation tag after creating table');
+          }
+          
+          const createdTag = result.rows[0];
+          
+          return json({ tag: createdTag }, { status: 201 });
+        } catch (createTableError) {
+          console.error('Error creating donation_tags table:', createTableError);
+          throw error(500, `Failed to create donation_tags table: ${createTableError.message}`);
+        }
+      }
+      
+      // For other SQL errors, just return a generic error
+      throw error(500, `Database error while creating tag: ${sqlError.message}`);
+    }
+  } catch (err) {
+    console.error('Error creating donation tag:', err);
+    
+    if (err instanceof Response) {
+      throw err;
+    }
+    
+    throw error(500, `Failed to create donation tag: ${err.message || 'Unknown error'}`);
+  }
+};

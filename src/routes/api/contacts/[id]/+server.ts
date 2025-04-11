@@ -3,53 +3,18 @@ import { db } from '$lib/db/drizzle';
 import { contacts, userWorkspaces, contactEmails, contactPhoneNumbers, contactAddresses, contactSocialMediaAccounts, contactTags, zipCodes } from '$lib/db/drizzle/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
+import { verifyResourceAccess } from '$lib/utils/auth';
 
-// Utility function to check workspace access
-async function checkWorkspaceAccess(userId: string, contactId: string) {
-  // First, get the contact to determine its workspace
-  const [contact] = await db
-    .select()
-    .from(contacts)
-    .where(eq(contacts.id, contactId))
-    .limit(1);
-  
-  if (!contact) {
-    throw error(404, 'Contact not found');
-  }
-  
-  // Then check if the user has access to this workspace
-  const [userWorkspace] = await db
-    .select()
-    .from(userWorkspaces)
-    .where(
-      and(
-        eq(userWorkspaces.userId, userId),
-        eq(userWorkspaces.workspaceId, contact.workspaceId)
-      )
-    )
-    .limit(1);
-  
-  if (!userWorkspace) {
-    throw error(403, 'You do not have access to this contact');
-  }
-  
-  return { contact, userWorkspace };
-}
+
 
 // GET /api/contacts/[id] - Get a specific contact by ID
 export const GET: RequestHandler = async ({ params, locals }) => {
-  const user = locals.user;
-  
-  if (!user) {
-    throw error(401, 'Authentication required');
-  }
-  
   const contactId = params.id;
   console.log('API: GET contact request for ID:', contactId);
   
   try {
     // Check workspace access and get contact
-    const { contact } = await checkWorkspaceAccess(user.id, contactId);
+    const { resource: contact } = await verifyResourceAccess(locals.user, contactId, contacts);
     
     // Get emails
     const emails = await db
@@ -130,17 +95,11 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 
 // PUT /api/contacts/[id] - Update a contact
 export const PUT: RequestHandler = async ({ params, request, locals }) => {
-  const user = locals.user;
-  
-  if (!user) {
-    throw error(401, 'Authentication required');
-  }
-  
   const contactId = params.id;
   
   try {
     // Check workspace access
-    const { contact, userWorkspace } = await checkWorkspaceAccess(user.id, contactId);
+    const { resource: contact } = await verifyResourceAccess(locals.user, contactId, contacts);
     
     // Get the updated contact data
     const requestData = await request.json();
@@ -159,7 +118,7 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
           pronouns: contactData.pronouns,
           vanid: contactData.vanid,
           status: contactData.status || contact.status,
-          updatedById: user.id,
+          updatedById: locals.user.id,
           updatedAt: new Date(),
         })
         .where(eq(contacts.id, contactId));
@@ -182,8 +141,8 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
               contactId: contactId,
               email: email.email,
               status: email.status || 'active',
-              createdById: user.id,
-              updatedById: user.id,
+              createdById: locals.user.id,
+              updatedById: locals.user.id,
             });
           } else if (email.isModified && email.id) {
             // Update existing email
@@ -193,7 +152,7 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
               .set({
                 email: email.email,
                 status: email.status || 'active',
-                updatedById: user.id,
+                updatedById: locals.user.id,
                 updatedAt: new Date(),
               })
               .where(eq(contactEmails.id, email.id));
@@ -225,8 +184,8 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
               contactId: contactId,
               phoneNumber: phone.phoneNumber,
               status: phone.status || 'active',
-              createdById: user.id,
-              updatedById: user.id,
+              createdById: locals.user.id,
+              updatedById: locals.user.id,
             });
           } else if (phone.isModified && phone.id) {
             // Update existing phone number
@@ -236,7 +195,7 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
               .set({
                 phoneNumber: phone.phoneNumber,
                 status: phone.status || 'active',
-                updatedById: user.id,
+                updatedById: locals.user.id,
                 updatedAt: new Date(),
               })
               .where(eq(contactPhoneNumbers.id, phone.id));
@@ -312,8 +271,8 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
                 stateId: address.stateId,
                 zipCodeId: zipCodeId,
                 status: address.status || 'active',
-                createdById: user.id,
-                updatedById: user.id,
+                createdById: locals.user.id,
+                updatedById: locals.user.id,
               });
             } else if (address.isModified && address.id) {
               // Update existing address
@@ -327,7 +286,7 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
                   stateId: address.stateId,
                   zipCodeId: zipCodeId,
                   status: address.status || 'active',
-                  updatedById: user.id,
+                  updatedById: locals.user.id,
                   updatedAt: new Date(),
                 })
                 .where(eq(contactAddresses.id, address.id));
@@ -357,8 +316,8 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
               serviceType: account.serviceType,
               socialMediaAccount: account.socialMediaAccount,
               status: account.status || 'active',
-              createdById: user.id,
-              updatedById: user.id,
+              createdById: locals.user.id,
+              updatedById: locals.user.id,
             });
           } else if (account.isModified && account.id) {
             // Update existing social media account
@@ -369,7 +328,7 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
                 serviceType: account.serviceType,
                 socialMediaAccount: account.socialMediaAccount,
                 status: account.status || 'active',
-                updatedById: user.id,
+                updatedById: locals.user.id,
                 updatedAt: new Date(),
               })
               .where(eq(contactSocialMediaAccounts.id, account.id));
@@ -494,17 +453,11 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
 
 // DELETE /api/contacts/[id] - Delete a contact
 export const DELETE: RequestHandler = async ({ params, locals }) => {
-  const user = locals.user;
-  
-  if (!user) {
-    throw error(401, 'Authentication required');
-  }
-  
   const contactId = params.id;
   
   try {
     // Check workspace access
-    await checkWorkspaceAccess(user.id, contactId);
+    await verifyResourceAccess(locals.user, contactId, contacts);
     
     // Delete all related data first (automatically handled by cascade in most cases,
     // but we'll explicitly delete them for clarity and to avoid potential issues)

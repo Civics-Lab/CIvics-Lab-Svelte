@@ -5,7 +5,6 @@
   
   export let tags = [];
   export let isSaving = false;
-  export let supabase;
   
   const dispatch = createEventDispatcher();
   const tagInput = writable('');
@@ -25,18 +24,24 @@
     showSuggestions.set(true);
     
     try {
-      // Fetch tags from donation_tags table
-      const { data: donationTags, error: donationTagsError } = await supabase
-        .from('donation_tags')
-        .select('tag')
-        .ilike('tag', `%${query}%`)
-        .order('tag')
-        .limit(10);
+      // Use the API endpoint to get tag suggestions
+      const response = await fetch(`/api/donation-tags?query=${encodeURIComponent(query)}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
       
-      if (donationTagsError) throw donationTagsError;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to fetch tag suggestions');
+      }
       
-      // Remove duplicates and filter out already selected tags
-      const uniqueTags = [...new Set(donationTags.map(t => t.tag))];
+      const data = await response.json();
+      const suggestions = data.suggestions || [];
+      
+      // Extract tag values and filter out already selected tags
+      const uniqueTags = [...new Set(suggestions.map(s => s.tag))];
       const filteredTags = uniqueTags.filter(tag => !$tags.includes(tag));
       
       suggestedTags.set(filteredTags);

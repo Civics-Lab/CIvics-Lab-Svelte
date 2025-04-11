@@ -49,6 +49,30 @@
         return field ? field.label : fieldId;
     }
     
+    // Helper function to check if a field is enabled in the current view
+    function isFieldEnabled(fieldId: string): boolean {
+        if (!currentView) return false;
+        
+        // Try the exact field ID first
+        if (currentView[fieldId] !== undefined) {
+            return !!currentView[fieldId];
+        }
+        
+        // Try snake_case version if the field ID is in camelCase
+        const snakeCaseId = fieldId.replace(/([A-Z])/g, '_$1').toLowerCase();
+        if (currentView[snakeCaseId] !== undefined) {
+            return !!currentView[snakeCaseId];
+        }
+        
+        // Try camelCase version if the field ID is in snake_case
+        const camelCaseId = fieldId.replace(/_([a-z])/g, (_, char) => char.toUpperCase());
+        if (currentView[camelCaseId] !== undefined) {
+            return !!currentView[camelCaseId];
+        }
+        
+        return false;
+    }
+    
     // Toggle filter popover
     function toggleFilterPopover(): void {
         isFilterPopoverOpen = !isFilterPopoverOpen;
@@ -147,8 +171,8 @@
         if (!currentView) return [];
         
         return availableFields.filter(field => 
-            // Only include fields that are visible in the current view
-            currentView[field.id] === true
+            // Check if the field is visible in the current view (checking both camelCase and snake_case)
+            isFieldEnabled(field.id)
         );
     }
     

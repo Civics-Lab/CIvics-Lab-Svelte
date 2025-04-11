@@ -37,11 +37,45 @@ export async function fetchContactDonations(contactId: string): Promise<Donation
 }
 
 /**
+ * Fetch donations for a specific business
+ */
+export async function fetchBusinessDonations(businessId: string): Promise<Donation[]> {
+  try {
+    console.log('Fetching donations for business ID:', businessId);
+    
+    const response = await fetch(`/api/businesses/${businessId}/donations`);
+    console.log('Business donations API response status:', response.status);
+    
+    if (!response.ok) {
+      try {
+        const error = await response.json();
+        console.error('API error response:', error);
+        throw new Error(error.message || 'Failed to fetch donations');
+      } catch (jsonError) {
+        // If the response body isn't valid JSON
+        console.error('Failed to parse error response:', jsonError);
+        throw new Error(`Failed to fetch donations: ${response.status} ${response.statusText}`);
+      }
+    }
+    
+    const data = await response.json();
+    console.log(`Found ${data.donations?.length || 0} donations for business`);
+    
+    return data.donations || [];
+  } catch (error) {
+    console.error('Error in fetchBusinessDonations:', error);
+    throw error;
+  }
+}
+
+/**
  * Create a new donation for a contact
  */
-export async function createDonation(contactId: string, donationData: {
+export async function createContactDonation(contactId: string, donationData: {
   amount: number;
   status: string;
+  notes?: string;
+  paymentType?: string;
 }): Promise<Donation> {
   try {
     const response = await fetch(`/api/contacts/${contactId}/donations`, {
@@ -60,9 +94,50 @@ export async function createDonation(contactId: string, donationData: {
     const data = await response.json();
     return data.donation;
   } catch (error) {
-    console.error('Error in createDonation:', error);
+    console.error('Error in createContactDonation:', error);
     throw error;
   }
+}
+
+/**
+ * Create a new donation for a business
+ */
+export async function createBusinessDonation(businessId: string, donationData: {
+  amount: number;
+  status: string;
+  notes?: string;
+  paymentType?: string;
+}): Promise<Donation> {
+  try {
+    const response = await fetch(`/api/businesses/${businessId}/donations`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(donationData)
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to create donation');
+    }
+    
+    const data = await response.json();
+    return data.donation;
+  } catch (error) {
+    console.error('Error in createBusinessDonation:', error);
+    throw error;
+  }
+}
+
+/**
+ * Create a new donation (legacy function for backwards compatibility)
+ */
+export async function createDonation(contactId: string, donationData: {
+  amount: number;
+  status: string;
+}): Promise<Donation> {
+  return createContactDonation(contactId, donationData);
 }
 
 /**

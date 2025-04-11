@@ -186,8 +186,11 @@
         throw new Error('No workspace selected');
       }
       
-      // Fetch all options via API
+      // Fetch all form options at once
+      console.log('Fetching all form options...');
       const options = await fetchFormOptions($workspaceStore.currentWorkspace.id);
+      
+      console.log('Form options fetched:', options);
       
       // Set options in stores
       genderOptions.set(options.genders || []);
@@ -195,8 +198,8 @@
       stateOptions.set(options.states || []);
       existingTags.set(options.tags || []);
     } catch (error) {
-      console.error('Error fetching options:', error);
-      toastStore.error('Failed to load form options');
+      console.error('Error in fetchOptions:', error);
+      toastStore.error('Failed to load form options. Some dropdowns may not be populated.');
     }
   }
   
@@ -242,24 +245,34 @@
         phoneNumbers: $phoneNumbers
           .filter(item => item.phone_number.trim())
           .map(item => ({
+            // Ensure we provide both property formats to accommodate the API changes
             phoneNumber: item.phone_number.trim(),
+            phone_number: item.phone_number.trim(),
             status: item.status
           })),
         addresses: $addresses
           .filter(addr => addr.street_address.trim() && addr.city.trim())
           .map(addr => ({
+            // Ensure we provide both property formats to accommodate the API changes
             streetAddress: addr.street_address.trim(),
+            street_address: addr.street_address.trim(),
             secondaryStreetAddress: addr.secondary_street_address?.trim() || null,
+            secondary_street_address: addr.secondary_street_address?.trim() || null,
             city: addr.city.trim(),
             stateId: addr.state_id || null,
+            state_id: addr.state_id || null,
             zipCode: addr.zip_code?.trim() || null,
+            zip_code: addr.zip_code?.trim() || null,
             status: addr.status
           })),
         socialMedia: $socialMedia
           .filter(item => item.social_media_account.trim())
           .map(item => ({
+            // Ensure we provide both property formats to accommodate the API changes
             socialMediaAccount: item.social_media_account.trim(),
+            social_media_account: item.social_media_account.trim(),
             serviceType: item.service_type,
+            service_type: item.service_type,
             status: item.status
           })),
         tags: $tags

@@ -7,6 +7,21 @@
   import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
   import type { PageData } from './$types';
   
+  // Import services
+  import { 
+    fetchBusinesses, 
+    createBusiness, 
+    updateBusiness, 
+    deleteBusiness 
+  } from '$lib/services/businessService';
+  
+  import {
+    fetchBusinessViews,
+    createBusinessView,
+    updateBusinessView,
+    deleteBusinessView
+  } from '$lib/services/businessViewService';
+  
   // Import components
   import BusinessesViewNavbar from '$lib/components/businesses/BusinessesViewNavbar.svelte';
   import BusinessesFilterSortBar from '$lib/components/businesses/BusinessesFilterSortBar.svelte';
@@ -57,10 +72,10 @@
   
   // Fields that can be displayed/filtered/sorted
   const availableFields = writable([
-    { id: 'business_name', label: 'Business Name' },
+    { id: 'businessName', label: 'Business Name' },
     { id: 'addresses', label: 'Address' },
-    { id: 'phone_numbers', label: 'Phone' },
-    { id: 'social_media_accounts', label: 'Social Media' },
+    { id: 'phoneNumbers', label: 'Phone' },
+    { id: 'socialMediaAccounts', label: 'Social Media' },
     { id: 'employees', label: 'Employees' },
     { id: 'tags', label: 'Tags' }
   ]);
@@ -101,7 +116,7 @@
   
   function handleOpenEditViewModal() {
     if ($currentView) {
-      newViewName.set($currentView.view_name);
+      newViewName.set($currentView.viewName);
       isEditViewModalOpen.set(true);
     }
   }
@@ -119,11 +134,11 @@
   }
   
   function handleBusinessCreated() {
-    fetchBusinesses();
+    fetchBusinessesData();
   }
   
   function handleBusinessUpdated() {
-    fetchBusinesses();
+    fetchBusinessesData();
   }
   
   function handleAddFilter() {
@@ -175,20 +190,15 @@
   }
   
   // Fetch views for the current workspace
-  async function fetchViews(selectViewId = null) {
+  async function fetchViewsData(selectViewId = null) {
     if (!$workspaceStore.currentWorkspace) return;
     
     viewsLoading.set(true);
     viewsError.set(null);
     
     try {
-      const { data: fetchedViews, error } = await data.supabase
-        .from('business_views')
-        .select('*')
-        .eq('workspace_id', $workspaceStore.currentWorkspace.id)
-        .order('view_name');
-      
-      if (error) throw error;
+      // Use the business view service
+      const fetchedViews = await fetchBusinessViews($workspaceStore.currentWorkspace.id);
       
       if (fetchedViews && fetchedViews.length > 0) {
         views.set(fetchedViews);
@@ -245,30 +255,21 @@
     if (!$workspaceStore.currentWorkspace) return;
     
     try {
-      // Create a default view with only the fields that exist in the database schema
-      const defaultView = {
-        view_name: 'Default View',
-        workspace_id: $workspaceStore.currentWorkspace.id,
-        business_name: true,
+      // Create a default view with standard fields
+      const defaultView = await createBusinessView({
+        viewName: 'Default View',
+        workspaceId: $workspaceStore.currentWorkspace.id,
+        businessName: true,
         addresses: true,
-        phone_numbers: true,
-        social_media_accounts: false,
+        phoneNumbers: true,
+        socialMediaAccounts: false,
         employees: false,
-        // Remove tags as it doesn't exist in the table
         filters: [],
         sorting: []
-      };
+      });
       
-      const { data: newView, error } = await data.supabase
-        .from('business_views')
-        .insert(defaultView)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      
-      views.set([newView]);
-      currentView.set(newView);
+      views.set([defaultView]);
+      currentView.set(defaultView);
       filters.set([]);
       sorting.set([]);
       
@@ -284,34 +285,25 @@
     if (!$workspaceStore.currentWorkspace || !viewName.trim()) return;
     
     try {
-      // Create the view with only fields that exist in the table schema
-      const newView = {
-        view_name: viewName.trim(),
-        workspace_id: $workspaceStore.currentWorkspace.id,
-        business_name: true,
+      // Create the view
+      const createdView = await createBusinessView({
+        viewName: viewName.trim(),
+        workspaceId: $workspaceStore.currentWorkspace.id,
+        businessName: true,
         addresses: true,
-        phone_numbers: true,
-        social_media_accounts: true,
+        phoneNumbers: true,
+        socialMediaAccounts: true,
         employees: true,
-        // Remove tags as it doesn't exist in the table
         filters: [],
         sorting: []
-      };
-      
-      const { data: createdView, error } = await data.supabase
-        .from('business_views')
-        .insert(newView)
-        .select()
-        .single();
-      
-      if (error) throw error;
+      });
       
       // Close modal first to avoid any state issues
       isCreateViewModalOpen.set(false);
       newViewName.set('');
       
       // Re-fetch all views to ensure consistency
-      await fetchViews();
+      await fetchViewsData();
       
       // Find the newly created view in the refreshed list
       const refreshedView = $views.find(v => v.id === createdView.id);
@@ -335,27 +327,23 @@
     if (!$currentView) return;
     
     try {
-      let updatedView = { ...$currentView };
+      let updateData: any = {};
       
       // If editing the name (from event or from modal)
       if (event && typeof event.detail === 'string' && event.detail.trim()) {
-        updatedView.view_name = event.detail.trim();
+        updateData.viewName = event.detail.trim();
       } else if ($isEditViewModalOpen && $newViewName.trim()) {
-        updatedView.view_name = $newViewName.trim();
+        updateData.viewName = $newViewName.trim();
       }
       
       // Update filters and sorting
-      updatedView.filters = $filters;
-      updatedView.sorting = $sorting;
+      updateData.filters = $filters;
+      updateData.sorting = $sorting;
       
-      console.log('Updating view with:', updatedView);
+      console.log('Updating view with:', updateData);
       
-      const { error } = await data.supabase
-        .from('business_views')
-        .update(updatedView)
-        .eq('id', $currentView.id);
-      
-      if (error) throw error;
+      // Use the business view service
+      const updatedView = await updateBusinessView($currentView.id, updateData);
       
       // Update the view in the list
       views.update(v => 
@@ -369,7 +357,7 @@
       currentView.set(updatedView);
       
       // Refetch views to ensure list is updated
-      await fetchViews($currentView.id);
+      await fetchViewsData($currentView.id);
       
       // Close the edit modal if it's open
       if ($isEditViewModalOpen) {
@@ -389,27 +377,25 @@
     if (!$currentView) return;
     
     try {
-      const { error } = await data.supabase
-        .from('business_views')
-        .delete()
-        .eq('id', $currentView.id);
+      // Use the business view service
+      const success = await deleteBusinessView($currentView.id);
       
-      if (error) throw error;
-      
-      // Remove the view from the list
-      views.update(v => v.filter(view => view.id !== $currentView.id));
-      
-      // Set the first remaining view as current, or create a default if none left
-      if ($views.length > 0) {
-        currentView.set($views[0]);
-        filters.set($views[0].filters || []);
-        sorting.set($views[0].sorting || []);
-      } else {
-        await createDefaultView();
+      if (success) {
+        // Remove the view from the list
+        views.update(v => v.filter(view => view.id !== $currentView.id));
+        
+        // Set the first remaining view as current, or create a default if none left
+        if ($views.length > 0) {
+          currentView.set($views[0]);
+          filters.set($views[0].filters || []);
+          sorting.set($views[0].sorting || []);
+        } else {
+          await createDefaultView();
+        }
+        
+        isDeleteViewModalOpen.set(false);
+        toastStore.success('View deleted successfully');
       }
-      
-      isDeleteViewModalOpen.set(false);
-      toastStore.success('View deleted successfully');
       
     } catch (error) {
       console.error('Error deleting view:', error);
@@ -422,14 +408,13 @@
     if (!$currentView) return;
     
     try {
-      const updatedView = { ...$currentView, [fieldId]: !$currentView[fieldId] };
+      // Create an update object with the toggled field
+      const updateData = {
+        [fieldId]: !$currentView[fieldId]
+      };
       
-      const { error } = await data.supabase
-        .from('business_views')
-        .update({ [fieldId]: !$currentView[fieldId] })
-        .eq('id', $currentView.id);
-      
-      if (error) throw error;
+      // Use the business view service
+      const updatedView = await updateBusinessView($currentView.id, updateData);
       
       // Update the current view
       currentView.set(updatedView);
@@ -452,7 +437,7 @@
   function addFilter() {
     filters.update(f => [
       ...f, 
-      { field: Object.keys($currentView).find(key => $currentView[key] === true) || 'business_name', operator: '=', value: '' }
+      { field: Object.keys($currentView).find(key => $currentView[key] === true && key !== 'id' && key !== 'viewName' && key !== 'workspaceId') || 'businessName', operator: '=', value: '' }
     ]);
   }
   
@@ -467,7 +452,7 @@
   function addSort() {
     sorting.update(s => [
       ...s, 
-      { field: Object.keys($currentView).find(key => $currentView[key] === true) || 'business_name', direction: 'asc' }
+      { field: Object.keys($currentView).find(key => $currentView[key] === true && key !== 'id' && key !== 'viewName' && key !== 'workspaceId') || 'businessName', direction: 'asc' }
     ]);
   }
   
@@ -508,76 +493,17 @@
     applyFiltersAndSorting();
   }
   
-  // Function to fetch businesses
-  async function fetchBusinesses() {
+  // Function to fetch businesses using the new API
+  async function fetchBusinessesData() {
     if (!$workspaceStore.currentWorkspace) return;
     
     isLoadingBusinesses.set(true);
     businessesError.set(null);
     
     try {
-      // Fetch businesses for the current workspace
-      const { data: businessData, error } = await data.supabase
-        .from('businesses')
-        .select('*')
-        .eq('workspace_id', $workspaceStore.currentWorkspace.id);
-      
-      if (error) throw error;
-      
-      // Enhanced business data with addresses, phones, etc.
-      const enhancedBusinesses = await Promise.all((businessData || []).map(async (business) => {
-        try {
-          // Get phone numbers
-          const { data: phones } = await data.supabase
-            .from('business_phone_numbers')
-            .select('*')
-            .eq('business_id', business.id);
-          
-          // Get addresses
-          const { data: addresses } = await data.supabase
-            .from('business_full_addresses')
-            .select('*')
-            .eq('business_id', business.id);
-          
-          // Get social media accounts
-          const { data: socialMedia } = await data.supabase
-            .from('business_social_media_accounts')
-            .select('*')
-            .eq('business_id', business.id);
-          
-          // Get employees - which are contacts from the same workspace
-          const { data: employeeRelations } = await data.supabase
-            .from('business_employees')
-            .select(`
-              id,
-              status,
-              contact_id,
-              contacts:contact_id (id, first_name, last_name)
-            `)
-            .eq('business_id', business.id);
-          
-          // Get tags
-          const { data: tags } = await data.supabase
-            .from('business_tags')
-            .select('*')
-            .eq('business_id', business.id);
-          
-          // Return enhanced business
-          return {
-            ...business,
-            phone_numbers: phones || [],
-            addresses: addresses || [],
-            social_media_accounts: socialMedia || [],
-            employees: employeeRelations || [],
-            tags: tags || []
-          };
-        } catch (err) {
-          console.error('Error fetching business details:', err);
-          return business;
-        }
-      }));
-      
-      businesses.set(enhancedBusinesses || []);
+      // Use the business service
+      const businessData = await fetchBusinesses($workspaceStore.currentWorkspace.id);
+      businesses.set(businessData || []);
       applyFiltersAndSorting();
     } catch (error) {
       console.error('Error fetching businesses:', error);
@@ -596,13 +522,16 @@
       $filters.forEach(filter => {
         if (filter.field && filter.operator && filter.value) {
           result = result.filter(business => {
+            // Convert field names from camelCase to snake_case if needed
+            const fieldName = filter.field.replace(/([A-Z])/g, '_$1').toLowerCase();
+            
             // Handle different field types appropriately
-            const businessValue = business[filter.field];
+            const businessValue = business[filter.field] || business[fieldName];
             
             // Skip if the value is not available
             if (businessValue === null || businessValue === undefined) return false;
             
-            // Handle array fields (like addresses, phone_numbers)
+            // Handle array fields (like addresses, phoneNumbers)
             if (Array.isArray(businessValue)) {
               // For arrays, check if any element matches the filter
               return businessValue.some(item => {
@@ -642,8 +571,10 @@
     if ($searchQuery.trim()) {
       const query = $searchQuery.toLowerCase().trim();
       result = result.filter(business => {
-        // Search in business name
-        if (business.business_name && business.business_name.toLowerCase().includes(query)) {
+        // Search in business name (handling both camelCase and snake_case)
+        if ((business.businessName || business.business_name) && 
+            (business.businessName || '').toLowerCase().includes(query) || 
+            (business.business_name || '').toLowerCase().includes(query)) {
           return true;
         }
         
@@ -654,16 +585,17 @@
           return true;
         }
         
-        // Search in phone numbers
-        if (Array.isArray(business.phone_numbers) && business.phone_numbers.some(phone => 
-          phone.phone_number && phone.phone_number.toLowerCase().includes(query)
-        )) {
+        // Search in phone numbers (handling both camelCase and snake_case)
+        if ((Array.isArray(business.phoneNumbers) && business.phoneNumbers.some(phone => 
+              phone.phoneNumber && phone.phoneNumber.toLowerCase().includes(query))) ||
+            (Array.isArray(business.phone_numbers) && business.phone_numbers.some(phone => 
+              phone.phone_number && phone.phone_number.toLowerCase().includes(query)))) {
           return true;
         }
         
         // Search in tags
         if (Array.isArray(business.tags) && business.tags.some(tag => 
-          tag.tag && tag.tag.toLowerCase().includes(query)
+          (tag.tag || tag) && (tag.tag || tag).toLowerCase().includes(query)
         )) {
           return true;
         }
@@ -678,8 +610,11 @@
         for (const sort of $sorting) {
           if (!sort.field) continue;
           
-          let valueA = a[sort.field];
-          let valueB = b[sort.field];
+          // Convert field names from camelCase to snake_case if needed
+          const fieldName = sort.field.replace(/([A-Z])/g, '_$1').toLowerCase();
+          
+          let valueA = a[sort.field] || a[fieldName];
+          let valueB = b[sort.field] || b[fieldName];
           
           // Handle array fields
           if (Array.isArray(valueA)) {
@@ -728,15 +663,15 @@
   // Initialize data on component mount
   onMount(() => {
     if ($workspaceStore.currentWorkspace) {
-      fetchViews();
-      fetchBusinesses();
+      fetchViewsData();
+      fetchBusinessesData();
     }
   });
   
   // Fetch data when workspace changes
   $: if ($workspaceStore.currentWorkspace) {
-    fetchViews();
-    fetchBusinesses();
+    fetchViewsData();
+    fetchBusinessesData();
   }
 </script>
 
@@ -800,7 +735,7 @@
       isLoading={$isLoadingBusinesses}
       error={$businessesError}
       visibleColumns={$currentView ? Object.entries($currentView)
-        .filter(([key, value]) => value === true && !key.startsWith('_'))
+        .filter(([key, value]) => value === true && !key.startsWith('_') && !['id', 'viewName', 'workspaceId', 'filters', 'sorting', 'createdAt', 'updatedAt', 'createdById'].includes(key))
         .map(([key]) => key) : []}
       availableFields={$availableFields}
       supabase={data.supabase}

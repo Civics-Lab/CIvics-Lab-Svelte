@@ -6,7 +6,6 @@
   import DetailsSheetOverlay from '$lib/components/DetailsSheetOverlay.svelte';
   import { toastStore } from '$lib/stores/toastStore';
   import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-  import type { TypedSupabaseClient } from '$lib/types/supabase';
   
   // Import subcomponents
   import DonationBasicInfo from './DonationDetailsSheet/DonationBasicInfo.svelte';
@@ -15,7 +14,6 @@
   // Props
   export let isOpen = false;
   export let donationId: string | null = null;
-  export let supabase: TypedSupabaseClient;
   
   const dispatch = createEventDispatcher();
   
@@ -69,64 +67,86 @@
     error.set(null);
     
     try {
-      // Fetch donation details
-      const { data, error: fetchError } = await supabase
-      .from('donations')
-      .select(`
-          *,
-          contacts:contact_id (id, first_name, last_name),
-          businesses:business_id (id, business_name),
-          donation_tags (id, tag)
-      `)
-      .eq('id', donationId)
-      .single();
+      // Fetch donation details from the API
+      const response = await fetch(`/api/donations/${donationId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
       
-      if (fetchError) throw fetchError;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to fetch donation');
+      }
+      
+      const responseData = await response.json();
+      const data = responseData.donation;
       
       if (data) {
         // Format date from timestamp
-        let donationDate = data.donation_date || data.created_at?.split('T')[0] || new Date().toISOString().split('T')[0];
+        let donationDate = data.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0];
         
         // Set basic form data
         formData.set({
           amount: Number(data.amount) || 0,
           status: data.status || 'promise',
-          payment_type: data.payment_type || '',
+          payment_type: data.paymentType || '',
           notes: data.notes || '',
           donation_date: donationDate,
-          contact_id: data.contact_id || null,
-          business_id: data.business_id || null
+          contact_id: data.contactId || null,
+          business_id: data.businessId || null
         });
+        
+        // Fetch donation tags using the API
+        let donationTags = [];
+        try {
+          const tagsResponse = await fetch(`/api/donation-tags?donation_id=${donationId}`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (!tagsResponse.ok) {
+            const tagsErrorData = await tagsResponse.json();
+            console.warn('Failed to fetch donation tags:', tagsErrorData.message || 'Unknown error');
+            // Continue with empty tags instead of throwing
+          } else {
+            const tagsResponseData = await tagsResponse.json();
+            donationTags = tagsResponseData.tags || [];
+          }
+        } catch (tagsError) {
+          console.warn('Error fetching donation tags:', tagsError);
+          // Continue with empty tags instead of throwing
+        }
         
         // Store original data for comparison
         originalData.set({
           ...JSON.parse(JSON.stringify($formData)),
-          tags: data.donation_tags ? [...data.donation_tags.map(t => t.tag)] : []
+          tags: donationTags ? [...donationTags.map(t => t.tag)] : []
         });
         
         // Set donor info
-        if (data.contact_id && data.contacts) {
+        if (data.contactId && data.contact) {
           donor.set({
             type: 'contact',
-            id: data.contact_id,
-            name: `${data.contacts.first_name} ${data.contacts.last_name || ''}`.trim()
+            id: data.contactId,
+            name: `${data.contact.firstName} ${data.contact.lastName || ''}`.trim()
           });
-        } else if (data.business_id && data.businesses) {
+        } else if (data.businessId && data.business) {
           donor.set({
             type: 'business',
-            id: data.business_id,
-            name: data.businesses.business_name
+            id: data.businessId,
+            name: data.business.businessName
           });
         } else {
           donor.set(null);
         }
         
         // Set tags
-        if (data.donation_tags) {
-          tags.set(Array.isArray(data.donation_tags) ? data.donation_tags.map(tag => tag.tag) : []);
-        } else {
-          tags.set([]);
-        }
+        tags.set(donationTags ? donationTags.map(tag => tag.tag) : []);
+        
       } else {
         error.set('Donation not found');
       }
@@ -149,44 +169,94 @@
     try {
       // Update donation basic info if changed
       if (JSON.stringify($formData) !== JSON.stringify($originalData)) {
-        const { error: updateError } = await supabase
-          .from('donations')
-          .update($formData)
-          .eq('id', donationId);
+        // Prepare the update data in the format the API expects
+        const donationData = {
+          amount: Number($formData.amount) || 0,
+          status: $formData.status || 'promise',
+          paymentType: $formData.payment_type || '',
+          notes: $formData.notes || ''
+        };
         
-        if (updateError) throw updateError;
-      }
-      
-      // Handle tags updates
-      // First get existing tags
-      const { data: existingTags, error: existingTagsError } = await supabase
-        .from('donation_tags')
-        .select('id, tag')
-        .eq('donation_id', donationId);
-      
-      if (existingTagsError) throw existingTagsError;
-      
-      // Delete tags that are no longer in the current tags list
-      for (const existingTag of existingTags || []) {
-        if (!$tags.includes(existingTag.tag)) {
-          await supabase
-            .from('donation_tags')
-            .delete()
-            .eq('id', existingTag.id);
+        // Call the API to update the donation
+        const response = await fetch(`/api/donations/${donationId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ donationData })
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to update donation');
         }
       }
       
-      // Add new tags
-      const existingTagValues = (existingTags || []).map(t => t.tag);
-      const newTags = $tags.filter(tag => !existingTagValues.includes(tag));
-      
-      for (const newTag of newTags) {
-        await supabase
-          .from('donation_tags')
-          .insert({
-            donation_id: donationId,
-            tag: newTag
-          });
+      // Handle tags updates using API endpoints
+      try {
+        // First get existing tags
+        const tagsResponse = await fetch(`/api/donation-tags?donation_id=${donationId}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        let existingTags = [];
+        if (!tagsResponse.ok) {
+          console.warn('Failed to fetch existing tags, will continue with tag updates anyway');
+        } else {
+          const tagsData = await tagsResponse.json();
+          existingTags = tagsData.tags || [];
+          
+          // Delete tags that are no longer in the current tags list
+          for (const existingTag of existingTags) {
+            if (!$tags.includes(existingTag.tag)) {
+              try {
+                const deleteResponse = await fetch(`/api/donation-tags/${existingTag.id}`, {
+                  method: 'DELETE',
+                  headers: {
+                    'Content-Type': 'application/json'
+                  }
+                });
+                
+                if (!deleteResponse.ok) {
+                  console.warn('Failed to delete tag:', existingTag.tag);
+                }
+              } catch (deleteErr) {
+                console.warn('Error deleting tag:', existingTag.tag, deleteErr);
+              }
+            }
+          }
+        }
+        
+        // Add new tags
+        const existingTagValues = existingTags.map(t => t.tag);
+        const newTags = $tags.filter(tag => !existingTagValues.includes(tag));
+        
+        for (const newTag of newTags) {
+          try {
+            const createResponse = await fetch('/api/donation-tags', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                donationId: donationId,
+                tag: newTag
+              })
+            });
+            
+            if (!createResponse.ok) {
+              console.warn('Failed to create tag:', newTag);
+            }
+          } catch (createErr) {
+            console.warn('Error creating tag:', newTag, createErr);
+          }
+        }
+      } catch (tagsErr) {
+        console.warn('Error handling tags:', tagsErr);
+        // Continue with the save operation even if tag updates fail
       }
       
       // Success notification
@@ -203,7 +273,7 @@
       
     } catch (err) {
       console.error('Error saving donation changes:', err);
-      error.set('Failed to save changes');
+      error.set('Failed to save changes: ' + (err.message || 'Unknown error'));
       toastStore.error('Failed to save changes');
     } finally {
       isSaving.set(false);
@@ -393,7 +463,6 @@
                 <!-- Tags Section -->
                 <DonationTags 
                   {tags}
-                  {supabase}
                   isSaving={$isSaving}
                   on:change={handleMultiItemChange}
                 />

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { createEventDispatcher } from 'svelte';
   import type { Writable } from 'svelte/store';
   import type { BusinessFormErrors, Employee, ContactOption } from './types';
   
@@ -6,6 +7,8 @@
   export let errors: Writable<BusinessFormErrors>;
   export let isSubmitting: Writable<boolean>;
   export let contactOptions: Writable<ContactOption[]>;
+  
+  const dispatch = createEventDispatcher();
   
   // Employee search field state
   let employeeInput = '';
@@ -34,17 +37,13 @@
   }
   
   function handleEmployeeInputChange() {
-    // Filter contacts based on input
-    if (employeeInput.trim()) {
-      filteredContacts = $contactOptions
-        .filter(contact => 
-          contact.name.toLowerCase().includes(employeeInput.toLowerCase()) && 
-          !$employees.some(e => e.contact_id === contact.id)
-        )
-        .slice(0, 5);
-    } else {
-      filteredContacts = [];
+    // Dispatch event to search contacts
+    if (employeeInput.trim().length > 1) {
+      dispatch('searchContacts', employeeInput);
     }
+    
+    // Filter existing contacts based on input
+    filteredContacts = $contactOptions;
   }
   
   function selectContact(contact: ContactOption) {
@@ -54,6 +53,11 @@
   // Watch for input changes
   $: if (employeeInput !== undefined) {
     handleEmployeeInputChange();
+  }
+  
+  // Watch for contact options changes
+  $: if ($contactOptions !== undefined) {
+    filteredContacts = $contactOptions;
   }
 </script>
 

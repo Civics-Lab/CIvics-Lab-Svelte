@@ -95,6 +95,11 @@
     applyFiltersAndSorting();
   }
   
+  function handleRetryFetchViews() {
+    viewsError.set(null);
+    fetchViews();
+  }
+  
   function handleToggleField(event) {
     toggleField(event.detail);
   }
@@ -131,6 +136,35 @@
   
   function handleDonationUpdated() {
     fetchDonations();
+  }
+  
+  // Function to ensure views exist even on error
+  function createLocalFallbackView() {
+    // Create a temporary view that will not be saved to the database
+    const tempView = {
+      id: 'temp-' + Math.random().toString(36).substring(2, 11),
+      view_name: 'Default View (Local Only)',
+      workspace_id: $workspaceStore.currentWorkspace?.id || '',
+      amount: true,
+      status: true,
+      payment_type: true,
+      notes: false,
+      filters: [],
+      sorting: [],
+      created_at: new Date(),
+      updated_at: new Date(),
+      temporary: true // Flag to indicate this is a temporary view
+    };
+    
+    // Set the view and notify user
+    views.set([tempView]);
+    currentView.set(tempView);
+    filters.set([]);
+    sorting.set([]);
+    
+    // Notify user of the database error with more helpful message
+    toastStore.warning('Database issue detected: The donation_views table does not exist. Using a local view instead. Please contact your administrator.');
+    viewsError.set('Database table missing. Using a local view as fallback.');
   }
   
   function handleAddFilter() {
@@ -180,7 +214,7 @@
     isDonationModalOpen.set(true);
   }
   
-  // Fetch views for the current workspace
+  // Fetch views for the current workspace using the API
   async function fetchViews(selectViewId = null) {
     if (!$workspaceStore.currentWorkspace) return;
     
@@ -188,13 +222,21 @@
     viewsError.set(null);
     
     try {
-      const { data: fetchedViews, error } = await data.supabase
-        .from('donation_views')
-        .select('*')
-        .eq('workspace_id', $workspaceStore.currentWorkspace.id)
-        .order('view_name');
+      // Use the API endpoint to fetch donation views
+      const response = await fetch(`/api/donation-views?workspace_id=${$workspaceStore.currentWorkspace.id}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
       
-      if (error) throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to fetch donation views');
+      }
+      
+      const data = await response.json();
+      const fetchedViews = data.views || [];
       
       if (fetchedViews && fetchedViews.length > 0) {
         views.set(fetchedViews);
@@ -240,7 +282,21 @@
       }
     } catch (error) {
       console.error('Error fetching views:', error);
-      viewsError.set('Failed to load views');
+      viewsError.set(error.message || 'Failed to load views');
+      
+      // Check for database relation not exist error - this is a severe error that needs fallback
+      if (error.message && error.message.includes('relation "donation_views" does not exist')) {
+        console.warn('Missing donation_views table detected - using local fallback view');
+        createLocalFallbackView();
+      } else {
+        // For other errors, try once more after a short delay
+        setTimeout(() => {
+          // Only retry if error is still present and we don't have a fallback view
+          if ($viewsError && $views.length === 0) {
+            createLocalFallbackView();
+          }
+        }, 2000);
+      }
     } finally {
       viewsLoading.set(false);
     }
@@ -262,13 +318,22 @@
         sorting: []
       };
       
-      const { data: newView, error } = await data.supabase
-        .from('donation_views')
-        .insert(defaultView)
-        .select()
-        .single();
+      // Use the API endpoint to create a default view
+      const response = await fetch('/api/donation-views', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(defaultView)
+      });
       
-      if (error) throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to create default view');
+      }
+      
+      const responseData = await response.json();
+      const newView = responseData.view;
       
       views.set([newView]);
       currentView.set(newView);
@@ -277,7 +342,15 @@
       
     } catch (error) {
       console.error('Error creating default view:', error);
-      viewsError.set('Failed to create default view');
+      viewsError.set(error.message || 'Failed to create default view');
+      
+      // Check if error is due to missing table and create a local fallback view if needed
+      if (error.message && error.message.includes('relation "donation_views" does not exist')) {
+        createLocalFallbackView();
+      } else {
+        // Create a temporary view when API call fails for other reasons
+        createLocalFallbackView();
+      }
     }
   }
   
@@ -299,13 +372,22 @@
         sorting: []
       };
       
-      const { data: createdView, error } = await data.supabase
-        .from('donation_views')
-        .insert(newView)
-        .select()
-        .single();
+      // Use the API endpoint to create a new view
+      const response = await fetch('/api/donation-views', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(newView)
+      });
       
-      if (error) throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to create view');
+      }
+      
+      const responseData = await response.json();
+      const createdView = responseData.view;
       
       // Close modal first to avoid any state issues
       isCreateViewModalOpen.set(false);
@@ -338,6 +420,56 @@
       return;
     }
     
+    // Handle temporary views
+    if ($currentView.temporary) {
+      let updatedViewName = '';
+      
+      // Determine the new view name
+      if (event && event.detail) {
+        // Get name from event if available
+        updatedViewName = event.detail.trim();
+      } else if ($isEditViewModalOpen && $newViewName.trim()) {
+        // Get name from store if modal is open
+        updatedViewName = $newViewName.trim();
+      } else {
+        // Fallback to current name
+        updatedViewName = $currentView.view_name;
+      }
+      
+      if (!updatedViewName) {
+        console.error('No valid view name for update');
+        return;
+      }
+      
+      // Create updated view object
+      const updatedView = {
+        ...$currentView,
+        view_name: updatedViewName,
+        filters: $filters,
+        sorting: $sorting
+      };
+      
+      // Update the views list locally
+      views.update(viewsList => 
+        viewsList.map(view => view.id === $currentView.id 
+          ? updatedView 
+          : view
+        )
+      );
+      
+      // Update current view
+      currentView.set(updatedView);
+      
+      // Close the edit modal if it's open
+      if ($isEditViewModalOpen) {
+        isEditViewModalOpen.set(false);
+        newViewName.set('');
+      }
+      
+      toastStore.info('View updated in temporary mode. Changes will not be saved to the database.');
+      return;
+    }
+    
     try {
       let updatedViewName = '';
       
@@ -366,15 +498,18 @@
         sorting: $sorting
       };
       
-      // Update in Supabase
-      const { data: updatedData, error } = await data.supabase
-        .from('donation_views')
-        .update(updatedView)
-        .eq('id', $currentView.id)
-        .select();
+      // Use the API endpoint to update the view
+      const response = await fetch(`/api/donation-views/${$currentView.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updatedView)
+      });
       
-      if (error) {
-        throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update view');
       }
       
       // Update the views list
@@ -410,12 +545,18 @@
     if (!$currentView) return;
     
     try {
-      const { error } = await data.supabase
-        .from('donation_views')
-        .delete()
-        .eq('id', $currentView.id);
+      // Use the API endpoint to delete the view
+      const response = await fetch(`/api/donation-views/${$currentView.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
       
-      if (error) throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to delete view');
+      }
       
       // Remove the view from the list
       views.update(v => v.filter(view => view.id !== $currentView.id));
@@ -442,15 +583,38 @@
   async function toggleField(fieldId) {
     if (!$currentView) return;
     
+    // If we're using a temporary view, just update it locally
+    if ($currentView.temporary) {
+      const updatedView = { 
+        ...$currentView, 
+        [fieldId]: !$currentView[fieldId] 
+      };
+      currentView.set(updatedView);
+      views.update(v => 
+        v.map(view => view.id === $currentView.id 
+          ? updatedView 
+          : view
+        )
+      );
+      return;
+    }
+    
     try {
       const updatedView = { ...$currentView, [fieldId]: !$currentView[fieldId] };
       
-      const { error } = await data.supabase
-        .from('donation_views')
-        .update({ [fieldId]: !$currentView[fieldId] })
-        .eq('id', $currentView.id);
+      // Use the API endpoint to update the field visibility
+      const response = await fetch(`/api/donation-views/${$currentView.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ [fieldId]: !$currentView[fieldId] })
+      });
       
-      if (error) throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update view');
+      }
       
       // Update the current view
       currentView.set(updatedView);
@@ -529,7 +693,7 @@
     applyFiltersAndSorting();
   }
   
-  // Function to fetch donations
+  // Function to fetch donations using the API endpoints
   async function fetchDonations() {
     if (!$workspaceStore.currentWorkspace) return;
     
@@ -537,84 +701,58 @@
     donationsError.set(null);
     
     try {
-      // Get contacts from the current workspace
-      const { data: workspaceContacts, error: contactsError } = await data.supabase
-        .from('contacts')
-        .select('id')
-        .eq('workspace_id', $workspaceStore.currentWorkspace.id);
-      
-      if (contactsError) throw contactsError;
-      
-      // Get businesses from the current workspace
-      const { data: workspaceBusinesses, error: businessesError } = await data.supabase
-        .from('businesses')
-        .select('id')
-        .eq('workspace_id', $workspaceStore.currentWorkspace.id);
-      
-      if (businessesError) throw businessesError;
-      
-      // Extract IDs for filtering
-      const contactIds = workspaceContacts ? workspaceContacts.map(c => c.id) : [];
-      const businessIds = workspaceBusinesses ? workspaceBusinesses.map(b => b.id) : [];
-      
-      // If there are no contacts or businesses in this workspace, return empty results
-      if (contactIds.length === 0 && businessIds.length === 0) {
-        donations.set([]);
-        donationStats.set({
-          totalAmount: 0,
-          averageAmount: 0,
-          donorCount: 0
-        });
-        return;
-      }
-      
-      // Build the query with filters for current workspace entities
-      let query = data.supabase
-        .from('donations')
-        .select(`
-          id,
-          amount,
-          status,
-          payment_type,
-          notes,
-          created_at,
-          contacts:contact_id (id, first_name, last_name),
-          businesses:business_id (id, business_name)
-        `)
-        .order('created_at', { ascending: false });
-      
-      // Apply filters for contacts and businesses from this workspace
-      if (contactIds.length > 0) {
-        if (businessIds.length > 0) {
-          // Filter for both contacts and businesses from this workspace
-          query = query.or(`contact_id.in.(${contactIds.join(',')}),business_id.in.(${businessIds.join(',')})`);
-        } else {
-          // Only filter for contacts if there are no businesses
-          query = query.in('contact_id', contactIds);
+      // Use the API endpoint that returns donations for a workspace
+      const response = await fetch(`/api/donations?workspace_id=${$workspaceStore.currentWorkspace.id}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
         }
-      } else if (businessIds.length > 0) {
-        // Only filter for businesses if there are no contacts
-        query = query.in('business_id', businessIds);
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to fetch donations');
       }
       
-      // Execute the query
-      const { data: fetchedDonations, error } = await query;
+      const data = await response.json();
+      const fetchedDonations = data.donations || [];
       
-      if (error) throw error;
+      // Adapt field names for compatibility with existing code
+      const formattedDonations = fetchedDonations.map(donation => ({
+        id: donation.id,
+        amount: donation.amount,
+        status: donation.status,
+        payment_type: donation.paymentType,
+        notes: donation.notes,
+        created_at: donation.createdAt,
+        updated_at: donation.updatedAt,
+        contact_id: donation.contactId,
+        business_id: donation.businessId,
+        // Format the contact and business properties to match the old structure
+        contacts: donation.contact ? {
+          id: donation.contact.id,
+          first_name: donation.contact.firstName,
+          last_name: donation.contact.lastName
+        } : null,
+        businesses: donation.business ? {
+          id: donation.business.id,
+          business_name: donation.business.businessName
+        } : null
+      }));
       
-      donations.set(fetchedDonations || []);
+      donations.set(formattedDonations);
       applyFiltersAndSorting();
       
       // Calculate donation stats
-      if (fetchedDonations && fetchedDonations.length > 0) {
-        const totalAmount = fetchedDonations.reduce((sum, donation) => sum + donation.amount, 0);
-        const averageAmount = totalAmount / fetchedDonations.length;
+      if (formattedDonations && formattedDonations.length > 0) {
+        const totalAmount = formattedDonations.reduce((sum, donation) => sum + donation.amount, 0);
+        const averageAmount = totalAmount / formattedDonations.length;
         
         // Count unique donors
         const contactDonorIds = new Set();
         const businessDonorIds = new Set();
         
-        fetchedDonations.forEach(donation => {
+        formattedDonations.forEach(donation => {
           if (donation.contacts && donation.contacts.id) {
             contactDonorIds.add(donation.contacts.id);
           } else if (donation.businesses && donation.businesses.id) {
@@ -638,7 +776,7 @@
       }
     } catch (error) {
       console.error('Error fetching donations:', error);
-      donationsError.set('Failed to load donations');
+      donationsError.set(error.message || 'Failed to load donations');
     } finally {
       isLoadingDonations.set(false);
     }
@@ -805,6 +943,7 @@
       isViewSettingsOpen={$isViewSettingsOpen}
       availableFields={$availableFields}
       on:selectView={handleSelectView}
+      on:retryFetchViews={handleRetryFetchViews}
       on:toggleField={handleToggleField}
       on:openCreateViewModal={handleOpenCreateViewModal}
       on:openEditViewModal={handleOpenEditViewModal}

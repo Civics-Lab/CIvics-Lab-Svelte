@@ -90,9 +90,18 @@
       const address = addresses[0];
       const parts = [];
       
-      if (address.street_address) parts.push(address.street_address);
-      if (address.city) parts.push(address.city);
-      if (address.state_abbreviation) parts.push(address.state_abbreviation);
+      // Handle both camelCase and snake_case properties
+      if (address.streetAddress || address.street_address) {
+        parts.push(address.streetAddress || address.street_address);
+      }
+      
+      if (address.city) {
+        parts.push(address.city);
+      }
+      
+      if (address.stateAbbreviation || address.state_abbreviation) {
+        parts.push(address.stateAbbreviation || address.state_abbreviation);
+      }
       
       return parts.join(', ') || '—';
     }
@@ -100,13 +109,55 @@
     // Format phone for display
     function formatPhone(phones) {
       if (!phones || !Array.isArray(phones) || phones.length === 0) return '—';
-      return phones[0].phone_number || '—';
+      
+      // Handle both camelCase and snake_case properties
+      return (phones[0].phoneNumber || phones[0].phone_number) || '—';
     }
     
     // Format tags for display
     function formatTags(tags) {
       if (!tags || !Array.isArray(tags) || tags.length === 0) return '—';
-      return tags.map(t => t.tag).join(', ') || '—';
+      
+      // Tags can be either strings or objects with a tag property
+      return tags.map(t => typeof t === 'string' ? t : (t.tag || '')).join(', ') || '—';
+    }
+    
+    // Format employees for display
+    function formatEmployees(employees) {
+      if (!employees || !Array.isArray(employees) || employees.length === 0) return '—';
+      
+      // Just show the count of employees
+      return `${employees.length} employee${employees.length === 1 ? '' : 's'}`;
+    }
+    
+    // Format social media for display
+    function formatSocialMedia(socialMediaAccounts) {
+      if (!socialMediaAccounts || !Array.isArray(socialMediaAccounts) || socialMediaAccounts.length === 0) return '—';
+      
+      // Just show the count of social media accounts
+      return `${socialMediaAccounts.length} account${socialMediaAccounts.length === 1 ? '' : 's'}`;
+    }
+    
+    // Get the value from business based on column id (handling camelCase and snake_case)
+    function getBusinessValue(business, columnId) {
+      const snakeCaseKey = columnId.replace(/([A-Z])/g, '_$1').toLowerCase();
+      
+      if (columnId === 'businessName' || columnId === 'business_name') {
+        return business.businessName || business.business_name || '—';
+      } else if (columnId === 'addresses') {
+        return formatAddress(business.addresses);
+      } else if (columnId === 'phoneNumbers' || columnId === 'phone_numbers') {
+        return formatPhone(business.phoneNumbers || business.phone_numbers);
+      } else if (columnId === 'tags') {
+        return formatTags(business.tags);
+      } else if (columnId === 'employees') {
+        return formatEmployees(business.employees);
+      } else if (columnId === 'socialMediaAccounts' || columnId === 'social_media_accounts') {
+        return formatSocialMedia(business.socialMediaAccounts || business.social_media_accounts);
+      } else {
+        // Try both camelCase and snake_case
+        return business[columnId] || business[snakeCaseKey] || '—';
+      }
     }
     
     onMount(() => {
@@ -176,34 +227,9 @@
                 >
                   {#each visibleColumns as columnId}
                     <td class="px-4 py-4 whitespace-nowrap">
-                      {#if columnId === 'business_name'}
-                        <div class="text-sm font-medium text-gray-900">
-                          {business.business_name || '—'}
-                        </div>
-                      {:else if columnId === 'addresses'}
-                        <div class="text-sm text-gray-500">
-                          {formatAddress(business.addresses)}
-                        </div>
-                      {:else if columnId === 'phone_numbers'}
-                        <div class="text-sm text-gray-500">
-                          {formatPhone(business.phone_numbers)}
-                        </div>
-                      {:else if columnId === 'tags'}
-                        <div class="text-sm text-gray-500">
-                          {formatTags(business.tags)}
-                        </div>
-                      {:else if columnId === 'social_media_accounts' || columnId === 'employees'}
-                        <!-- These would need custom formatting based on your data structure -->
-                        <div class="text-sm text-gray-500">
-                          {business[columnId] && Array.isArray(business[columnId]) && business[columnId].length > 0 
-                            ? `${business[columnId].length} items` 
-                            : '—'}
-                        </div>
-                      {:else}
-                        <div class="text-sm text-gray-500">
-                          {business[columnId] || '—'}
-                        </div>
-                      {/if}
+                      <div class="text-sm {columnId === 'businessName' || columnId === 'business_name' ? 'font-medium text-gray-900' : 'text-gray-500'}">
+                        {getBusinessValue(business, columnId)}
+                      </div>
                     </td>
                   {/each}
                   <td class="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">

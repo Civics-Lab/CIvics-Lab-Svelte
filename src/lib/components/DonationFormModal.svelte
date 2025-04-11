@@ -65,7 +65,12 @@
                 .order('tag')
                 .limit(10);
             
-            if (donationTagsError) throw donationTagsError;
+            if (donationTagsError) {
+                console.error('Error fetching tag suggestions:', donationTagsError);
+                // Fall back to an empty array instead of throwing
+                suggestedTags.set([]);
+                return;
+            }
             
             // Remove duplicates and filter out already selected tags
             const uniqueTags = [...new Set(donationTags.map(t => t.tag))];
@@ -74,6 +79,7 @@
             suggestedTags.set(filteredTags);
         } catch (error) {
             console.error('Error loading tag suggestions:', error);
+            // Silent failure - just set empty tags
             suggestedTags.set([]);
         } finally {
             isLoadingSuggestions.set(false);
@@ -153,25 +159,42 @@
         isLoadingData.set(true);
         
         try {
-            // Load businesses
-            const { data: businessesData, error: businessesError } = await supabase
-                .from('businesses')
-                .select('*')
-                .eq('workspace_id', $workspaceStore.currentWorkspace?.id)
-                .eq('status', 'active');
-                
-            if (businessesError) throw businessesError;
-            businesses.set(businessesData || []);
+            // Use API endpoints for fetching businesses and contacts
+            if (!$workspaceStore.currentWorkspace) {
+                throw new Error('No workspace selected');
+            }
             
-            // Load contacts
-            const { data: contactsData, error: contactsError } = await supabase
-                .from('contacts')
-                .select('*')
-                .eq('workspace_id', $workspaceStore.currentWorkspace?.id)
-                .eq('status', 'active');
+            // Fetch businesses via API
+            const businessesResponse = await fetch(`/api/businesses?workspace_id=${$workspaceStore.currentWorkspace.id}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
                 
-            if (contactsError) throw contactsError;
-            contacts.set(contactsData || []);
+            if (!businessesResponse.ok) {
+                const businessesError = await businessesResponse.json();
+                throw new Error(businessesError.message || 'Failed to fetch businesses');
+            }
+            
+            const businessesData = await businessesResponse.json();
+            businesses.set(businessesData.businesses || []);
+            
+            // Fetch contacts via API
+            const contactsResponse = await fetch(`/api/contacts?workspace_id=${$workspaceStore.currentWorkspace.id}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+                
+            if (!contactsResponse.ok) {
+                const contactsError = await contactsResponse.json();
+                throw new Error(contactsError.message || 'Failed to fetch contacts');
+            }
+            
+            const contactsData = await contactsResponse.json();
+            contacts.set(contactsData.contacts || []);
             
         } catch (err) {
             console.error('Error loading data:', err);
@@ -182,8 +205,14 @@
     }
     
     // Format contact name for display
-    function formatContactName(contact: Contact): string {
-        return `${contact.first_name} ${contact.middle_name ? contact.middle_name + ' ' : ''}${contact.last_name}`.trim();
+    function formatContactName(contact: any): string {
+        // The API returns firstName/lastName, but Supabase returns first_name/last_name
+        // Handle both formats
+        const firstName = contact.firstName || contact.first_name || '';
+        const middleName = contact.middleName || contact.middle_name || '';
+        const lastName = contact.lastName || contact.last_name || '';
+        
+        return `${firstName} ${middleName ? middleName + ' ' : ''}${lastName}`.trim();
     }
     
     async function handleSubmit() {
@@ -207,27 +236,46 @@
         error.set(null);
         
         try {
-            // Prepare donation data with the dedicated donation_date field
+            // Prepare donation data
             const donationData = {
-                workspace_id: $workspaceStore.currentWorkspace?.id,
                 amount: parseFloat($formData.amount),
                 notes: $formData.notes || null,
                 status: $formData.status,
-                contact_id: $formData.donorType === 'person' ? $formData.contactId : null,
-                business_id: $formData.donorType === 'business' ? $formData.businessId : null,
-                donation_date: $formData.date // Using the new column
+                paymentType: $formData.paymentType || null
             };
             
-            // Insert donation
-            const { data: donation, error: donationError } = await supabase
-                .from('donations')
-                .insert(donationData)
-                .select()
-                .single();
+            let response;
             
-            if (donationError) throw donationError;
+            // Use the appropriate API endpoint based on donor type
+            if ($formData.donorType === 'person') {
+                // Use the contact-specific donation endpoint
+                response = await fetch(`/api/contacts/${$formData.contactId}/donations`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(donationData)
+                });
+            } else {
+                // Use the business-specific donation endpoint
+                response = await fetch(`/api/businesses/${$formData.businessId}/donations`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(donationData)
+                });
+            }
             
-            // Insert tags if any
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to create donation');
+            }
+            
+            const responseData = await response.json();
+            const donation = responseData.donation;
+            
+            // For now, handle tags using Supabase until we have API endpoints for tags
             if ($formData.tags && $formData.tags.length > 0) {
                 const tagObjects = $formData.tags.map(tag => ({
                     donation_id: donation.id,
@@ -299,25 +347,36 @@
     async function handleBusinessCreated() {
         isBusinessFormOpen.set(false);
         
-        // Reload businesses
+        // Reload businesses using API
         try {
-            const { data: businessesData, error: businessesError } = await supabase
-                .from('businesses')
-                .select('*')
-                .eq('workspace_id', $workspaceStore.currentWorkspace?.id)
-                .eq('status', 'active');
-                
-            if (businessesError) throw businessesError;
+            if (!$workspaceStore.currentWorkspace) {
+                throw new Error('No workspace selected');
+            }
             
-            businesses.set(businessesData || []);
+            const response = await fetch(`/api/businesses?workspace_id=${$workspaceStore.currentWorkspace.id}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to fetch businesses');
+            }
+            
+            const data = await response.json();
+            const businessesData = data.businesses || [];
+            
+            businesses.set(businessesData);
             
             // Select newly created business (should be the last one)
             if (businessesData && businessesData.length > 0) {
                 $formData.businessId = businessesData[businessesData.length - 1].id;
             }
-            
         } catch (err) {
             console.error('Error reloading businesses:', err);
+            error.set(err instanceof Error ? err.message : 'Failed to reload businesses');
         }
     }
     
@@ -325,25 +384,36 @@
     async function handleContactCreated() {
         isContactFormOpen.set(false);
         
-        // Reload contacts
+        // Reload contacts using API
         try {
-            const { data: contactsData, error: contactsError } = await supabase
-                .from('contacts')
-                .select('*')
-                .eq('workspace_id', $workspaceStore.currentWorkspace?.id)
-                .eq('status', 'active');
-                
-            if (contactsError) throw contactsError;
+            if (!$workspaceStore.currentWorkspace) {
+                throw new Error('No workspace selected');
+            }
             
-            contacts.set(contactsData || []);
+            const response = await fetch(`/api/contacts?workspace_id=${$workspaceStore.currentWorkspace.id}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to fetch contacts');
+            }
+            
+            const data = await response.json();
+            const contactsData = data.contacts || [];
+            
+            contacts.set(contactsData);
             
             // Select newly created contact (should be the last one)
             if (contactsData && contactsData.length > 0) {
                 $formData.contactId = contactsData[contactsData.length - 1].id;
             }
-            
         } catch (err) {
             console.error('Error reloading contacts:', err);
+            error.set(err instanceof Error ? err.message : 'Failed to reload contacts');
         }
     }
     
@@ -490,7 +560,7 @@
                                     >
                                         <option value="">Select a business</option>
                                         {#each $businesses as business}
-                                            <option value={business.id}>{business.business_name}</option>
+                                            <option value={business.id}>{business.businessName || business.business_name}</option>
                                         {/each}
                                     </select>
                                     <button

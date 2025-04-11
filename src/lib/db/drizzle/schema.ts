@@ -261,8 +261,32 @@ export const donations = pgTable('donations', {
   contactId: uuid('contact_id').references(() => contacts.id),
   businessId: uuid('business_id').references(() => businesses.id),
   status: donationStatusEnum('status').default('promise'),
+  paymentType: text('payment_type'),
+  notes: text('notes'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow()
+});
+
+export const donationTags = pgTable('donation_tags', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  donationId: uuid('donation_id').references(() => donations.id, { onDelete: 'cascade' }),
+  tag: text('tag').notNull(),
+  createdAt: timestamp('created_at').defaultNow()
+});
+
+export const donationViews = pgTable('donation_views', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  viewName: text('view_name').notNull(),
+  workspaceId: uuid('workspace_id').references(() => workspaces.id),
+  amount: boolean('amount').default(true),
+  status: boolean('status').default(true),
+  paymentType: boolean('payment_type').default(true),
+  notes: boolean('notes').default(false),
+  filters: jsonb('filters'),
+  sorting: jsonb('sorting'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  createdById: uuid('created_by').references(() => users.id)
 });
 
 export const workspaceSubscriptions = pgTable('workspace_subscriptions', {
@@ -318,6 +342,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   createdContactSocialMediaAccounts: many(contactSocialMediaAccounts, { relationName: 'userCreatedContactSocialMediaAccounts' }),
   updatedContactSocialMediaAccounts: many(contactSocialMediaAccounts, { relationName: 'userUpdatedContactSocialMediaAccounts' }),
   createdContactViews: many(contactViews, { relationName: 'userCreatedContactViews' }),
+  createdDonationViews: many(donationViews, { relationName: 'userCreatedDonationViews' }),
   sentInvites: many(userInvites, { relationName: 'userSentInvites' })
 }));
 
@@ -333,6 +358,7 @@ export const workspacesRelations = relations(workspaces, ({ one, many }) => ({
   contactViews: many(contactViews),
   businesses: many(businesses),
   businessViews: many(businessViews),
+  donationViews: many(donationViews),
   subscriptions: many(workspaceSubscriptions),
   payments: many(workspacePayments),
   userInvites: many(userInvites)
@@ -394,7 +420,7 @@ export const businessesRelations = relations(businesses, ({ one, many }) => ({
   donations: many(donations)
 }));
 
-export const donationsRelations = relations(donations, ({ one }) => ({
+export const donationsRelations = relations(donations, ({ one, many }) => ({
   contact: one(contacts, {
     fields: [donations.contactId],
     references: [contacts.id]
@@ -402,6 +428,27 @@ export const donationsRelations = relations(donations, ({ one }) => ({
   business: one(businesses, {
     fields: [donations.businessId],
     references: [businesses.id]
+  }),
+  tags: many(donationTags)
+}));
+
+export const donationTagsRelations = relations(donationTags, ({ one }) => ({
+  donation: one(donations, {
+    fields: [donationTags.donationId],
+    references: [donations.id]
+  })
+}));
+
+// Donation Views Relations
+export const donationViewsRelations = relations(donationViews, ({ one }) => ({
+  workspace: one(workspaces, {
+    fields: [donationViews.workspaceId],
+    references: [workspaces.id]
+  }),
+  createdBy: one(users, {
+    fields: [donationViews.createdById],
+    references: [users.id],
+    relationName: 'userCreatedDonationViews'
   })
 }));
 

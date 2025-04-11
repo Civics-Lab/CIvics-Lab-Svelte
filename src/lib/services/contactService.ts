@@ -99,26 +99,27 @@ export async function createContact(contactData: {
         status: email.status
       })),
       
-      // Map phone numbers from snake_case to camelCase
+      // Map phone numbers - ensure we're using consistent property naming
       phoneNumbers: contactData.phoneNumbers?.map(phone => ({
-        phoneNumber: phone.phone_number,
+        // The ContactFormModal uses phone_number but the API expects phoneNumber
+        phoneNumber: phone.phoneNumber || phone.phone_number,
         status: phone.status
       })),
       
       // Map addresses from snake_case to camelCase
       addresses: contactData.addresses?.map(address => ({
-        streetAddress: address.street_address,
-        secondaryStreetAddress: address.secondary_street_address,
+        streetAddress: address.streetAddress || address.street_address,
+        secondaryStreetAddress: address.secondaryStreetAddress || address.secondary_street_address,
         city: address.city,
-        stateId: address.state_id,
-        zipCode: address.zip_code,
+        stateId: address.stateId || address.state_id,
+        zipCode: address.zipCode || address.zip_code,
         status: address.status
       })),
       
       // Map social media from snake_case to camelCase
       socialMedia: contactData.socialMedia?.map(social => ({
-        socialMediaAccount: social.social_media_account,
-        serviceType: social.service_type,
+        socialMediaAccount: social.socialMediaAccount || social.social_media_account,
+        serviceType: social.serviceType || social.service_type,
         status: social.status
       })),
       
@@ -196,14 +197,21 @@ export async function updateContact(contactId: string, updateData: {
           isDeleted: email.isDeleted
         })),
       
-      // Map phone numbers from snake_case to camelCase
+      // Map phone numbers - ensure we're using consistent property naming
       // Also filter out any invalid phone numbers to prevent DB errors
       // Preserve isNew, isModified, and isDeleted flags for server-side logic
       phoneNumbers: updateData.phoneNumbers
-        ?.filter(phone => phone.phoneNumber && phone.phoneNumber.trim() !== '')
+        ?.filter(phone => {
+          // Keep deleted items even if empty (they need to be removed)
+          if (phone.isDeleted) return true;
+          // Filter out empty non-deleted items
+          // Check both potential property names
+          const phoneNumber = phone.phoneNumber || phone.phone_number || '';
+          return phoneNumber.trim() !== '';
+        })
         .map(phone => ({
           id: phone.id, // Preserve ID for existing phone numbers
-          phoneNumber: phone.phoneNumber, // Already mapped in ContactDetailsSheet
+          phoneNumber: phone.phoneNumber || phone.phone_number, // Handle both property name formats
           status: phone.status,
           isNew: phone.isNew,
           isModified: phone.isModified,
@@ -213,14 +221,21 @@ export async function updateContact(contactId: string, updateData: {
       // Map addresses from snake_case to camelCase
       // Also preserve isNew, isModified, and isDeleted flags for server-side logic
       addresses: updateData.addresses
-        ?.filter(address => address.street_address && address.street_address.trim() !== '')
+        ?.filter(address => {
+          // Keep deleted items even if empty (they need to be removed)
+          if (address.isDeleted) return true;
+          // Filter out empty non-deleted items
+          // Check both potential property names
+          const streetAddress = address.streetAddress || address.street_address || '';
+          return streetAddress.trim() !== '' && address.city && address.city.trim() !== '';
+        })
         .map(address => ({
           id: address.id, // Preserve ID for existing addresses
-          streetAddress: address.street_address,
-          secondaryStreetAddress: address.secondary_street_address,
+          streetAddress: address.streetAddress || address.street_address,
+          secondaryStreetAddress: address.secondaryStreetAddress || address.secondary_street_address,
           city: address.city,
-          stateId: address.state_id,
-          zipCode: address.zip_code,
+          stateId: address.stateId || address.state_id,
+          zipCode: address.zipCode || address.zip_code,
           status: address.status,
           isNew: address.isNew,
           isModified: address.isModified,
@@ -230,11 +245,18 @@ export async function updateContact(contactId: string, updateData: {
       // Map social media from snake_case to camelCase
       // Also preserve isNew, isModified, and isDeleted flags for server-side logic
       socialMedia: updateData.socialMedia
-        ?.filter(social => social.social_media_account && social.social_media_account.trim() !== '')
+        ?.filter(social => {
+          // Keep deleted items even if empty (they need to be removed)
+          if (social.isDeleted) return true;
+          // Filter out empty non-deleted items
+          // Check both potential property names
+          const account = social.socialMediaAccount || social.social_media_account || '';
+          return account.trim() !== '' && (social.serviceType || social.service_type);
+        })
         .map(social => ({
           id: social.id, // Preserve ID for existing social media accounts
-          socialMediaAccount: social.social_media_account,
-          serviceType: social.service_type,
+          socialMediaAccount: social.socialMediaAccount || social.social_media_account,
+          serviceType: social.serviceType || social.service_type,
           status: social.status,
           isNew: social.isNew,
           isModified: social.isModified,

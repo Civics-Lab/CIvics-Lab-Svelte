@@ -7,18 +7,26 @@
     
     // Props
     export let employees;
+    export let contactOptions;
     export let supabase: TypedSupabaseClient;
     export let isSaving = false;
+    export let isLoadingContacts = false;
     
     const dispatch = createEventDispatcher();
     
     // For employee selection
-    const isLoadingContacts = writable(false);
-    const contacts = writable<any[]>([]);
     const selectedContactId = writable('');
     const selectedRole = writable(''); 
     const isAddingEmployee = writable(false);
     const showContactSelect = writable(false);
+    const searchQuery = writable('');
+    
+    // For searching contacts via API
+    function handleContactSearch() {
+      if ($searchQuery && $searchQuery.trim().length > 1) {
+        dispatch('searchContacts', $searchQuery);
+      }
+    }
     
     // Available status options
     const statusOptions = [
@@ -32,29 +40,13 @@
       dispatch('change');
     }
     
-    async function fetchContacts() {
-      isLoadingContacts.set(true);
-      
-      try {
-        const { data: contactsData, error } = await supabase
-          .from('active_contacts')
-          .select('*')
-          .order('last_name, first_name');
-        
-        if (error) throw error;
-        
-        contacts.set(contactsData || []);
-      } catch (err) {
-        console.error('Error fetching contacts:', err);
-      } finally {
-        isLoadingContacts.set(false);
-      }
-    }
-    
     function toggleContactSelect() {
       showContactSelect.update(value => !value);
+      // Reset search query when showing the select
       if ($showContactSelect) {
-        fetchContacts();
+        searchQuery.set('');
+        // Clear existing contact options when opening
+        contactOptions.set([]);
       }
     }
     
@@ -73,7 +65,7 @@
       
       try {
         // Find the selected contact
-        const contact = $contacts.find(c => c.id === $selectedContactId);
+        const contact = $contactOptions.find(c => c.id === $selectedContactId);
         
         // Add to employees list
         employees.update(items => [
@@ -83,19 +75,22 @@
             business_id: null, // This will be set when saving
             contact_id: $selectedContactId,
             status: 'active',
-            role: $selectedRole,
+            role: $selectedRole, // Store role information for display
             isNew: true,
-            contact: {
-              id: contact.id,
-              first_name: contact.first_name,
-              last_name: contact.last_name
-            }
+            contact_name: contact ? contact.name : 'Unknown Contact'
           }
         ]);
         
         // Close the selection UI
         showContactSelect.set(false);
         isAddingEmployee.set(false);
+        
+        // Log for debugging
+        console.log('Added new employee with role:', $selectedRole);
+        
+        // Reset role and contact selection
+        selectedRole.set('');
+        selectedContactId.set('');
         
         // Dispatch change
         handleChange();
@@ -142,10 +137,7 @@
     
     // Format display name
     function formatName(employee) {
-      if (employee.contact) {
-        return `${employee.contact.first_name} ${employee.contact.last_name}`;
-      }
-      return 'Unknown Contact';
+      return employee.contactName || employee.contact_name || 'Unknown Contact';
     }
   </script>
   
@@ -171,7 +163,40 @@
         
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label for="contact" class="block text-sm font-medium text-gray-700 mb-1">Contact</label>
+            <label for="contact_search" class="block text-sm font-medium text-gray-700 mb-1">Search Contact</label>
+            <div class="flex items-center">
+              <input 
+                type="text" 
+                id="contact_search" 
+                bind:value={$searchQuery}
+                on:input={() => {
+                  if ($searchQuery.trim().length > 1) {
+                    handleContactSearch();
+                  }
+                }}
+                class="block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500" 
+                placeholder="Search by name"
+                disabled={$isAddingEmployee}
+              />
+              <button
+                type="button"
+                class="ml-2 p-2 rounded-md bg-green-100 text-green-600 hover:bg-green-200"
+                on:click={() => {
+                  if ($searchQuery.trim().length > 1) {
+                    handleContactSearch();
+                  }
+                }}
+                disabled={$isAddingEmployee || $searchQuery.trim().length <= 1}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          
+          <div>
+            <label for="contact" class="block text-sm font-medium text-gray-700 mb-1">Select Contact</label>
             <select 
               id="contact"
               bind:value={$selectedContactId}
@@ -181,9 +206,13 @@
               <option value="">Select a contact</option>
               {#if $isLoadingContacts}
                 <option value="" disabled>Loading contacts...</option>
+              {:else if $contactOptions.length === 0 && $searchQuery.trim().length > 1}
+                <option value="" disabled>No contacts found</option>
+              {:else if $contactOptions.length === 0}
+                <option value="" disabled>Search for contacts above</option>
               {:else}
-                {#each $contacts as contact}
-                  <option value={contact.id}>{contact.first_name} {contact.last_name}</option>
+                {#each $contactOptions as contact}
+                  <option value={contact.id}>{contact.name}</option>
                 {/each}
               {/if}
             </select>
@@ -243,7 +272,7 @@
         <div class="flex flex-col sm:flex-row justify-between">
           <div class="mb-3 sm:mb-0">
             <h4 class="text-sm font-medium text-gray-900">{formatName(employee)}</h4>
-            <p class="text-sm text-gray-500">{employee.role || 'No role specified'}</p>
+            <p class="text-sm text-gray-500">{employee.role || ''}</p>
           </div>
           
           <div>

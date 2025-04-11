@@ -12,6 +12,7 @@ export const GET: RequestHandler = async ({ locals }) => {
   if (!user) {
     throw error(401, 'Authentication required');
   }
+  // We don't use verifyWorkspaceAccess here because we're getting all workspaces for the user
   
   try {
     // First, get all workspace IDs the user has access to
@@ -57,6 +58,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   if (!user) {
     throw error(401, 'Authentication required');
   }
+  // Authentication check is sufficient for workspace creation - no workspace to check access for yet
   
   try {
     // Get the name from the request body

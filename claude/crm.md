@@ -2,7 +2,10 @@
 
 This document provides a comprehensive overview of the Customer Relationship Management (CRM) portion of the Civics Lab application, which is located in the `/engage` route.
 
-For detailed information on the contact management system's API and interface updates, see the [CRM Updates Documentation](crm-updates.md) and [Database Updates Documentation](database-updates.md).
+For detailed information on system updates, see the following documents:
+- [Contact Management Updates](crm-updates.md) - Improvements to the contact management system
+- [Business API Updates](business-api-updates.md) - Enhancements to the business management API
+- [Database Updates Documentation](database-updates.md) - Changes to the underlying database schema
 
 ## Table of Contents
 
@@ -301,6 +304,46 @@ The CRM system integrates with other parts of the Civics Lab application:
 This CRM system provides a robust foundation for civic engagement organizations to manage their relationships with constituents, businesses, and donors in an organized and efficient manner.
 
 ## Known Issues and Fixes
+
+### Business API Endpoint Integration Issue
+
+**Issue**: The business details sheet was experiencing errors when interacting with API endpoints. It had inadequate error handling and wasn't properly processing API responses, particularly for employee contact searches.
+
+**Root Cause**: The BusinessDetailsSheet component was not correctly passing the workspace ID for contact searches, had incomplete error handling, and wasn't properly handling empty arrays in API responses. Additionally, the contact search functionality was using direct Supabase calls instead of the API endpoints.
+
+**Fix Implementation**:
+
+1. Enhanced the business service to ensure proper API communication:
+   ```typescript
+   // Make sure related collections are arrays even if empty
+   business.phoneNumbers = business.phoneNumbers || [];
+   business.addresses = business.addresses || [];
+   business.socialMediaAccounts = business.socialMediaAccounts || [];
+   business.employees = business.employees || [];
+   business.tags = business.tags || [];
+   ```
+
+2. Improved the API payload construction to properly handle deleted items:
+   ```typescript
+   // Filter logic for phone numbers that preserves deleted items
+   phoneNumbers: updateData.phoneNumbers
+     ?.filter(phone => {
+       // Keep deleted items even if empty (they need to be removed)
+       if (phone.isDeleted) return true;
+       // Filter out empty non-deleted items
+       return phone.phone_number && phone.phone_number.trim() !== '';
+     })
+   ```
+
+3. Redesigned the contact search functionality to use API-based search instead of direct Supabase queries
+
+4. Added better error handling with detailed error messages and improved toast notifications
+
+5. Ensured the workspace ID is properly stored and passed to contact search functions
+
+This fix ensures reliable API communication for all business operations, enabling proper management of multiple related records (phone numbers, addresses, etc.) and improving the overall stability of the business management interface.
+
+For complete implementation details, see the [Business API Updates Documentation](business-api-updates.md).
 
 ### Multiple Contact-Related Records Issue
 

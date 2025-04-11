@@ -15,6 +15,35 @@
     
     const dispatch = createEventDispatcher();
     
+    // Helper function to get view name (handles both camelCase and snake_case)
+    function getViewName(view) {
+      return view.viewName || view.view_name || 'Unknown View';
+    }
+    
+    // Helper function to check if a field is enabled in the current view
+    function isFieldEnabled(fieldId) {
+      if (!currentView) return false;
+      
+      // Try the exact field ID first
+      if (currentView[fieldId] !== undefined) {
+        return !!currentView[fieldId];
+      }
+      
+      // Try snake_case version if the field ID is in camelCase
+      const snakeCaseId = fieldId.replace(/([A-Z])/g, '_$1').toLowerCase();
+      if (currentView[snakeCaseId] !== undefined) {
+        return !!currentView[snakeCaseId];
+      }
+      
+      // Try camelCase version if the field ID is in snake_case
+      const camelCaseId = fieldId.replace(/_([a-z])/g, (_, char) => char.toUpperCase());
+      if (currentView[camelCaseId] !== undefined) {
+        return !!currentView[camelCaseId];
+      }
+      
+      return false;
+    }
+    
     // Event handlers
     function toggleViewSelect(event) {
       // Close when clicking the button while the dropdown is open
@@ -98,7 +127,7 @@
           class="px-3 py-2 border rounded-md bg-white flex items-center space-x-2 text-sm hover:bg-gray-50"
           on:click={toggleViewSelect}
         >
-          <span>{currentView?.view_name || 'Select View'}</span>
+          <span>{currentView ? getViewName(currentView) : 'Select View'}</span>
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
           </svg>
@@ -126,7 +155,7 @@
                     class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 {currentView?.id === view.id ? 'bg-green-50 text-green-700' : ''}"
                     on:click={() => selectView(view)}
                   >
-                    {view.view_name}
+                    {getViewName(view)}
                   </button>
                 {/each}
               {/if}
@@ -176,7 +205,7 @@
                     type="checkbox"
                     id={`field-${field.id}`}
                     class="rounded text-green-600 focus:ring-green-500"
-                    checked={currentView ? currentView[field.id] : false}
+                    checked={isFieldEnabled(field.id)}
                     on:change={() => toggleField(field.id)}
                   />
                   <label for={`field-${field.id}`} class="ml-2 text-sm">{field.label}</label>

@@ -1,12 +1,14 @@
 <!-- src/lib/components/businesses/BusinessFormModal.svelte -->
 <script lang="ts">
-    import { createEventDispatcher } from 'svelte';
+    import { createEventDispatcher, onMount } from 'svelte';
     import { writable } from 'svelte/store';
     import Modal from '$lib/components/Modal.svelte';
     import { toastStore } from '$lib/stores/toastStore';
     import { workspaceStore } from '$lib/stores/workspaceStore';
     import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
     import type { TypedSupabaseClient } from '$lib/types/supabase';
+    import { createBusiness } from '$lib/services/businessService';
+    import { fetchStateOptions, fetchContactOptions } from '$lib/services/formOptionsService';
     
     // Import modular form components
     import BusinessBasicInfo from './form/BusinessBasicInfo.svelte';
@@ -132,41 +134,43 @@
     
     async function fetchOptions() {
       try {
-        // Fetch state options
-        const { data: stateData, error: stateError } = await supabase
-          .from('states')
-          .select('id, name, abbreviation')
-          .order('name');
+        console.log("Fetching options for business form");
         
-        if (stateError) throw stateError;
-        stateOptions.set(stateData || []);
+        // Use the form options service to fetch states
+        const states = await fetchStateOptions();
+        stateOptions.set(states);
+        console.log("Fetched states:", states.length);
         
-        // Fetch existing business tags
-        const { data: tagData, error: tagError } = await supabase
-          .from('business_tags')
-          .select('tag')
-          .order('tag');
+        // Sample tags (we can implement a tag API endpoint later)
+        const hardcodedTags = ["retail", "tech", "healthcare", "education", "nonprofit", "local", "national"];
+        existingTags.set(hardcodedTags);
         
-        if (tagError) throw tagError;
-        const uniqueTags = [...new Set(tagData?.map(t => t.tag) || [])];
-        existingTags.set(uniqueTags);
-        
-        // Fetch contacts for employees
-        const { data: contactData, error: contactError } = await supabase
-          .from('contacts')
-          .select('id, first_name, last_name')
-          .eq('status', 'active')
-          .order('last_name');
-        
-        if (contactError) throw contactError;
-        contactOptions.set((contactData || []).map(c => ({
-          id: c.id,
-          name: `${c.first_name} ${c.last_name}`
-        })));
+        // For contacts, we'll fetch them when the user starts typing in the employee field
+        // Instead of prefetching all contacts
         
       } catch (error) {
-        console.error('Error fetching options:', error);
+        console.error('Error fetching form options:', error);
         toastStore.error('Failed to load form options');
+      }
+    }
+    
+    // Function to fetch contacts based on search term
+    async function searchContacts(searchTerm: string) {
+      if (!$workspaceStore.currentWorkspace?.id) {
+        console.error('No workspace selected');
+        return;
+      }
+      
+      try {
+        if (searchTerm.trim().length > 1) {
+          const contacts = await fetchContactOptions($workspaceStore.currentWorkspace.id, searchTerm);
+          contactOptions.set(contacts);
+          console.log("Fetched contacts for search:", searchTerm, contacts.length);
+        } else {
+          contactOptions.set([]);
+        }
+      } catch (error) {
+        console.error('Error searching contacts:', error);
       }
     }
     
@@ -177,248 +181,56 @@
         errors.set({});
         
         try {
-            // Log what we're sending to check data structure
-            console.log('Submitting form data:', {
+            // Prepare the business data for the API
+            const businessData = {
+                workspaceId: $workspaceStore.currentWorkspace?.id,
                 business: {
                     business_name: $formData.business_name,
-                    status: $formData.status,
-                    workspace_id: $workspaceStore.currentWorkspace?.id
+                    status: $formData.status
                 },
-                phones: $formData.phones.filter(p => p.phone_number.trim()),
-                addresses: $formData.addresses.filter(addr => addr.street_address && addr.city && addr.state_id && addr.zip_code),
-                socialMedia: $formData.socialMedia.filter(s => s.social_media_account.trim()),
-                employees: $employees.filter(e => e.contact_id),
+                phoneNumbers: $formData.phones
+                    .filter(p => p.phone_number.trim())
+                    .map(phone => ({
+                        phone_number: phone.phone_number,
+                        status: phone.status || 'active'
+                    })),
+                addresses: $formData.addresses
+                    .filter(addr => addr.street_address && addr.city && addr.state_id && addr.zip_code)
+                    .map(address => ({
+                        street_address: address.street_address,
+                        secondary_street_address: address.secondary_street_address || '',
+                        city: address.city,
+                        state_id: address.state_id,
+                        zip_code: address.zip_code,
+                        status: address.status || 'active'
+                    })),
+                socialMedia: $formData.socialMedia
+                    .filter(s => s.social_media_account.trim())
+                    .map(social => ({
+                        social_media_account: social.social_media_account,
+                        service_type: social.service_type,
+                        status: social.status || 'active'
+                    })),
+                employees: $employees
+                    .filter(e => e.contact_id)
+                    .map(employee => ({
+                        contact_id: employee.contact_id,
+                        status: employee.status || 'active'
+                    })),
                 tags: $tags
-            });
-            
-            // Ensure we have the workspace_id for all operations
-            if (!$workspaceStore.currentWorkspace?.id) {
-                toastStore.error('No workspace selected. Please select a workspace first.');
-                throw new Error('No workspace selected');
-            }
-            
-            // Create business
-            const { data: business, error: businessError } = await supabase
-                .from('businesses')
-                .insert({
-                    business_name: $formData.business_name,
-                    status: $formData.status,
-                    workspace_id: $workspaceStore.currentWorkspace?.id
-                })
-                .select()
-                .single();
-            
-            if (businessError) throw businessError;
-            
-            console.log('Business created:', business);
-            
-            // Arrays to track created relationships
-            const createdRelationships = {
-                phones: [],
-                addresses: [],
-                socialMedia: [],
-                employees: [],
-                tags: []
             };
             
-            // Handle phone numbers (multiple)
-            const phonePromises = $formData.phones
-                .filter(phone => phone.phone_number.trim())
-                .map(async phone => {
-                    const { data, error } = await supabase
-                        .from('business_phone_numbers')
-                        .insert({
-                          business_id: business.id,
-                          phone_number: phone.phone_number,
-                          status: phone.status || 'active'
-                        })
-                        .select();
-                    
-                    if (error) {
-                        console.error('Error saving phone number:', error);
-                        return { success: false, error };
-                    }
-                    
-                    createdRelationships.phones.push(data[0]);
-                    return { success: true, data };
-                });
+            console.log('Submitting business data:', businessData);
             
-            // Handle addresses (multiple)
-            const addressPromises = [];
-            for (const addr of $formData.addresses.filter(addr => addr.street_address && addr.city && addr.state_id && addr.zip_code)) {
-                try {
-                    // First, look up the zip code ID or create it if needed
-                    let zipCodeId;
-                    
-                    try {
-                        // Check if the zip code exists
-                        const { data: existingZip, error: zipLookupError } = await supabase
-                            .from('zip_codes')
-                            .select('id')
-                            .eq('name', addr.zip_code)
-                            .maybeSingle();
-                        
-                        if (!zipLookupError && existingZip) {
-                            zipCodeId = existingZip.id;
-                        } else {
-                            // Zip code doesn't exist, create it
-                            console.log(`Creating new zip code for: ${addr.zip_code}`);
-                            const { data: newZip, error: createZipError } = await supabase
-                                .from('zip_codes')
-                                .insert({ name: addr.zip_code })
-                                .select()
-                                .single();
-                                
-                            if (createZipError) {
-                                console.error('Error creating zip code:', createZipError);
-                                continue; // Skip this address
-                            }
-                            
-                            zipCodeId = newZip.id;
-                        }
-                    } catch (zipError) {
-                        console.error('Exception in zip code lookup/creation:', zipError);
-                        continue; // Skip this address
-                    }
-                    
-                    // Now create the address with the proper zip_code_id
-                    const { data, error } = await supabase
-                        .from('business_addresses')
-                        .insert({
-                          business_id: business.id,
-                          street_address: addr.street_address,
-                          secondary_street_address: addr.secondary_street_address || null,
-                          city: addr.city,
-                          state_id: addr.state_id,
-                          zip_code_id: zipCodeId,
-                          status: addr.status || 'active'
-                        })
-                        .select();
-                    
-                    if (error) {
-                        console.error('Error saving address:', error);
-                    } else if (data) {
-                        createdRelationships.addresses.push(data[0]);
-                    }
-                } catch (err) {
-                    console.error('Exception while creating address:', err);
-                }
-            }
+            // Use the business service to create the business
+            const newBusiness = await createBusiness(businessData);
             
-            // Handle social media (multiple)
-            const socialMediaPromises = $formData.socialMedia
-                .filter(social => social.social_media_account.trim())
-                .map(async social => {
-                    const { data, error } = await supabase
-                        .from('business_social_media_accounts')
-                        .insert({
-                          business_id: business.id,
-                          social_media_account: social.social_media_account,
-                          service_type: social.service_type,
-                          status: social.status || 'active'
-                        })
-                        .select();
-                    
-                    if (error) {
-                        console.error('Error saving social media account:', error);
-                        return { success: false, error };
-                    }
-                    
-                    createdRelationships.socialMedia.push(data[0]);
-                    return { success: true, data };
-                });
-                
-            // Handle employees (multiple)
-            const employeePromises = $employees
-                .filter(employee => employee.contact_id)
-                .map(async employee => {
-                    const { data, error } = await supabase
-                        .from('business_employees')
-                        .insert({
-                          business_id: business.id,
-                          contact_id: employee.contact_id,
-                          status: employee.status || 'active'
-                        })
-                        .select();
-                    
-                    if (error) {
-                        console.error('Error saving employee:', error);
-                        return { success: false, error };
-                    }
-                    
-                    createdRelationships.employees.push(data[0]);
-                    return { success: true, data };
-                });
+            // Success toast and reset form
+            toastStore.success('Business created successfully!');
+            resetForm();
             
-            // Handle tags
-            const tagPromises = $tags.length > 0
-                ? $tags.map(async tag => {
-                    const { data, error } = await supabase
-                        .from('business_tags')
-                        .insert({
-                          business_id: business.id,
-                          tag
-                        })
-                        .select();
-                    
-                    if (error) {
-                        console.error('Error saving tag:', error);
-                        return { success: false, error };
-                    }
-                    
-                    createdRelationships.tags.push(data[0]);
-                    return { success: true, data };
-                })
-                : [];
-            
-            // Execute all promises
-            const phoneResults = await Promise.allSettled(phonePromises);
-            // addressPromises is already handled with await in the loop
-            const socialMediaResults = await Promise.allSettled(socialMediaPromises);
-            const employeeResults = await Promise.allSettled(employeePromises);
-            const tagResults = await Promise.allSettled(tagPromises);
-            
-            // Log the results to see what happened
-            console.log('Created relationships:', {
-                phones: createdRelationships.phones,
-                addresses: createdRelationships.addresses,
-                socialMedia: createdRelationships.socialMedia,
-                employees: createdRelationships.employees,
-                tags: createdRelationships.tags
-            });
-            
-            // Check for any errors
-            const allResults = [
-                ...phoneResults,
-                ...socialMediaResults,
-                ...employeeResults,
-                ...tagResults
-            ];
-            
-            const errors = allResults
-                .filter(result => result.status === 'rejected' || (result.status === 'fulfilled' && !result.value.success))
-                .map(result => {
-                    if (result.status === 'rejected') {
-                        return result.reason;
-                    } else {
-                        return (result.value as any).error;
-                    }
-                });
-            
-            if (errors.length > 0) {
-                console.error('Some operations failed:', errors);
-                toastStore.warning('Business created but some details could not be saved');
-            } else {
-                // Success toast and reset form
-                toastStore.success('Business created successfully!');
-                resetForm();
-            }
-            
-            // Emit success event with created business and relationships
-            dispatch('success', {
-                business,
-                relationships: createdRelationships
-            });
+            // Emit success event with created business
+            dispatch('success', newBusiness);
             
             // Close modal
             handleClose();
@@ -485,6 +297,13 @@
     $: if ($tagInput !== undefined) {
       handleTagInputChange();
     }
+    
+    // Make sure we fetch options on mount too
+    onMount(() => {
+      if (isOpen) {
+        fetchOptions();
+      }
+    });
 </script>
 
 <Modal {isOpen} title="Add New Business" on:close={handleClose}>
@@ -525,6 +344,7 @@
       {errors}
       {isSubmitting}
       {contactOptions}
+      on:searchContacts={(e) => searchContacts(e.detail)}
     />
     
     <BusinessTags

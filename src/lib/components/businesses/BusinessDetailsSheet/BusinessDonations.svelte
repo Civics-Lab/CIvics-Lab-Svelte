@@ -5,10 +5,11 @@
   import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
   import { toastStore } from '$lib/stores/toastStore';
   import type { TypedSupabaseClient } from '$lib/types/supabase';
+  import { fetchBusinessDonations } from '$lib/services/donationService';
   
   // Props
   export let businessId: string;
-  export let supabase: TypedSupabaseClient;
+  export let supabase: TypedSupabaseClient; // Still needed for backwards compatibility
   export let isSaving: boolean = false;
   
   const dispatch = createEventDispatcher();
@@ -47,19 +48,22 @@
     error.set(null);
     
     try {
-      // Fetch donations for this business
-      const { data, error: fetchError } = await supabase
-        .from('donations')
-        .select('*')
-        .eq('business_id', businessId)
-        .order('created_at', { ascending: false });
+      // Use the donation service instead of direct API call
+      const data = await fetchBusinessDonations(businessId);
       
-      if (fetchError) throw fetchError;
-      
-      if (data) {
+      if (data && data.length > 0) {
+        // Map data to the expected format
         const donationsWithFormattedDates = data.map(donation => ({
-          ...donation,
-          formattedDate: formatDate(donation.created_at),
+          id: donation.id,
+          amount: donation.amount,
+          status: donation.status,
+          notes: donation.notes,
+          payment_type: donation.paymentType,
+          business_id: donation.businessId,
+          contact_id: donation.contactId,
+          created_at: donation.createdAt,
+          updated_at: donation.updatedAt,
+          formattedDate: formatDate(donation.createdAt),
           formattedAmount: formatCurrency(donation.amount)
         }));
         
@@ -96,7 +100,7 @@
       
     } catch (err) {
       console.error('Error fetching donations:', err);
-      error.set('Failed to load donations');
+      error.set(err.message || 'Failed to load donations');
     } finally {
       isLoading.set(false);
     }
