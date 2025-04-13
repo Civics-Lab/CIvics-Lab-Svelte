@@ -33,21 +33,40 @@ export const authService = {
    */
   async login({ username, password }: LoginData) {
     try {
+      console.log(`Attempting login for username: ${username}`);
+      
+      // Debug: Check if db is properly initialized
+      console.log('Database connection status:', !!db);
+      
       // Find user by username
-      const [user] = await db.select().from(users).where(eq(users.username, username));
+      console.log('Querying user from database...');
+      const userResults = await db.select().from(users).where(eq(users.username, username));
+      console.log(`Found ${userResults.length} matching users`);
+      
+      const [user] = userResults;
       
       if (!user) {
+        console.log('No user found with that username');
         throw new Error('Invalid credentials');
       }
       
+      // Debug: Log user object (without password)
+      const userDebug = { ...user };
+      delete userDebug.passwordHash;
+      console.log('User found:', JSON.stringify(userDebug));
+      
       // Verify password
+      console.log('Verifying password...');
       const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+      console.log('Password valid:', isPasswordValid);
       
       if (!isPasswordValid) {
+        console.log('Password verification failed');
         throw new Error('Invalid credentials');
       }
       
       // Update last login time
+      console.log('Updating last login time...');
       await db.update(users)
         .set({ lastLoginAt: new Date() })
         .where(eq(users.id, user.id));
@@ -60,7 +79,9 @@ export const authService = {
         role: user.role
       };
       
+      console.log('Generating JWT token...');
       const token = await this.generateToken(payload);
+      console.log('Token generated successfully');
       
       return {
         token,
@@ -73,7 +94,13 @@ export const authService = {
         }
       };
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('Login error details:', error);
+      
+      // Add stack trace for better debugging
+      if (error instanceof Error) {
+        console.error('Error stack:', error.stack);
+      }
+      
       throw error;
     }
   },
@@ -83,6 +110,8 @@ export const authService = {
    */
   async signup({ email, username, password, displayName, inviteToken }: SignupData) {
     try {
+      console.log(`Attempting signup for username: ${username}, email: ${email}`);
+      
       // Check if username or email already exists
       const existingUser = await db.select().from(users)
         .where(or(
@@ -90,14 +119,19 @@ export const authService = {
           eq(users.email, email)
         ));
         
+      console.log(`Found ${existingUser.length} existing users with same username/email`);
+      
       if (existingUser.length > 0) {
         throw new Error('Username or email already exists');
       }
       
       // Hash password
+      console.log('Hashing password...');
       const passwordHash = await bcrypt.hash(password, 10);
+      console.log('Password hashed successfully');
       
       // Create new user
+      console.log('Creating new user...');
       const [newUser] = await db.insert(users)
         .values({
           email,
@@ -114,19 +148,24 @@ export const authService = {
           role: users.role
         });
       
+      console.log('User created successfully:', JSON.stringify(newUser));
+      
       let acceptedInvites = [];
       let pendingInvites = [];
       
       // Check for an invite token if provided
       if (inviteToken) {
+        console.log(`Processing invite token: ${inviteToken}`);
         const invite = await db.query.userInvites.findFirst({
           where: eq(userInvites.token, inviteToken)
         });
         
         if (invite) {
+          console.log('Found invite:', JSON.stringify(invite));
           // Verify the invite is for this email
           if (invite.email.toLowerCase() === email.toLowerCase()) {
             // Update invite status to accepted
+            console.log('Accepting invite...');
             await db.update(userInvites)
               .set({ 
                 status: 'Accepted',
@@ -135,6 +174,7 @@ export const authService = {
               .where(eq(userInvites.id, invite.id));
             
             // Create user-workspace relationship
+            console.log('Adding user to workspace...');
             await db.insert(userWorkspaces)
               .values({
                 userId: newUser.id,
@@ -143,11 +183,13 @@ export const authService = {
               });
             
             acceptedInvites.push(invite);
+            console.log('Invite processed successfully');
           }
         }
       }
       
       // Check for any other pending invites for this email
+      console.log('Checking for other pending invites...');
       pendingInvites = await db.select()
         .from(userInvites)
         .where(
@@ -157,11 +199,15 @@ export const authService = {
           )
         );
       
+      console.log(`Found ${pendingInvites.length} additional pending invites`);
+      
       // Accept all other pending invites for this email
       if (pendingInvites.length > 0) {
         for (const invite of pendingInvites) {
           // Skip the one we already processed
           if (invite.token === inviteToken) continue;
+          
+          console.log(`Processing additional invite: ${invite.id}`);
           
           // Update invite status to accepted
           await db.update(userInvites)
@@ -180,10 +226,12 @@ export const authService = {
             });
           
           acceptedInvites.push(invite);
+          console.log('Additional invite processed successfully');
         }
       }
       
       // Generate JWT
+      console.log('Generating JWT token...');
       const payload = {
         id: newUser.id,
         username: newUser.username,
@@ -192,6 +240,7 @@ export const authService = {
       };
       
       const token = await this.generateToken(payload);
+      console.log('Token generated successfully');
       
       return {
         token,
@@ -200,7 +249,13 @@ export const authService = {
         hasAcceptedInvites: acceptedInvites.length > 0
       };
     } catch (error) {
-      console.error('Signup error:', error);
+      console.error('Signup error details:', error);
+      
+      // Add stack trace for better debugging
+      if (error instanceof Error) {
+        console.error('Error stack:', error.stack);
+      }
+      
       throw error;
     }
   },
@@ -209,28 +264,36 @@ export const authService = {
    * Generate JWT token
    */
   async generateToken(payload: Omit<JwtPayload, 'iat' | 'exp'>, expiresIn: string = '7d') {
-    // Calculate expiration time
-    const now = Math.floor(Date.now() / 1000);
-    let expiration: number;
-    
-    if (expiresIn === '7d') {
-      expiration = now + (7 * 24 * 60 * 60); // 7 days
-    } else if (expiresIn === '1d') {
-      expiration = now + (24 * 60 * 60); // 1 day
-    } else if (expiresIn === '1h') {
-      expiration = now + (60 * 60); // 1 hour
-    } else {
-      expiration = now + (7 * 24 * 60 * 60); // Default to 7 days
+    try {
+      // Calculate expiration time
+      const now = Math.floor(Date.now() / 1000);
+      let expiration: number;
+      
+      if (expiresIn === '7d') {
+        expiration = now + (7 * 24 * 60 * 60); // 7 days
+      } else if (expiresIn === '1d') {
+        expiration = now + (24 * 60 * 60); // 1 day
+      } else if (expiresIn === '1h') {
+        expiration = now + (60 * 60); // 1 hour
+      } else {
+        expiration = now + (7 * 24 * 60 * 60); // Default to 7 days
+      }
+      
+      // Create token with expiration
+      const tokenPayload = {
+        ...payload,
+        iat: now,
+        exp: expiration
+      };
+      
+      // Debug JWT secret (don't log the actual secret)
+      console.log('JWT Secret length:', env.JWT_SECRET?.length || 0);
+      
+      return sign(tokenPayload, env.JWT_SECRET);
+    } catch (error) {
+      console.error('Token generation error:', error);
+      throw error;
     }
-    
-    // Create token with expiration
-    const tokenPayload = {
-      ...payload,
-      iat: now,
-      exp: expiration
-    };
-    
-    return sign(tokenPayload, env.JWT_SECRET);
   },
   
   /**
@@ -238,9 +301,12 @@ export const authService = {
    */
   async validateToken(token: string): Promise<JwtPayload> {
     try {
+      console.log('Validating token...');
       const payload = await verify(token, env.JWT_SECRET);
+      console.log('Token validated successfully');
       return payload as JwtPayload;
     } catch (error) {
+      console.error('Token validation error:', error);
       throw new Error('Invalid token');
     }
   }
