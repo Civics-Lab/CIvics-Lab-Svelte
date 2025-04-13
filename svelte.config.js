@@ -18,10 +18,6 @@ const config = {
 				privatePrefix: ''
 			},
 			
-			// Set to true for Edge Functions deployment
-			// or 'nodejs' for Node.js Functions
-			edge: false,
-			
 			// Always external allows for proper handling of server dependencies
 			external: ['postgres', 'drizzle-orm']
 		})
