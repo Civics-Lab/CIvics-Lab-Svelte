@@ -3,7 +3,8 @@ import { eq, or, and } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { users, userInvites, userWorkspaces } from '$lib/db/drizzle/schema';
 import { env } from '$env/dynamic/private';
-import { sign, verify } from 'hono/jwt';
+// Import node-compatible crypto functions instead of browser APIs
+import crypto from 'crypto';
 
 export interface LoginData {
   username: string;
@@ -26,6 +27,56 @@ export interface JwtPayload {
   iat?: number;
   exp?: number;
 }
+
+// Simple JWT implementation without requiring WebCrypto
+const jwt = {
+  sign: (payload: any, secret: string): string => {
+    const header = {
+      alg: 'HS256',
+      typ: 'JWT'
+    };
+    
+    const encodedHeader = Buffer.from(JSON.stringify(header)).toString('base64url');
+    const encodedPayload = Buffer.from(JSON.stringify(payload)).toString('base64url');
+    
+    const signature = crypto
+      .createHmac('sha256', secret)
+      .update(`${encodedHeader}.${encodedPayload}`)
+      .digest('base64url');
+    
+    return `${encodedHeader}.${encodedPayload}.${signature}`;
+  },
+  
+  verify: (token: string, secret: string): any => {
+    const [headerB64, payloadB64, signatureB64] = token.split('.');
+    
+    if (!headerB64 || !payloadB64 || !signatureB64) {
+      throw new Error('Invalid token format');
+    }
+    
+    const expectedSignature = crypto
+      .createHmac('sha256', secret)
+      .update(`${headerB64}.${payloadB64}`)
+      .digest('base64url');
+    
+    if (expectedSignature !== signatureB64) {
+      throw new Error('Invalid signature');
+    }
+    
+    try {
+      const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString());
+      
+      // Check expiration
+      if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+        throw new Error('Token expired');
+      }
+      
+      return payload;
+    } catch (error) {
+      throw new Error('Invalid token payload');
+    }
+  }
+};
 
 export const authService = {
   /**
@@ -289,7 +340,8 @@ export const authService = {
       // Debug JWT secret (don't log the actual secret)
       console.log('JWT Secret length:', env.JWT_SECRET?.length || 0);
       
-      return sign(tokenPayload, env.JWT_SECRET);
+      // Use Node.js-friendly JWT implementation
+      return jwt.sign(tokenPayload, env.JWT_SECRET);
     } catch (error) {
       console.error('Token generation error:', error);
       throw error;
@@ -302,7 +354,8 @@ export const authService = {
   async validateToken(token: string): Promise<JwtPayload> {
     try {
       console.log('Validating token...');
-      const payload = await verify(token, env.JWT_SECRET);
+      // Use Node.js-friendly JWT verification
+      const payload = jwt.verify(token, env.JWT_SECRET);
       console.log('Token validated successfully');
       return payload as JwtPayload;
     } catch (error) {
