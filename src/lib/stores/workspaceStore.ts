@@ -1,7 +1,6 @@
 // src/lib/stores/workspaceStore.ts
 import { writable } from 'svelte/store';
 import type { Workspace } from '$lib/types/supabase';
-import type { TypedSupabaseClient } from '$lib/types/supabase';
 import { fetchUserWorkspaces } from '$lib/services/workspaceService';
 
 interface WorkspaceState {
@@ -114,8 +113,31 @@ function createWorkspaceStore() {
       set(initialState);
     },
     
+    // Update the current workspace with new data
+    updateCurrentWorkspace: (updates: Partial<Workspace>) => {
+      update(state => {
+        if (!state.currentWorkspace) return state;
+        
+        const updatedWorkspace = {
+          ...state.currentWorkspace,
+          ...updates
+        };
+        
+        // Also update the workspace in the workspaces array
+        const updatedWorkspaces = state.workspaces.map(w => 
+          w.id === updatedWorkspace.id ? updatedWorkspace : w
+        );
+        
+        return {
+          ...state,
+          currentWorkspace: updatedWorkspace,
+          workspaces: updatedWorkspaces
+        };
+      });
+    },
+    
     // Refresh workspaces from the database using the API
-    refreshWorkspaces: async (supabase?: TypedSupabaseClient) => {
+    refreshWorkspaces: async () => {
       update(state => ({ ...state, isLoading: true, error: null }));
       
       try {
@@ -144,11 +166,13 @@ function createWorkspaceStore() {
           let currentWorkspace = null;
           
           if (savedWorkspaceId) {
-            // Try to find the workspace with the saved ID
-            currentWorkspace = fetchedWorkspaces.find(w => w.id === savedWorkspaceId);
-            console.log("Using workspace from localStorage:", 
-              currentWorkspace ? { id: currentWorkspace.id, name: currentWorkspace.name } : "Not found");
-          }
+          // Try to find the workspace with the saved ID
+          currentWorkspace = fetchedWorkspaces.find(w => w.id === savedWorkspaceId);
+          console.log("Using workspace from localStorage:", 
+          currentWorkspace ? 
+                { id: currentWorkspace.id, name: currentWorkspace.name, hasLogo: !!currentWorkspace.logo } : 
+          "Not found");
+    }
           
           // If no valid workspace was found from localStorage, use the current one if it exists
           if (!currentWorkspace && state.currentWorkspace) {

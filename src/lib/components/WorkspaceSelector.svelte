@@ -4,19 +4,17 @@
   import { workspaceStore } from '$lib/stores/workspaceStore';
   import type { Workspace } from '$lib/types/supabase';
   import LoadingSpinner from './LoadingSpinner.svelte';
+  import WorkspaceLogo from './WorkspaceLogo.svelte';
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   
   // Local state for popover
   const isOpen = writable(false);
   
-  // Export supabase client if it's provided
-  export let supabase = undefined;
-  
   // Ensure the workspaces are loaded when the component mounts
   onMount(() => {
-    if (supabase && (!$workspaceStore.workspaces || $workspaceStore.workspaces.length === 0)) {
-      workspaceStore.refreshWorkspaces(supabase);
+    if (!$workspaceStore.workspaces || $workspaceStore.workspaces.length === 0) {
+      workspaceStore.refreshWorkspaces();
     }
   });
   
@@ -62,18 +60,23 @@
     class="flex items-center space-x-2 px-4 py-2 bg-white border rounded-lg shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
     on:click={togglePopover}
   >
-    <span class="flex-1 text-left truncate max-w-[200px] flex items-center">
-      {#if $workspaceStore.isLoading}
-        <LoadingSpinner size="sm" color="gray" />
-        <span class="ml-2">Loading...</span>
-      {:else if $workspaceStore.currentWorkspace}
+    {#if $workspaceStore.isLoading}
+      <LoadingSpinner size="sm" color="gray" />
+      <span class="ml-2 flex-1 text-left">Loading...</span>
+    {:else if $workspaceStore.currentWorkspace}
+      <WorkspaceLogo 
+        logo={$workspaceStore.currentWorkspace.logo} 
+        name={$workspaceStore.currentWorkspace.name} 
+        size="sm" 
+      />
+      <span class="flex-1 text-left truncate max-w-[180px] ml-2">
         {$workspaceStore.currentWorkspace.name}
-      {:else if $workspaceStore.error}
-        Error loading workspaces
-      {:else}
-        Select Workspace
-      {/if}
-    </span>
+      </span>
+    {:else if $workspaceStore.error}
+      <span class="flex-1 text-left">Error loading workspaces</span>
+    {:else}
+      <span class="flex-1 text-left">Select Workspace</span>
+    {/if}
     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
       <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
     </svg>
@@ -100,7 +103,14 @@
               class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 {$workspaceStore.currentWorkspace?.id === workspace.id ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'}"
               on:click={() => selectWorkspace(workspace)}
             >
-              {workspace.name}
+              <div class="flex items-center">
+                <WorkspaceLogo 
+                  logo={workspace.logo} 
+                  name={workspace.name} 
+                  size="sm" 
+                />
+                <span class="ml-2 truncate">{workspace.name}</span>
+              </div>
             </button>
           {/each}
         {/if}

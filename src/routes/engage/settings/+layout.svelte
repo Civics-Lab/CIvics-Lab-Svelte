@@ -5,7 +5,6 @@
     import type { LayoutData } from './$types';
     
     export let data: LayoutData;
-    $: ({ supabase } = data);
   
     // Define the sidebar navigation structure
     const settingsNav = [

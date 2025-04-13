@@ -1,4 +1,4 @@
-// src/routes/engage/settings/workspace/+page.server.ts
+// src/routes/engage/settings/workspace/general/+page.server.ts
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 

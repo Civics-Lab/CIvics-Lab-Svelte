@@ -4,6 +4,16 @@ import type { Handle } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { db, workspaces } from '$lib/db/drizzle';
 import { eq } from 'drizzle-orm';
+import { runAutoMigrations } from '$lib/db/auto-migrate';
+
+// Run auto-migrations when server starts
+runAutoMigrations().then(success => {
+  if (success) {
+    console.log('Auto-migrations completed successfully');
+  } else {
+    console.error('Failed to run auto-migrations');
+  }
+});
 
 export const handle: Handle = async ({ event, resolve }) => {
   // Initialize user auth state

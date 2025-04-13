@@ -32,6 +32,7 @@ export const users = pgTable('users', {
 export const workspaces = pgTable('workspaces', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
+  logo: text('logo'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
   createdById: uuid('created_by').references(() => users.id)

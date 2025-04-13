@@ -6,33 +6,45 @@ import type { RequestHandler } from './$types';
 
 // GET /api/workspaces - Get all workspaces for the current user
 export const GET: RequestHandler = async ({ locals }) => {
+  console.log('API: GET /api/workspaces - Start');
   // Get the authenticated user from locals
   const user = locals.user;
   
   if (!user) {
+    console.error('No authenticated user found in locals');
     throw error(401, 'Authentication required');
   }
+  
+  console.log('API: Getting workspaces for user:', user.id);
+  
   // We don't use verifyWorkspaceAccess here because we're getting all workspaces for the user
   
   try {
     // First, get all workspace IDs the user has access to
+    console.log('Querying user_workspaces for user:', user.id);
     const userWorkspaceData = await db
       .select({ workspaceId: userWorkspaces.workspaceId, role: userWorkspaces.role })
       .from(userWorkspaces)
       .where(eq(userWorkspaces.userId, user.id));
     
+    console.log('Found user workspaces:', userWorkspaceData);
+    
     if (!userWorkspaceData.length) {
+      console.log('No workspaces found for user:', user.id);
       return json({ workspaces: [] });
     }
     
     // Extract workspace IDs
     const workspaceIds = userWorkspaceData.map(uw => uw.workspaceId);
+    console.log('Workspace IDs to fetch:', workspaceIds);
     
     // Fetch the actual workspace data
     const workspaceData = await db
       .select()
       .from(workspaces)
       .where(inArray(workspaces.id, workspaceIds));
+    
+    console.log('Fetched workspace data:', workspaceData.map(ws => ({ id: ws.id, name: ws.name })));
     
     // Combine workspace data with user roles
     const enrichedWorkspaces = workspaceData.map(workspace => {
@@ -43,9 +55,16 @@ export const GET: RequestHandler = async ({ locals }) => {
       };
     });
     
+    console.log('Returning enriched workspaces:', 
+      enrichedWorkspaces.map(ws => ({ id: ws.id, name: ws.name, role: ws.userRole })));
+    
     return json({ workspaces: enrichedWorkspaces });
   } catch (err) {
     console.error('Error fetching workspaces:', err);
+    if (err instanceof Error) {
+      console.error('Error details:', err.message);
+      console.error('Error stack:', err.stack);
+    }
     throw error(500, 'Failed to fetch workspaces');
   }
 };
