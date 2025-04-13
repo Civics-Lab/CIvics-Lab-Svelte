@@ -1,5 +1,6 @@
 import { eq, and } from 'drizzle-orm';
-import { db, users, workspaces, workspaceUsers, contacts, businesses, donations } from '$lib/db/drizzle';
+import { db } from '$lib/server/db';
+import { users, workspaces, userWorkspaces, contacts, businesses, donations } from '$lib/db/drizzle/schema';
 
 export const resolvers = {
   Query: {
@@ -25,12 +26,12 @@ export const resolvers = {
       // Regular users can only view users in their workspaces
       const [user] = await db.select().from(users)
         .where(eq(users.id, id))
-        .innerJoin(workspaceUsers, eq(workspaceUsers.userId, users.id))
+        .innerJoin(userWorkspaces, eq(userWorkspaces.userId, users.id))
         .innerJoin(
-          workspaceUsers,
+          userWorkspaces,
           and(
-            eq(workspaceUsers.workspaceId, workspaceUsers.workspaceId),
-            eq(workspaceUsers.userId, userId)
+            eq(userWorkspaces.workspaceId, userWorkspaces.workspaceId),
+            eq(userWorkspaces.userId, userId)
           )
         );
       
@@ -42,11 +43,11 @@ export const resolvers = {
       if (!userId) throw new Error('Authentication required');
       
       // Check if user has access to workspace
-      const userWorkspace = await db.select().from(workspaceUsers)
+      const userWorkspace = await db.select().from(userWorkspaces)
         .where(
           and(
-            eq(workspaceUsers.workspaceId, workspaceId),
-            eq(workspaceUsers.userId, userId)
+            eq(userWorkspaces.workspaceId, workspaceId),
+            eq(userWorkspaces.userId, userId)
           )
         );
       
@@ -60,10 +61,10 @@ export const resolvers = {
       })
       .from(users)
       .innerJoin(
-        workspaceUsers,
+        userWorkspaces,
         and(
-          eq(workspaceUsers.userId, users.id),
-          eq(workspaceUsers.workspaceId, workspaceId)
+          eq(userWorkspaces.userId, users.id),
+          eq(userWorkspaces.workspaceId, workspaceId)
         )
       );
       
@@ -76,11 +77,11 @@ export const resolvers = {
       if (!userId) throw new Error('Authentication required');
       
       // Check if user has access to workspace
-      const userWorkspace = await db.select().from(workspaceUsers)
+      const userWorkspace = await db.select().from(userWorkspaces)
         .where(
           and(
-            eq(workspaceUsers.workspaceId, id),
-            eq(workspaceUsers.userId, userId)
+            eq(userWorkspaces.workspaceId, id),
+            eq(userWorkspaces.userId, userId)
           )
         );
       
@@ -102,10 +103,10 @@ export const resolvers = {
       })
       .from(workspaces)
       .innerJoin(
-        workspaceUsers,
+        userWorkspaces,
         and(
-          eq(workspaceUsers.workspaceId, workspaces.id),
-          eq(workspaceUsers.userId, userId)
+          eq(userWorkspaces.workspaceId, workspaces.id),
+          eq(userWorkspaces.userId, userId)
         )
       );
       
@@ -124,11 +125,11 @@ export const resolvers = {
       }
       
       // Check if user has access to contact's workspace
-      const userWorkspace = await db.select().from(workspaceUsers)
+      const userWorkspace = await db.select().from(userWorkspaces)
         .where(
           and(
-            eq(workspaceUsers.workspaceId, contact.workspaceId),
-            eq(workspaceUsers.userId, userId)
+            eq(userWorkspaces.workspaceId, contact.workspaceId),
+            eq(userWorkspaces.userId, userId)
           )
         );
       
@@ -144,11 +145,11 @@ export const resolvers = {
       if (!userId) throw new Error('Authentication required');
       
       // Check if user has access to workspace
-      const userWorkspace = await db.select().from(workspaceUsers)
+      const userWorkspace = await db.select().from(userWorkspaces)
         .where(
           and(
-            eq(workspaceUsers.workspaceId, workspaceId),
-            eq(workspaceUsers.userId, userId)
+            eq(userWorkspaces.workspaceId, workspaceId),
+            eq(userWorkspaces.userId, userId)
           )
         );
       
@@ -171,11 +172,11 @@ export const resolvers = {
       }
       
       // Check if user has access to business's workspace
-      const userWorkspace = await db.select().from(workspaceUsers)
+      const userWorkspace = await db.select().from(userWorkspaces)
         .where(
           and(
-            eq(workspaceUsers.workspaceId, business.workspaceId),
-            eq(workspaceUsers.userId, userId)
+            eq(userWorkspaces.workspaceId, business.workspaceId),
+            eq(userWorkspaces.userId, userId)
           )
         );
       
@@ -191,11 +192,11 @@ export const resolvers = {
       if (!userId) throw new Error('Authentication required');
       
       // Check if user has access to workspace
-      const userWorkspace = await db.select().from(workspaceUsers)
+      const userWorkspace = await db.select().from(userWorkspaces)
         .where(
           and(
-            eq(workspaceUsers.workspaceId, workspaceId),
-            eq(workspaceUsers.userId, userId)
+            eq(userWorkspaces.workspaceId, workspaceId),
+            eq(userWorkspaces.userId, userId)
           )
         );
       
@@ -218,11 +219,11 @@ export const resolvers = {
       }
       
       // Check if user has access to donation's workspace
-      const userWorkspace = await db.select().from(workspaceUsers)
+      const userWorkspace = await db.select().from(userWorkspaces)
         .where(
           and(
-            eq(workspaceUsers.workspaceId, donation.workspaceId),
-            eq(workspaceUsers.userId, userId)
+            eq(userWorkspaces.workspaceId, donation.workspaceId),
+            eq(userWorkspaces.userId, userId)
           )
         );
       
@@ -238,11 +239,11 @@ export const resolvers = {
       if (!userId) throw new Error('Authentication required');
       
       // Check if user has access to workspace
-      const userWorkspace = await db.select().from(workspaceUsers)
+      const userWorkspace = await db.select().from(userWorkspaces)
         .where(
           and(
-            eq(workspaceUsers.workspaceId, workspaceId),
-            eq(workspaceUsers.userId, userId)
+            eq(userWorkspaces.workspaceId, workspaceId),
+            eq(userWorkspaces.userId, userId)
           )
         );
       
@@ -271,7 +272,7 @@ export const resolvers = {
         .returning();
       
       // Add owner as member
-      await db.insert(workspaceUsers)
+      await db.insert(userWorkspaces)
         .values({
           workspaceId: workspace.id,
           userId,
@@ -326,7 +327,7 @@ export const resolvers = {
       }
       
       // Delete all related records (cascade)
-      await db.delete(workspaceUsers).where(eq(workspaceUsers.workspaceId, id));
+      await db.delete(userWorkspaces).where(eq(userWorkspaces.workspaceId, id));
       await db.delete(contacts).where(eq(contacts.workspaceId, id));
       await db.delete(businesses).where(eq(businesses.workspaceId, id));
       await db.delete(donations).where(eq(donations.workspaceId, id));
@@ -348,11 +349,11 @@ export const resolvers = {
         throw new Error('Workspace not found');
       }
       
-      const [userRole] = await db.select().from(workspaceUsers)
+      const [userRole] = await db.select().from(userWorkspaces)
         .where(
           and(
-            eq(workspaceUsers.workspaceId, workspaceId),
-            eq(workspaceUsers.userId, userId)
+            eq(userWorkspaces.workspaceId, workspaceId),
+            eq(userWorkspaces.userId, userId)
           )
         );
       
@@ -369,11 +370,11 @@ export const resolvers = {
       }
       
       // Check if user is already a member
-      const existingMember = await db.select().from(workspaceUsers)
+      const existingMember = await db.select().from(userWorkspaces)
         .where(
           and(
-            eq(workspaceUsers.workspaceId, workspaceId),
-            eq(workspaceUsers.userId, input.userId)
+            eq(userWorkspaces.workspaceId, workspaceId),
+            eq(userWorkspaces.userId, input.userId)
           )
         );
       
@@ -382,7 +383,7 @@ export const resolvers = {
       }
       
       // Add member
-      const [newMember] = await db.insert(workspaceUsers)
+      const [newMember] = await db.insert(userWorkspaces)
         .values({
           workspaceId,
           userId: input.userId,
@@ -404,11 +405,11 @@ export const resolvers = {
         throw new Error('Workspace not found');
       }
       
-      const [userRole] = await db.select().from(workspaceUsers)
+      const [userRole] = await db.select().from(userWorkspaces)
         .where(
           and(
-            eq(workspaceUsers.workspaceId, workspaceId),
-            eq(workspaceUsers.userId, userId)
+            eq(userWorkspaces.workspaceId, workspaceId),
+            eq(userWorkspaces.userId, userId)
           )
         );
       
@@ -423,11 +424,11 @@ export const resolvers = {
       }
       
       // Remove member
-      await db.delete(workspaceUsers)
+      await db.delete(userWorkspaces)
         .where(
           and(
-            eq(workspaceUsers.workspaceId, workspaceId),
-            eq(workspaceUsers.userId, memberUserId)
+            eq(userWorkspaces.workspaceId, workspaceId),
+            eq(userWorkspaces.userId, memberUserId)
           )
         );
       
@@ -440,11 +441,11 @@ export const resolvers = {
       if (!userId) throw new Error('Authentication required');
       
       // Check if user has access to workspace
-      const userWorkspace = await db.select().from(workspaceUsers)
+      const userWorkspace = await db.select().from(userWorkspaces)
         .where(
           and(
-            eq(workspaceUsers.workspaceId, input.workspaceId),
-            eq(workspaceUsers.userId, userId)
+            eq(userWorkspaces.workspaceId, input.workspaceId),
+            eq(userWorkspaces.userId, userId)
           )
         );
       
@@ -475,11 +476,11 @@ export const resolvers = {
       }
       
       // Check if user has access to workspace
-      const userWorkspace = await db.select().from(workspaceUsers)
+      const userWorkspace = await db.select().from(userWorkspaces)
         .where(
           and(
-            eq(workspaceUsers.workspaceId, contact.workspaceId),
-            eq(workspaceUsers.userId, userId)
+            eq(userWorkspaces.workspaceId, contact.workspaceId),
+            eq(userWorkspaces.userId, userId)
           )
         );
       
@@ -511,11 +512,11 @@ export const resolvers = {
       }
       
       // Check if user has access to workspace
-      const userWorkspace = await db.select().from(workspaceUsers)
+      const userWorkspace = await db.select().from(userWorkspaces)
         .where(
           and(
-            eq(workspaceUsers.workspaceId, contact.workspaceId),
-            eq(workspaceUsers.userId, userId)
+            eq(userWorkspaces.workspaceId, contact.workspaceId),
+            eq(userWorkspaces.userId, userId)
           )
         );
       
@@ -535,11 +536,11 @@ export const resolvers = {
       if (!userId) throw new Error('Authentication required');
       
       // Check if user has access to workspace
-      const userWorkspace = await db.select().from(workspaceUsers)
+      const userWorkspace = await db.select().from(userWorkspaces)
         .where(
           and(
-            eq(workspaceUsers.workspaceId, input.workspaceId),
-            eq(workspaceUsers.userId, userId)
+            eq(userWorkspaces.workspaceId, input.workspaceId),
+            eq(userWorkspaces.userId, userId)
           )
         );
       
@@ -570,11 +571,11 @@ export const resolvers = {
       }
       
       // Check if user has access to workspace
-      const userWorkspace = await db.select().from(workspaceUsers)
+      const userWorkspace = await db.select().from(userWorkspaces)
         .where(
           and(
-            eq(workspaceUsers.workspaceId, business.workspaceId),
-            eq(workspaceUsers.userId, userId)
+            eq(userWorkspaces.workspaceId, business.workspaceId),
+            eq(userWorkspaces.userId, userId)
           )
         );
       
@@ -606,11 +607,11 @@ export const resolvers = {
       }
       
       // Check if user has access to workspace
-      const userWorkspace = await db.select().from(workspaceUsers)
+      const userWorkspace = await db.select().from(userWorkspaces)
         .where(
           and(
-            eq(workspaceUsers.workspaceId, business.workspaceId),
-            eq(workspaceUsers.userId, userId)
+            eq(userWorkspaces.workspaceId, business.workspaceId),
+            eq(userWorkspaces.userId, userId)
           )
         );
       
@@ -630,11 +631,11 @@ export const resolvers = {
       if (!userId) throw new Error('Authentication required');
       
       // Check if user has access to workspace
-      const userWorkspace = await db.select().from(workspaceUsers)
+      const userWorkspace = await db.select().from(userWorkspaces)
         .where(
           and(
-            eq(workspaceUsers.workspaceId, input.workspaceId),
-            eq(workspaceUsers.userId, userId)
+            eq(userWorkspaces.workspaceId, input.workspaceId),
+            eq(userWorkspaces.userId, userId)
           )
         );
       
@@ -665,11 +666,11 @@ export const resolvers = {
       }
       
       // Check if user has access to workspace
-      const userWorkspace = await db.select().from(workspaceUsers)
+      const userWorkspace = await db.select().from(userWorkspaces)
         .where(
           and(
-            eq(workspaceUsers.workspaceId, donation.workspaceId),
-            eq(workspaceUsers.userId, userId)
+            eq(userWorkspaces.workspaceId, donation.workspaceId),
+            eq(userWorkspaces.userId, userId)
           )
         );
       
@@ -701,11 +702,11 @@ export const resolvers = {
       }
       
       // Check if user has access to workspace
-      const userWorkspace = await db.select().from(workspaceUsers)
+      const userWorkspace = await db.select().from(userWorkspaces)
         .where(
           and(
-            eq(workspaceUsers.workspaceId, donation.workspaceId),
-            eq(workspaceUsers.userId, userId)
+            eq(userWorkspaces.workspaceId, donation.workspaceId),
+            eq(userWorkspaces.userId, userId)
           )
         );
       
@@ -728,7 +729,7 @@ export const resolvers = {
     },
     
     members: async (parent) => {
-      return db.select().from(workspaceUsers).where(eq(workspaceUsers.workspaceId, parent.id));
+      return db.select().from(userWorkspaces).where(eq(userWorkspaces.workspaceId, parent.id));
     }
   },
   
