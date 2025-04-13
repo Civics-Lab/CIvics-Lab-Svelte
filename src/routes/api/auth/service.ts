@@ -14,6 +14,7 @@ export interface SignupData {
   username: string;
   password: string;
   displayName?: string;
+  inviteToken?: string;
 }
 
 export interface JwtPayload {
@@ -74,7 +75,7 @@ export const authService = {
   /**
    * Create new user account and return JWT
    */
-  async signup({ email, username, password, displayName }: SignupData) {
+  async signup({ email, username, password, displayName, inviteToken }: SignupData) {
     // Check if username or email already exists
     const existingUser = await db.select().from(users)
       .where(or(
@@ -106,8 +107,41 @@ export const authService = {
         role: users.role
       });
     
-    // Check for pending invites for this email
-    const pendingInvites = await db.select()
+    let acceptedInvites = [];
+    let pendingInvites = [];
+    
+    // Check for an invite token if provided
+    if (inviteToken) {
+      const invite = await db.query.userInvites.findFirst({
+        where: eq(userInvites.token, inviteToken)
+      });
+      
+      if (invite) {
+        // Verify the invite is for this email
+        if (invite.email.toLowerCase() === email.toLowerCase()) {
+          // Update invite status to accepted
+          await db.update(userInvites)
+            .set({ 
+              status: 'Accepted',
+              acceptedAt: new Date()
+            })
+            .where(eq(userInvites.id, invite.id));
+          
+          // Create user-workspace relationship
+          await db.insert(userWorkspaces)
+            .values({
+              userId: newUser.id,
+              workspaceId: invite.workspaceId,
+              role: invite.role
+            });
+          
+          acceptedInvites.push(invite);
+        }
+      }
+    }
+    
+    // Check for any other pending invites for this email
+    pendingInvites = await db.select()
       .from(userInvites)
       .where(
         and(
@@ -116,9 +150,12 @@ export const authService = {
         )
       );
     
-    // If invites exist, accept them and link user to workspaces
+    // Accept all other pending invites for this email
     if (pendingInvites.length > 0) {
       for (const invite of pendingInvites) {
+        // Skip the one we already processed
+        if (invite.token === inviteToken) continue;
+        
         // Update invite status to accepted
         await db.update(userInvites)
           .set({ 
@@ -134,6 +171,8 @@ export const authService = {
             workspaceId: invite.workspaceId,
             role: invite.role
           });
+        
+        acceptedInvites.push(invite);
       }
     }
     
@@ -150,8 +189,8 @@ export const authService = {
     return {
       token,
       user: newUser,
-      invites: pendingInvites,
-      hasAcceptedInvites: pendingInvites.length > 0
+      invites: acceptedInvites,
+      hasAcceptedInvites: acceptedInvites.length > 0
     };
   },
   

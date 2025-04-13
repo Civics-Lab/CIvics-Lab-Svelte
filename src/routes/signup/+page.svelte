@@ -2,18 +2,27 @@
 <script lang="ts">
 	import { auth } from '$lib/auth/client';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
+	import type { PageData } from './$types';
 
-	let email = '';
+	export let data: PageData;
+
+	let email = data.invite?.email || '';
+	let firstName = '';
+	let lastName = '';
 	let username = '';
-	let displayName = '';
 	let password = '';
 	let confirmPassword = '';
 	let loading = false;
 	let passwordVisible = false;
 	let confirmPasswordVisible = false;
-	let error = '';
+	let error = data.error || '';
 	let success = false;
 	let successMessage = '';
+
+	// Whether this is an invite signup
+	const isInviteSignup = !!data.invite;
+	const inviteToken = data.invite?.token || $page.url.searchParams.get('invite');
 
 	async function handleSignup() {
 		// Reset status
@@ -24,6 +33,14 @@
 		// Form validation
 		if (!email) {
 			error = 'Email is required';
+			return;
+		}
+		if (!firstName) {
+			error = 'First name is required';
+			return;
+		}
+		if (!lastName) {
+			error = 'Last name is required';
 			return;
 		}
 		if (!username) {
@@ -45,14 +62,21 @@
 
 		try {
 			loading = true;
-			// Use the displayName if provided, otherwise use username
-			const userDisplayName = displayName.trim() || username;
+			// Create display name from first and last name
+			const displayName = `${firstName} ${lastName}`;
 			
-			const result = await auth.signup(email, username, password, userDisplayName);
+			// Pass the invite token if available
+			const result = await auth.signup(email, username, password, displayName, inviteToken);
 			
 			// Signup successful - show success message
 			success = true;
-			successMessage = 'Account created successfully! Redirecting...';
+			
+			// Message based on whether there were invites
+			if (result.hasAcceptedInvites) {
+				successMessage = 'Account created successfully! Connecting to your workspace...';
+			} else {
+				successMessage = 'Account created successfully! Redirecting to onboarding...';
+			}
 			
 			// If user has accepted invites, redirect to app, otherwise to onboarding
 			const redirectPath = result.hasAcceptedInvites ? '/app' : '/onboarding';
@@ -85,7 +109,15 @@
 <div class="min-h-screen flex items-center justify-center bg-gray-50 py-8">
 	<div class="w-full max-w-md bg-white p-8 rounded-lg shadow-md">
 		<h1 class="text-2xl font-bold mb-4">Create an Account</h1>
-		<p class="text-gray-600 mb-6">Sign up to get started with Civics Lab</p>
+		
+		{#if isInviteSignup}
+			<div class="bg-blue-100 border border-blue-500 text-blue-800 p-3 mb-4 rounded">
+				<p class="font-medium">You've been invited to join a workspace!</p>
+				<p>Complete this form to accept your invitation.</p>
+			</div>
+		{:else}
+			<p class="text-gray-600 mb-6">Sign up to get started with Civics Lab</p>
+		{/if}
 		
 		{#if error}
 		<div class="bg-red-100 border border-red-500 text-red-800 p-3 mb-4 rounded">
@@ -104,11 +136,41 @@
 			<input
 				id="email"
 				bind:value={email}
-				class="w-full p-2 border rounded"
+				class="w-full p-2 border rounded {isInviteSignup ? 'bg-gray-100' : ''}"
 				type="email"
 				placeholder="Your email"
 				required
+				readonly={isInviteSignup}
 			/>
+			{#if isInviteSignup}
+				<p class="text-xs text-gray-500 mt-1">Email is set by your invitation</p>
+			{/if}
+		</div>
+		
+		<div class="grid grid-cols-2 gap-4 mb-4">
+			<div>
+				<label for="firstName" class="block text-sm font-medium mb-1">First Name</label>
+				<input
+					id="firstName"
+					bind:value={firstName}
+					class="w-full p-2 border rounded"
+					type="text"
+					placeholder="First name"
+					required
+				/>
+			</div>
+			
+			<div>
+				<label for="lastName" class="block text-sm font-medium mb-1">Last Name</label>
+				<input
+					id="lastName"
+					bind:value={lastName}
+					class="w-full p-2 border rounded"
+					type="text"
+					placeholder="Last name"
+					required
+				/>
+			</div>
 		</div>
 		
 		<div class="mb-4">
@@ -120,17 +182,6 @@
 				type="text"
 				placeholder="Choose a username"
 				required
-			/>
-		</div>
-		
-		<div class="mb-4">
-			<label for="displayName" class="block text-sm font-medium mb-1">Display Name (optional)</label>
-			<input
-				id="displayName"
-				bind:value={displayName}
-				class="w-full p-2 border rounded"
-				type="text"
-				placeholder="How you'll appear to others"
 			/>
 		</div>
 		
@@ -186,6 +237,8 @@
 					Creating account...
 				{:else if success}
 					Account created!
+				{:else if isInviteSignup}
+					Accept Invitation & Sign up
 				{:else}
 					Sign up
 				{/if}

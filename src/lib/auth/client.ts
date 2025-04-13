@@ -93,7 +93,7 @@ const createAuthStore = () => {
       }
     },
     
-    signup: async (email: string, username: string, password: string, displayName?: string) => {
+    signup: async (email: string, username: string, password: string, displayName?: string, inviteToken?: string) => {
       update(state => ({ ...state, loading: true, error: null }));
       
       try {
@@ -102,7 +102,7 @@ const createAuthStore = () => {
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ email, username, password, displayName })
+          body: JSON.stringify({ email, username, password, displayName, inviteToken })
         });
         
         const data = await response.json();

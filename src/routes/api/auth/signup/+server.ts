@@ -5,7 +5,7 @@ import { authService } from '../service';
 
 export const POST: RequestHandler = async ({ request }) => {
   try {
-    const { email, username, password, displayName } = await request.json();
+    const { email, username, password, displayName, inviteToken } = await request.json();
     
     // Validate input
     if (!email || !username || !password) {
@@ -16,7 +16,13 @@ export const POST: RequestHandler = async ({ request }) => {
     }
     
     // Attempt signup
-    const result = await authService.signup({ email, username, password, displayName });
+    const result = await authService.signup({ 
+      email, 
+      username, 
+      password, 
+      displayName, 
+      inviteToken 
+    });
     
     return json({
       success: true,
