@@ -54,6 +54,9 @@ const createAuthStore = () => {
       update(state => ({ ...state, loading: true, error: null }));
       
       try {
+        // Log the login attempt
+        console.log(`Attempting to login with username: ${username}`);
+        
         const response = await fetch('/api/auth/login', {
           method: 'POST',
           headers: {
@@ -62,19 +65,48 @@ const createAuthStore = () => {
           body: JSON.stringify({ username, password })
         });
         
-        const data = await response.json();
+        // Check if the request was successful
+        console.log(`Login response status: ${response.status}`);
+        
+        // Get the response text first for debugging
+        const responseText = await response.text();
+        console.log('Raw response:', responseText);
+        
+        // Parse the JSON (if it's valid JSON)
+        let data;
+        try {
+          data = JSON.parse(responseText);
+        } catch (e) {
+          console.error('Failed to parse JSON response:', e);
+          throw new Error('Invalid response from server');
+        }
         
         if (!response.ok || !data.success) {
           throw new Error(data.error || 'Login failed');
         }
         
+        // Log successful data
+        console.log('Login successful. User data received:', 
+          data.data.user ? JSON.stringify({
+            id: data.data.user.id,
+            username: data.data.user.username,
+            role: data.data.user.role
+          }) : 'No user data'
+        );
+        
         // Save to localStorage
         if (typeof window !== 'undefined') {
-          localStorage.setItem('auth_token', data.data.token);
-          localStorage.setItem('auth_user', JSON.stringify(data.data.user));
-          
-          // Also set the token in cookie for server-side auth
-          document.cookie = `auth_token=${data.data.token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Strict`;
+          try {
+            localStorage.setItem('auth_token', data.data.token);
+            localStorage.setItem('auth_user', JSON.stringify(data.data.user));
+            
+            // Also set the token in cookie for server-side auth
+            document.cookie = `auth_token=${data.data.token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Strict`;
+            
+            console.log('Auth data saved to localStorage and cookie');
+          } catch (e) {
+            console.error('Failed to save auth data:', e);
+          }
         }
         
         // Update store
@@ -85,8 +117,10 @@ const createAuthStore = () => {
           error: null
         });
         
+        console.log('Auth store updated, login complete');
         return data.data;
       } catch (error) {
+        console.error('Login error:', error);
         const errorMessage = error instanceof Error ? error.message : 'Login failed';
         update(state => ({ ...state, loading: false, error: errorMessage }));
         throw error;
@@ -105,7 +139,18 @@ const createAuthStore = () => {
           body: JSON.stringify({ email, username, password, displayName, inviteToken })
         });
         
-        const data = await response.json();
+        // Get the response text first for debugging
+        const responseText = await response.text();
+        console.log('Raw signup response:', responseText);
+        
+        // Parse the JSON (if it's valid JSON)
+        let data;
+        try {
+          data = JSON.parse(responseText);
+        } catch (e) {
+          console.error('Failed to parse JSON response for signup:', e);
+          throw new Error('Invalid response from server');
+        }
         
         if (!response.ok || !data.success) {
           throw new Error(data.error || 'Signup failed');
