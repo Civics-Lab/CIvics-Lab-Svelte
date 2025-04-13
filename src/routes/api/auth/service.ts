@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { eq, or, and } from 'drizzle-orm';
-import { db, users, userInvites, userWorkspaces } from '$lib/db/drizzle';
+import { db } from '$lib/server/db';
+import { users, userInvites, userWorkspaces } from '$lib/db/drizzle/schema';
 import { env } from '$env/dynamic/private';
 import { sign, verify } from 'hono/jwt';
 
@@ -31,94 +32,137 @@ export const authService = {
    * Login user and return JWT if credentials are valid
    */
   async login({ username, password }: LoginData) {
-    // Find user by username
-    const [user] = await db.select().from(users).where(eq(users.username, username));
-    
-    if (!user) {
-      throw new Error('Invalid credentials');
-    }
-    
-    // Verify password
-    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-    
-    if (!isPasswordValid) {
-      throw new Error('Invalid credentials');
-    }
-    
-    // Update last login time
-    await db.update(users)
-      .set({ lastLoginAt: new Date() })
-      .where(eq(users.id, user.id));
-    
-    // Generate JWT
-    const payload = {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      role: user.role
-    };
-    
-    const token = await this.generateToken(payload);
-    
-    return {
-      token,
-      user: {
+    try {
+      // Find user by username
+      const [user] = await db.select().from(users).where(eq(users.username, username));
+      
+      if (!user) {
+        throw new Error('Invalid credentials');
+      }
+      
+      // Verify password
+      const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+      
+      if (!isPasswordValid) {
+        throw new Error('Invalid credentials');
+      }
+      
+      // Update last login time
+      await db.update(users)
+        .set({ lastLoginAt: new Date() })
+        .where(eq(users.id, user.id));
+      
+      // Generate JWT
+      const payload = {
         id: user.id,
         username: user.username,
         email: user.email,
-        displayName: user.displayName,
         role: user.role
-      }
-    };
+      };
+      
+      const token = await this.generateToken(payload);
+      
+      return {
+        token,
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          displayName: user.displayName,
+          role: user.role
+        }
+      };
+    } catch (error) {
+      console.error('Login error:', error);
+      throw error;
+    }
   },
   
   /**
    * Create new user account and return JWT
    */
   async signup({ email, username, password, displayName, inviteToken }: SignupData) {
-    // Check if username or email already exists
-    const existingUser = await db.select().from(users)
-      .where(or(
-        eq(users.username, username),
-        eq(users.email, email)
-      ));
+    try {
+      // Check if username or email already exists
+      const existingUser = await db.select().from(users)
+        .where(or(
+          eq(users.username, username),
+          eq(users.email, email)
+        ));
+        
+      if (existingUser.length > 0) {
+        throw new Error('Username or email already exists');
+      }
       
-    if (existingUser.length > 0) {
-      throw new Error('Username or email already exists');
-    }
-    
-    // Hash password
-    const passwordHash = await bcrypt.hash(password, 10);
-    
-    // Create new user
-    const [newUser] = await db.insert(users)
-      .values({
-        email,
-        username,
-        passwordHash,
-        displayName: displayName || username,
-        lastLoginAt: new Date()
-      })
-      .returning({
-        id: users.id,
-        username: users.username,
-        email: users.email,
-        displayName: users.displayName,
-        role: users.role
-      });
-    
-    let acceptedInvites = [];
-    let pendingInvites = [];
-    
-    // Check for an invite token if provided
-    if (inviteToken) {
-      const invite = await db.query.userInvites.findFirst({
-        where: eq(userInvites.token, inviteToken)
-      });
+      // Hash password
+      const passwordHash = await bcrypt.hash(password, 10);
       
-      if (invite) {
-        // Verify the invite is for this email
-        if (invite.email.toLowerCase() === email.toLowerCase()) {
+      // Create new user
+      const [newUser] = await db.insert(users)
+        .values({
+          email,
+          username,
+          passwordHash,
+          displayName: displayName || username,
+          lastLoginAt: new Date()
+        })
+        .returning({
+          id: users.id,
+          username: users.username,
+          email: users.email,
+          displayName: users.displayName,
+          role: users.role
+        });
+      
+      let acceptedInvites = [];
+      let pendingInvites = [];
+      
+      // Check for an invite token if provided
+      if (inviteToken) {
+        const invite = await db.query.userInvites.findFirst({
+          where: eq(userInvites.token, inviteToken)
+        });
+        
+        if (invite) {
+          // Verify the invite is for this email
+          if (invite.email.toLowerCase() === email.toLowerCase()) {
+            // Update invite status to accepted
+            await db.update(userInvites)
+              .set({ 
+                status: 'Accepted',
+                acceptedAt: new Date()
+              })
+              .where(eq(userInvites.id, invite.id));
+            
+            // Create user-workspace relationship
+            await db.insert(userWorkspaces)
+              .values({
+                userId: newUser.id,
+                workspaceId: invite.workspaceId,
+                role: invite.role
+              });
+            
+            acceptedInvites.push(invite);
+          }
+        }
+      }
+      
+      // Check for any other pending invites for this email
+      pendingInvites = await db.select()
+        .from(userInvites)
+        .where(
+          and(
+            eq(userInvites.email, email),
+            eq(userInvites.status, 'Pending')
+          )
+        );
+      
+      // Accept all other pending invites for this email
+      if (pendingInvites.length > 0) {
+        for (const invite of pendingInvites) {
+          // Skip the one we already processed
+          if (invite.token === inviteToken) continue;
+          
           // Update invite status to accepted
           await db.update(userInvites)
             .set({ 
@@ -138,60 +182,27 @@ export const authService = {
           acceptedInvites.push(invite);
         }
       }
+      
+      // Generate JWT
+      const payload = {
+        id: newUser.id,
+        username: newUser.username,
+        email: newUser.email,
+        role: newUser.role
+      };
+      
+      const token = await this.generateToken(payload);
+      
+      return {
+        token,
+        user: newUser,
+        invites: acceptedInvites,
+        hasAcceptedInvites: acceptedInvites.length > 0
+      };
+    } catch (error) {
+      console.error('Signup error:', error);
+      throw error;
     }
-    
-    // Check for any other pending invites for this email
-    pendingInvites = await db.select()
-      .from(userInvites)
-      .where(
-        and(
-          eq(userInvites.email, email),
-          eq(userInvites.status, 'Pending')
-        )
-      );
-    
-    // Accept all other pending invites for this email
-    if (pendingInvites.length > 0) {
-      for (const invite of pendingInvites) {
-        // Skip the one we already processed
-        if (invite.token === inviteToken) continue;
-        
-        // Update invite status to accepted
-        await db.update(userInvites)
-          .set({ 
-            status: 'Accepted',
-            acceptedAt: new Date()
-          })
-          .where(eq(userInvites.id, invite.id));
-        
-        // Create user-workspace relationship
-        await db.insert(userWorkspaces)
-          .values({
-            userId: newUser.id,
-            workspaceId: invite.workspaceId,
-            role: invite.role
-          });
-        
-        acceptedInvites.push(invite);
-      }
-    }
-    
-    // Generate JWT
-    const payload = {
-      id: newUser.id,
-      username: newUser.username,
-      email: newUser.email,
-      role: newUser.role
-    };
-    
-    const token = await this.generateToken(payload);
-    
-    return {
-      token,
-      user: newUser,
-      invites: acceptedInvites,
-      hasAcceptedInvites: acceptedInvites.length > 0
-    };
   },
   
   /**

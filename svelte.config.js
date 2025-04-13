@@ -8,7 +8,23 @@ const config = {
 	preprocess: vitePreprocess(),
 
 	kit: {
-		adapter: adapter()
+		adapter: adapter({
+			// Serverless function options
+			runtime: 'nodejs18.x',
+			
+			// Ensure proper environment variable handling
+			env: {
+				publicPrefix: 'PUBLIC_',
+				privatePrefix: ''
+			},
+			
+			// Set to true for Edge Functions deployment
+			// or 'nodejs' for Node.js Functions
+			edge: false,
+			
+			// Always external allows for proper handling of server dependencies
+			external: ['postgres', 'drizzle-orm']
+		})
 	}
 };
 
