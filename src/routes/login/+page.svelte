@@ -2,20 +2,40 @@
 <script lang="ts">
 	import { auth } from '$lib/auth/client';
 	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
 	let username = '';
 	let password = '';
 	let loading = false;
 	let passwordVisible = false;
 	let error = '';
 
+	// Check if user is already logged in
+	onMount(() => {
+		// Get the auth token from localStorage
+		const token = localStorage.getItem('auth_token');
+		if (token) {
+			console.log('User is already logged in, redirecting to app');
+			goto('/app');
+		}
+	});
+
 	async function handleLogin() {
 		try {
 			loading = true;
 			error = '';
-			await auth.login(username, password);
-			// Redirect to app on successful login
-			goto('/app');
+			console.log('Starting login process for:', username);
+			
+			const result = await auth.login(username, password);
+			console.log('Login successful, preparing to navigate');
+			
+			// Add a small delay to ensure state is updated
+			setTimeout(() => {
+				console.log('Navigating to app page');
+				// Redirect to app on successful login
+				goto('/app');
+			}, 100);
 		} catch (err) {
+			console.error('Login error:', err);
 			error = err instanceof Error ? err.message : 'Login failed';
 		} finally {
 			loading = false;
