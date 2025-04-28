@@ -88,17 +88,25 @@ export const authService = {
       
       // Debug: Check if db is properly initialized
       console.log('Database connection status:', !!db);
+      console.log('Environment:', env.NODE_ENV);
+      console.log('JWT Secret configured:', !!env.JWT_SECRET);
       
       // Find user by username
       console.log('Querying user from database...');
-      const userResults = await db.select().from(users).where(eq(users.username, username));
-      console.log(`Found ${userResults.length} matching users`);
-      
-      const [user] = userResults;
-      
-      if (!user) {
-        console.log('No user found with that username');
-        throw new Error('Invalid credentials');
+      let user;
+      try {
+        const userResults = await db.select().from(users).where(eq(users.username, username));
+        console.log(`Found ${userResults.length} matching users`);
+        
+        [user] = userResults;
+        
+        if (!user) {
+          console.log('No user found with that username');
+          throw new Error('Invalid credentials');
+        }
+      } catch (dbError) {
+        console.error('Database query error:', dbError);
+        throw new Error(`Database error: ${dbError instanceof Error ? dbError.message : 'Unknown DB error'}`);
       }
       
       // Debug: Log user object (without password)
@@ -339,9 +347,23 @@ export const authService = {
       
       // Debug JWT secret (don't log the actual secret)
       console.log('JWT Secret length:', env.JWT_SECRET?.length || 0);
+      console.log('Environment:', env.NODE_ENV);
+      
+      // In production, we'll use the PRODUCTION_JWT_SECRET if available
+      let secretToUse = env.JWT_SECRET;
+      if (env.NODE_ENV === 'production' && env.PRODUCTION_JWT_SECRET) {
+        console.log('Using production JWT secret for token generation');
+        secretToUse = env.PRODUCTION_JWT_SECRET;
+      }
+      
+      // Check if JWT secret is properly set
+      if (!secretToUse || secretToUse.length < 10) {
+        console.error('JWT secret is missing or too short!');
+        throw new Error('Server configuration error: Invalid JWT secret');
+      }
       
       // Use Node.js-friendly JWT implementation
-      return jwt.sign(tokenPayload, env.JWT_SECRET);
+      return jwt.sign(tokenPayload, secretToUse);
     } catch (error) {
       console.error('Token generation error:', error);
       throw error;
@@ -354,10 +376,37 @@ export const authService = {
   async validateToken(token: string): Promise<JwtPayload> {
     try {
       console.log('Validating token...');
-      // Use Node.js-friendly JWT verification
-      const payload = jwt.verify(token, env.JWT_SECRET);
-      console.log('Token validated successfully');
-      return payload as JwtPayload;
+      console.log('Environment:', env.NODE_ENV);
+      
+      // In production, we'll use the PRODUCTION_JWT_SECRET if available
+      let secretToUse = env.JWT_SECRET;
+      if (env.NODE_ENV === 'production' && env.PRODUCTION_JWT_SECRET) {
+        console.log('Using production JWT secret for validation');
+        secretToUse = env.PRODUCTION_JWT_SECRET;
+      }
+      
+      // First try with the selected secret
+      try {
+        const payload = jwt.verify(token, secretToUse);
+        console.log('Token validated successfully with primary secret');
+        return payload as JwtPayload;
+      } catch (primaryError) {
+        // If we're in production and using the production secret, also try the development secret
+        // This helps during transitions between environments
+        if (env.NODE_ENV === 'production' && env.PRODUCTION_JWT_SECRET && env.JWT_SECRET !== env.PRODUCTION_JWT_SECRET) {
+          console.log('Primary validation failed, trying fallback secret');
+          try {
+            const payload = jwt.verify(token, env.JWT_SECRET);
+            console.log('Token validated successfully with fallback secret');
+            return payload as JwtPayload;
+          } catch (fallbackError) {
+            console.error('Token validation failed with both secrets');
+            throw fallbackError;
+          }
+        } else {
+          throw primaryError;
+        }
+      }
     } catch (error) {
       console.error('Token validation error:', error);
       throw new Error('Invalid token');

@@ -203,9 +203,13 @@ const createAuthStore = () => {
     
     validateToken: async () => {
       const currentState = get(store);
-      if (!currentState.token) return false;
+      if (!currentState.token) {
+        console.log('No token available to validate');
+        return false;
+      }
       
       try {
+        console.log('Validating token with server...');
         const response = await fetch('/api/auth/validate', {
           method: 'POST',
           headers: {
@@ -213,9 +217,41 @@ const createAuthStore = () => {
           }
         });
         
-        const data = await response.json();
+        // Get response text first for debugging
+        const responseText = await response.text();
+        console.log('Validation response:', responseText);
+        
+        // Parse the JSON
+        const data = JSON.parse(responseText);
+        
+        if (!data.success) {
+          console.error('Token validation failed:', data.error);
+          
+          // If token is expired or invalid, clear it
+          if (data.error === 'Token expired' || data.error === 'Invalid token') {
+            console.log('Clearing expired/invalid token from storage');
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('auth_token');
+              localStorage.removeItem('auth_user');
+              document.cookie = 'auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+            }
+            
+            // Reset the store
+            set({
+              user: null,
+              token: null,
+              loading: false,
+              error: data.error
+            });
+          }
+          
+          return false;
+        }
+        
+        console.log('Token validation succeeded');
         return data.success && data.data.valid;
       } catch (error) {
+        console.error('Token validation error:', error);
         return false;
       }
     }
