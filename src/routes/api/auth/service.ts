@@ -211,6 +211,7 @@ export const authService = {
       
       let acceptedInvites = [];
       let pendingInvites = [];
+      let defaultWorkspaceCreated = false;
       
       // Check for an invite token if provided
       if (inviteToken) {
@@ -234,15 +235,31 @@ export const authService = {
             
             // Create user-workspace relationship
             console.log('Adding user to workspace...');
+            try {
+            // Verify the user still exists
+            const userExists = await db
+            .select({ id: users.id })
+            .from(users)
+              .where(eq(users.id, newUser.id));
+                
+              if (!userExists || userExists.length === 0) {
+                console.error(`User with ID ${newUser.id} not found when adding to workspace`);
+              throw new Error(`User with ID ${newUser.id} no longer exists in database`);
+            }
+            
             await db.insert(userWorkspaces)
               .values({
                 userId: newUser.id,
                 workspaceId: invite.workspaceId,
                 role: invite.role
               });
-            
+              
             acceptedInvites.push(invite);
-            console.log('Invite processed successfully');
+            console.log('Invite processed successfully');  
+          } catch (err) {
+            console.error('Error adding user to workspace:', err);
+            throw err;
+          }
           }
         }
       }
@@ -288,6 +305,9 @@ export const authService = {
           console.log('Additional invite processed successfully');
         }
       }
+      
+      // We'll no longer automatically create a default workspace
+      // Only use workspaces that come from accepted invites
       
       // Generate JWT
       console.log('Generating JWT token...');

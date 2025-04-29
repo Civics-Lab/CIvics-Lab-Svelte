@@ -74,17 +74,17 @@
 			// Message based on whether there were invites
 			if (result.hasAcceptedInvites) {
 				successMessage = 'Account created successfully! Connecting to your workspace...';
+				// Redirect to app after a short delay to show the success message
+				setTimeout(() => {
+					goto('/app');
+				}, 1500);
 			} else {
-				successMessage = 'Account created successfully! Redirecting to onboarding...';
+				successMessage = 'Account created successfully! Please create your first workspace.';
+				// Redirect to workspace creation page
+				setTimeout(() => {
+					goto('/app?create=workspace');
+				}, 1500);
 			}
-			
-			// If user has accepted invites, redirect to app, otherwise to onboarding
-			const redirectPath = result.hasAcceptedInvites ? '/app' : '/onboarding';
-			
-			// Redirect after a short delay to show the success message
-			setTimeout(() => {
-				goto(redirectPath);
-			}, 1500);
 			
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to create account';

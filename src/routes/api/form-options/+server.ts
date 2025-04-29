@@ -1,5 +1,5 @@
 import { json, error } from '@sveltejs/kit';
-import { db } from '$lib/db/drizzle';
+import { db } from '$lib/server/db';
 import { states, contacts, genders, races } from '$lib/db/drizzle/schema';
 import { eq, asc, ilike } from 'drizzle-orm';
 import type { RequestHandler } from './$types';

@@ -7,7 +7,7 @@ import type { Workspace } from '$lib/types/supabase';
 /**
  * Fetch all workspaces for the current user
  */
-export async function fetchUserWorkspaces(): Promise<Workspace[]> {
+export async function fetchUserWorkspaces(): Promise<{ workspaces: Workspace[], error?: string }> {
   try {
     const response = await fetch('/api/workspaces');
     
@@ -18,7 +18,7 @@ export async function fetchUserWorkspaces(): Promise<Workspace[]> {
     }
     
     const data = await response.json();
-    return data.workspaces;
+    return data; // Should contain workspaces array and possibly error
   } catch (error) {
     console.error('Error in fetchUserWorkspaces:', error);
     throw error;

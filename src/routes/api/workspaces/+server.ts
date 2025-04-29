@@ -1,8 +1,55 @@
 import { json, error } from '@sveltejs/kit';
-import { db } from '$lib/db/drizzle';
-import { workspaces, userWorkspaces } from '$lib/db/drizzle/schema';
+import { db } from '$lib/server/db';
+import { workspaces, userWorkspaces, users } from '$lib/db/drizzle/schema';
 import { eq, inArray } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
+
+// Handle creating a default workspace for a user with no workspaces
+async function createDefaultWorkspace(userId: string) {
+  try {
+    console.log(`Creating default workspace for user ${userId}`);
+    
+    // First, check if the user exists in the database
+    const userExists = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, userId));
+      
+    if (!userExists || userExists.length === 0) {
+      console.error(`User with ID ${userId} not found in database`);
+      throw new Error(`User with ID ${userId} not found in database`);
+    }
+    
+    // Insert the new workspace
+    const [newWorkspace] = await db
+      .insert(workspaces)
+      .values({
+        name: 'My Workspace',
+        createdBy: userId
+      })
+      .returning();
+    
+    if (!newWorkspace) {
+      throw new Error('Failed to create default workspace');
+    }
+    
+    // Add user to workspace with Super Admin role
+    await db
+      .insert(userWorkspaces)
+      .values({
+        userId,
+        workspaceId: newWorkspace.id,
+        role: 'Super Admin'
+      });
+    
+    console.log(`Default workspace created: ${newWorkspace.id}`);
+    
+    return newWorkspace;
+  } catch (err) {
+    console.error('Error creating default workspace:', err);
+    throw err;
+  }
+}
 
 // GET /api/workspaces - Get all workspaces for the current user
 export const GET: RequestHandler = async ({ locals }) => {
@@ -17,8 +64,6 @@ export const GET: RequestHandler = async ({ locals }) => {
   
   console.log('API: Getting workspaces for user:', user.id);
   
-  // We don't use verifyWorkspaceAccess here because we're getting all workspaces for the user
-  
   try {
     // First, get all workspace IDs the user has access to
     console.log('Querying user_workspaces for user:', user.id);
@@ -29,8 +74,10 @@ export const GET: RequestHandler = async ({ locals }) => {
     
     console.log('Found user workspaces:', userWorkspaceData);
     
+    // If no workspaces found, just return empty array
     if (!userWorkspaceData.length) {
       console.log('No workspaces found for user:', user.id);
+      // Just return an empty array, let the client handle the empty state
       return json({ workspaces: [] });
     }
     
@@ -46,8 +93,30 @@ export const GET: RequestHandler = async ({ locals }) => {
     
     console.log('Fetched workspace data:', workspaceData.map(ws => ({ id: ws.id, name: ws.name })));
     
+    // Check for nulls and filter them out to prevent errors
+    const validWorkspaceData = workspaceData.filter(ws => ws !== null && ws !== undefined);
+    
+    // If there are workspaceIds but no valid workspaces found, something is wrong (deleted workspaces?)
+    if (workspaceIds.length > 0 && validWorkspaceData.length === 0) {
+      console.warn('Found workspace relationships but no valid workspaces. Creating default workspace...');
+      try {
+        const defaultWorkspace = await createDefaultWorkspace(user.id);
+        
+        // Return the newly created workspace
+        return json({
+          workspaces: [{
+            ...defaultWorkspace,
+            userRole: 'Super Admin'
+          }]
+        });
+      } catch (createErr) {
+        console.error('Failed to create default workspace:', createErr);
+        return json({ workspaces: [] });
+      }
+    }
+    
     // Combine workspace data with user roles
-    const enrichedWorkspaces = workspaceData.map(workspace => {
+    const enrichedWorkspaces = validWorkspaceData.map(workspace => {
       const userWorkspace = userWorkspaceData.find(uw => uw.workspaceId === workspace.id);
       return {
         ...workspace,
@@ -77,9 +146,19 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   if (!user) {
     throw error(401, 'Authentication required');
   }
-  // Authentication check is sufficient for workspace creation - no workspace to check access for yet
   
   try {
+    // First, verify that the user exists in the database
+    const userExists = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, user.id));
+      
+    if (!userExists || userExists.length === 0) {
+      console.error(`User with ID ${user.id} not found in database`);
+      throw error(404, 'User not found in database');
+    }
+    
     // Get the name from the request body
     const body = await request.json();
     const { name } = body;

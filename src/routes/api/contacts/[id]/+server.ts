@@ -1,5 +1,5 @@
 import { json, error } from '@sveltejs/kit';
-import { db } from '$lib/db/drizzle';
+import { db } from '$lib/server/db';
 import { contacts, userWorkspaces, contactEmails, contactPhoneNumbers, contactAddresses, contactSocialMediaAccounts, contactTags, zipCodes } from '$lib/db/drizzle/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import type { RequestHandler } from './$types';

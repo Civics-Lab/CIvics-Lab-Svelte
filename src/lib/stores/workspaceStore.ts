@@ -142,10 +142,15 @@ function createWorkspaceStore() {
       
       try {
         // Fetch workspaces from the API
-        const fetchedWorkspaces = await fetchUserWorkspaces();
+        const response = await fetchUserWorkspaces();
         
-        // If no workspaces, we'll just set an empty array
-        // The API or backend should handle creating a default workspace if needed
+        // Check if there was an error from the server
+        if (response.error) {
+          console.error('Error from API:', response.error);
+          throw new Error(response.error);
+        }
+        
+        const fetchedWorkspaces = response.workspaces || [];
         
         // Get previously selected workspace ID from localStorage
         const savedWorkspaceId = typeof window !== 'undefined' 

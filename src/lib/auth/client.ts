@@ -173,8 +173,11 @@ const createAuthStore = () => {
           error: null
         });
         
-        // Return all data including invites information
-        return data.data;
+        // Return all data including invites and default workspace information
+        return {
+          ...data.data,
+          defaultWorkspaceCreated: data.data.defaultWorkspaceCreated || false
+        };
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Signup failed';
         update(state => ({ ...state, loading: false, error: errorMessage }));

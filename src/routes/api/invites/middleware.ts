@@ -1,4 +1,4 @@
-import { db } from '$lib/db/drizzle';
+import { db } from '$lib/server/db';
 import { userWorkspaces } from '$lib/db/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import type { MiddlewareHandler } from 'hono';

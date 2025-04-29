@@ -1,5 +1,5 @@
 import { json, error } from '@sveltejs/kit';
-import { db } from '$lib/db/drizzle';
+import { db } from '$lib/server/db';
 import { workspaces, userWorkspaces } from '$lib/db/drizzle/schema';
 import { eq, sql } from 'drizzle-orm';
 import { verifyWorkspaceAccess } from '$lib/server/auth';

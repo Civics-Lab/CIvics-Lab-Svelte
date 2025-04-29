@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { handle } from 'hono/vercel';
-import { db } from '$lib/db/drizzle';
+import { db } from '$lib/server/db';
 import { workspaces, userWorkspaces } from '$lib/db/drizzle/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { auth } from '$lib/middleware/auth';
