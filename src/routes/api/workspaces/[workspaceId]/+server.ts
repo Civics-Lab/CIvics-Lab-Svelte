@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { workspaces, userWorkspaces } from '$lib/db/drizzle/schema';
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql, and } from 'drizzle-orm';
 import { verifyWorkspaceAccess } from '$lib/server/auth';
 import type { RequestHandler } from './$types';
 
@@ -10,13 +10,25 @@ export const GET: RequestHandler = async ({ params, locals }) => {
   const { workspaceId } = params;
   const user = locals.user;
   
+  console.log(`GET workspace ${workspaceId} request from user ${user?.id}`);
+  console.log('Request parameters:', params);
+  console.log('Parameter type:', typeof workspaceId, 'Length:', workspaceId?.length);
+  
   if (!user) {
     throw error(401, 'Authentication required');
   }
   
   // Verify user has access to this workspace
-  const { hasAccess } = await verifyWorkspaceAccess(workspaceId, user.id);
+  const { hasAccess, exists } = await verifyWorkspaceAccess(workspaceId, user.id);
   
+  console.log(`Workspace access check: exists=${exists}, hasAccess=${hasAccess}`);
+  
+  // If workspace doesn't exist, return a 404
+  if (!exists) {
+    throw error(404, 'Workspace not found');
+  }
+  
+  // If user doesn't have access, return a 403
   if (!hasAccess) {
     throw error(403, 'You do not have permission to access this workspace');
   }
@@ -41,6 +53,11 @@ export const GET: RequestHandler = async ({ params, locals }) => {
       throw err;
     }
     
+    // Provide more detailed error message
+    if (err instanceof Error) {
+      throw error(500, `Failed to fetch workspace: ${err.message}`);
+    }
+    
     throw error(500, 'Failed to fetch workspace');
   }
 };
@@ -50,19 +67,50 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
   const { workspaceId } = params;
   const user = locals.user;
   
+  console.log(`PATCH workspace ${workspaceId} request from user ${user?.id}`);
+  console.log(`Request headers:`, Object.fromEntries([...request.headers]));
+  console.log(`Request URL:`, request.url);
+  console.log(`workspaceId parameter value:`, workspaceId);
+  console.log(`workspaceId parameter type:`, typeof workspaceId);
+  
   if (!user) {
     throw error(401, 'Authentication required');
   }
   
   // Verify user has admin access to this workspace
-  const { hasAccess, role } = await verifyWorkspaceAccess(workspaceId, user.id);
+  const { hasAccess, role, exists } = await verifyWorkspaceAccess(workspaceId, user.id);
   
+  console.log(`Workspace access check: exists=${exists}, hasAccess=${hasAccess}, role=${role}`);
+  
+  // If workspace doesn't exist, return a 404
+  if (!exists) {
+    throw error(404, 'Workspace not found');
+  }
+  
+  // If user doesn't have access or isn't an admin, return a 403
   if (!hasAccess || !['Super Admin', 'Admin'].includes(role)) {
     throw error(403, 'You do not have permission to update this workspace');
   }
   
   try {
+    console.log('Updating workspace with id:', workspaceId);
+    
+    // First, directly check if the workspace exists to confirm
+    const workspaceCheck = await db
+      .select()
+      .from(workspaces)
+      .where(eq(workspaces.id, workspaceId));
+      
+    console.log('Direct workspace check result:', workspaceCheck);
+      
+    if (!workspaceCheck || workspaceCheck.length === 0) {
+      console.error('Workspace not found in direct check');
+      throw error(404, 'Workspace not found in database');
+    }
+    
     const body = await request.json();
+    console.log('Request body:', body);
+    
     const updates: Record<string, any> = {};
     
     // Only allow updating specific fields
@@ -78,23 +126,64 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
       throw error(400, 'No valid update fields provided');
     }
     
+    console.log('Applying updates:', updates);
+    
     // Update the workspace
-    const [updatedWorkspace] = await db
-      .update(workspaces)
-      .set(updates)
-      .where(eq(workspaces.id, workspaceId))
-      .returning();
-    
-    if (!updatedWorkspace) {
-      throw error(404, 'Workspace not found');
+    try {
+      console.log('Attempting update with Drizzle ORM');
+      const [updatedWorkspace] = await db
+        .update(workspaces)
+        .set(updates)
+        .where(eq(workspaces.id, workspaceId))
+        .returning();
+      
+      if (!updatedWorkspace) {
+        console.log('No workspace returned from update, checking if update affected any rows');
+        // Check if the update affected any rows
+        const updatedRows = await db
+          .select({ count: sql`count(*)` })
+          .from(workspaces)
+          .where(eq(workspaces.id, workspaceId));
+        
+        console.log('Updated rows count:', updatedRows);
+        
+        if (!updatedRows.length || parseInt(updatedRows[0].count as string) === 0) {
+          console.error(`No workspace found with ID ${workspaceId}`);
+          throw error(404, 'Workspace not found');
+        }
+        
+        // If rows were affected but no returning data, fetch the workspace
+        const workspaceAfterUpdate = await db
+          .select()
+          .from(workspaces)
+          .where(eq(workspaces.id, workspaceId))
+          .limit(1);
+          
+        if (!workspaceAfterUpdate.length) {
+          console.error(`Failed to fetch workspace with ID ${workspaceId} after update`);
+          throw error(404, 'Workspace not found after update');
+        }
+        
+        console.log('Workspace updated successfully, fetched after update:', workspaceAfterUpdate[0]);
+        return json({ workspace: workspaceAfterUpdate[0] });
+      }
+      
+      console.log('Workspace updated successfully via Drizzle:', updatedWorkspace);
+      return json({ workspace: updatedWorkspace });
+    } catch (updateErr) {
+      console.error('Error in update operation:', updateErr);
+      throw updateErr;
     }
-    
-    return json({ workspace: updatedWorkspace });
   } catch (err) {
     console.error('Error updating workspace:', err);
     
     if (err instanceof Response) {
       throw err;
+    }
+    
+    // Provide more detailed error message
+    if (err instanceof Error) {
+      throw error(500, `Failed to update workspace: ${err.message}`);
     }
     
     throw error(500, 'Failed to update workspace');
@@ -115,8 +204,14 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
   console.log(`User ${user.id} attempting to delete workspace ${workspaceId}`);
   
   // Verify user has Super Admin access to this workspace
-  const { hasAccess, role } = await verifyWorkspaceAccess(workspaceId, user.id);
-  console.log(`Workspace access check: hasAccess=${hasAccess}, role=${role}`);
+  const { hasAccess, role, exists } = await verifyWorkspaceAccess(workspaceId, user.id);
+  console.log(`Workspace access check: exists=${exists}, hasAccess=${hasAccess}, role=${role}`);
+  
+  // If workspace doesn't exist, return a 404
+  if (!exists) {
+    console.error(`Workspace ${workspaceId} not found`);
+    throw error(404, 'Workspace not found');
+  }
   
   if (!hasAccess || role !== 'Super Admin') {
     console.error(`User ${user.id} does not have permission to delete workspace ${workspaceId}`);

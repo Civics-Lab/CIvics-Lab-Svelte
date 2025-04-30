@@ -187,14 +187,19 @@ export async function updateContact(contactId: string, updateData: {
       // Map emails from snake_case to camelCase
       // Also preserve isNew, isModified, and isDeleted flags for server-side logic
       emails: updateData.emails
-        ?.filter(email => email.email && email.email.trim() !== '')
+        ?.filter(email => {
+          // Always include emails marked for deletion
+          if (email.isDeleted) return true;
+          // Filter out empty emails
+          return email.email && email.email.trim() !== '';
+        })
         .map(email => ({
           id: email.id, // Preserve ID for existing emails
           email: email.email, 
-          status: email.status,
-          isNew: email.isNew,
-          isModified: email.isModified,
-          isDeleted: email.isDeleted
+          status: email.status || 'active',
+          isNew: email.isNew === true, // Ensure boolean value
+          isModified: email.isModified === true, // Ensure boolean value
+          isDeleted: email.isDeleted === true // Ensure boolean value
         })),
       
       // Map phone numbers - ensure we're using consistent property naming
@@ -281,12 +286,22 @@ export async function updateContact(contactId: string, updateData: {
     
     if (!response.ok) {
       try {
-        const error = await response.json();
-        console.error('API update error response:', error);
-        throw new Error(error.message || 'Failed to update contact');
-      } catch (jsonError) {
-        // If the response body isn't valid JSON
-        console.error('Failed to parse update error response:', jsonError);
+        const errorText = await response.text();
+        console.error('API update error raw response:', errorText);
+        
+        // Try to parse as JSON if possible
+        try {
+          const errorJson = JSON.parse(errorText);
+          console.error('API update error parsed JSON:', errorJson);
+          throw new Error(errorJson.message || 'Failed to update contact');
+        } catch (parseError) {
+          // Response wasn't valid JSON
+          console.error('Response was not valid JSON:', parseError);
+          throw new Error(`Failed to update contact: ${response.status} ${response.statusText}`);
+        }
+      } catch (responseError) {
+        // If we couldn't even get the response text
+        console.error('Failed to get error response text:', responseError);
         throw new Error(`Failed to update contact: ${response.status} ${response.statusText}`);
       }
     }

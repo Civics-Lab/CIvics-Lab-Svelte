@@ -1,4 +1,3 @@
-// This file initializes server-side resources
 import { sequence } from '@sveltejs/kit/hooks';
 import { db } from '$lib/server/db';
 import type { Handle } from '@sveltejs/kit';
@@ -135,5 +134,74 @@ const authHandler: Handle = async ({ event, resolve }) => {
   return resolve(event);
 };
 
-// Export the handle sequence
-export const handle = sequence(dbInitializer, authHandler);
+// Path selection handler to determine which API implementation to use
+const routeHandler: Handle = async ({ event, resolve }) => {
+  // Log the path being accessed
+  console.log(`Route handler for path: ${event.url.pathname}`);
+  
+  // Special handling for the workspace API routes
+  if (event.url.pathname.startsWith('/api/workspaces/')) {
+    // This is a workspace API request, log detailed info
+    console.log(`API Request: ${event.request.method} ${event.url.pathname}`);
+    console.log(`API Content-Type: ${event.request.headers.get('content-type')}`);
+    
+    // For PATCH requests to workspaces with ID, capture the body for debugging
+    if (
+      event.request.method === 'PATCH' && 
+      /^\/api\/workspaces\/[\w-]+$/.test(event.url.pathname)
+    ) {
+      try {
+        // Clone the request so we can read the body without consuming it
+        const clonedRequest = event.request.clone();
+        const body = await clonedRequest.json();
+        console.log(`PATCH Request Body:`, body);
+      } catch (err) {
+        console.error('Error reading request body for logging:', err);
+      }
+    }
+  }
+  
+  return resolve(event);
+};
+
+// Workspace handler - to check for current workspace in cookies
+const workspaceHandler: Handle = async ({ event, resolve }) => {
+  // Check for current workspace ID in cookies
+  const workspaceId = event.cookies.get('current_workspace_id');
+  
+  if (workspaceId) {
+    console.log(`Checking workspace ${workspaceId}`);
+    // If found, add to locals
+    try {
+      // Check if this workspace exists and user has access to it
+      if (event.locals.user && event.locals.db) {
+        const { db } = event.locals;
+        
+        // Query the workspace to see if it exists
+        const workspace = await db.query.workspaces.findFirst({
+          where: (workspaces, { eq }) => eq(workspaces.id, workspaceId)
+        });
+        
+        if (workspace) {
+          console.log(`Found workspace: ${workspace.name}`);
+          
+          // Add it to locals for all server components to access
+          event.locals.currentWorkspace = workspace;
+        } else {
+          console.log(`Workspace ${workspaceId} not found in database`);
+          // Cookie refers to a workspace that doesn't exist, clear it
+          event.cookies.set('current_workspace_id', '', { path: '/', maxAge: 0 });
+        }
+      }
+    } catch (error) {
+      console.error('Error checking workspace:', error);
+    }
+  } else {
+    console.log('No current workspace ID found in cookies');
+  }
+  
+  return resolve(event);
+};
+
+// Export the handle sequence - add workspaceHandler to the sequence
+export const handle = sequence(dbInitializer, authHandler, workspaceHandler, routeHandler);

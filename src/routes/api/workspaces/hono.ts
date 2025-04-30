@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { handle } from 'hono/vercel';
+import { and } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { workspaces, userWorkspaces } from '$lib/db/drizzle/schema';
 import { eq, inArray } from 'drizzle-orm';
@@ -57,6 +58,70 @@ app.get('/', async (c) => {
 // Export the Hono app
 export default app;
 
+// PATCH /api/workspaces/:workspaceId - Update a workspace
+app.patch('/:workspaceId', async (c) => {
+  const user = c.get('user');
+  const workspaceId = c.req.param('workspaceId');
+  
+  if (!user) {
+    return c.json({ error: 'Authentication required' }, 401);
+  }
+  
+  try {
+    // Check if workspace exists
+    const [workspace] = await db
+      .select()
+      .from(workspaces)
+      .where(eq(workspaces.id, workspaceId));
+    
+    if (!workspace) {
+      return c.json({ error: 'Workspace not found' }, 404);
+    }
+    
+    // Check if user has access to this workspace
+    const [userWorkspace] = await db
+      .select()
+      .from(userWorkspaces)
+      .where(
+        and(
+          eq(userWorkspaces.workspaceId, workspaceId),
+          eq(userWorkspaces.userId, user.id)
+        )
+      );
+    
+    if (!userWorkspace || !['Super Admin', 'Admin'].includes(userWorkspace.role)) {
+      return c.json({ error: 'You do not have permission to update this workspace' }, 403);
+    }
+    
+    // Get update data from request
+    const updates = await c.req.json();
+    
+    // Only allow updating name
+    if (!updates.name || typeof updates.name !== 'string' || !updates.name.trim()) {
+      return c.json({ error: 'Valid workspace name is required' }, 400);
+    }
+    
+    // Update the workspace
+    const [updatedWorkspace] = await db
+      .update(workspaces)
+      .set({
+        name: updates.name.trim(),
+        updatedAt: new Date()
+      })
+      .where(eq(workspaces.id, workspaceId))
+      .returning();
+    
+    if (!updatedWorkspace) {
+      return c.json({ error: 'Failed to update workspace' }, 500);
+    }
+    
+    return c.json({ workspace: updatedWorkspace, handler: 'hono' });
+  } catch (error) {
+    console.error('Error updating workspace:', error);
+    return c.json({ error: 'Failed to update workspace' }, 500);
+  }
+});
+
 // POST /api/workspaces - Create a new workspace
 app.post('/', async (c) => {
   const user = c.get('user');
@@ -103,5 +168,9 @@ app.post('/', async (c) => {
 });
 
 // Export the handle function for Vercel
+// Export handlers for base routes
 export const GET = handle(app);
 export const POST = handle(app);
+
+// For SvelteKit compatibility, make this available to other imports
+export default app;

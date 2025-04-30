@@ -90,16 +90,39 @@
     }
     
     // On mount, ensure we have a workspace ID
-    onMount(() => {
+    onMount(async () => {
       // Check if we have a workspace ID in the store
       const currentWorkspace = $workspaceStore.currentWorkspace;
       
       if (!currentWorkspace && $workspaceStore.workspaces.length > 0) {
         // Set the first workspace as active
-        workspaceStore.setCurrentWorkspace($workspaceStore.workspaces[0].id);
+        await workspaceStore.setCurrentWorkspace($workspaceStore.workspaces[0].id);
         
-        // Force a reload of the page to use the new workspace
-        window.location.reload();
+        // Wait for the current workspace to be synced to the server
+        setTimeout(() => {
+          // Force a reload of the page to use the new workspace
+          window.location.reload();
+        }, 500);
+      } else if (currentWorkspace && noWorkspaceSelected) {
+        // We have a workspace in the store but the server doesn't know about it
+        // This could happen if the cookie wasn't set properly
+        console.log('Workspace selected in client but not in server, syncing...');
+        
+        try {
+          // Sync the workspace with the server
+          await fetch('/api/workspaces/set-current', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ workspaceId: currentWorkspace.id })
+          });
+          
+          // Reload the page to use the newly set workspace
+          window.location.reload();
+        } catch (error) {
+          console.error('Failed to sync workspace with server:', error);
+        }
       }
     });
 </script>

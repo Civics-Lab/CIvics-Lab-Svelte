@@ -13,13 +13,15 @@
   }
   
   function addPhone() {
-    // Create a new empty phone number entry with isNew flag
+    // Create a new empty phone number entry with proper flags
     phoneNumbers.update(items => [...items, { 
       phone_number: '', // Start with empty string, not null
       status: 'active',
-      isNew: true  // This flag will ensure it's treated as a new entry for the API
+      isNew: true,  // This flag will ensure it's treated as a new entry for the API
+      isModified: false,
+      isDeleted: false
     }]);
-    console.log('Added new phone number entry');
+    console.log('Added new phone number entry with flags:', { isNew: true, isModified: false, isDeleted: false });
     handleChange();
   }
   
@@ -28,12 +30,19 @@
       const updatedItems = [...items];
       const item = updatedItems[index];
       
+      // Initialize flags if they don't exist
+      if (item.isNew === undefined) item.isNew = false;
+      if (item.isModified === undefined) item.isModified = false;
+      if (item.isDeleted === undefined) item.isDeleted = false;
+      
       if (item.id) {
         // For existing items, mark as deleted
         item.isDeleted = true;
+        console.log(`Phone ${index} with ID ${item.id} marked as deleted`);
       } else {
         // For new items, just remove from array
         updatedItems.splice(index, 1);
+        console.log(`New phone at index ${index} removed from array`);
       }
       
       return updatedItems;
@@ -46,9 +55,15 @@
       const updatedItems = [...items];
       const item = updatedItems[index];
       
+      // Initialize flags if they don't exist
+      if (item.isNew === undefined) item.isNew = false;
+      if (item.isModified === undefined) item.isModified = false;
+      if (item.isDeleted === undefined) item.isDeleted = false;
+      
       if (item.id && !item.isNew) {
         // Mark as modified for existing items
         item.isModified = true;
+        console.log(`Phone ${index} marked as modified:`, item);
       }
       
       // For phone_number field, ensure it's not null

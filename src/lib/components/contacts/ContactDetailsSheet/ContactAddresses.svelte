@@ -50,6 +50,11 @@
       const updatedItems = [...items];
       const item = updatedItems[index];
       
+      // Initialize flags if they don't exist
+      if (item.isNew === undefined) item.isNew = false;
+      if (item.isModified === undefined) item.isModified = false;
+      if (item.isDeleted === undefined) item.isDeleted = false;
+      
       if (item.id && !item.isNew) {
         // Mark as modified for existing items
         item.isModified = true;
@@ -59,6 +64,14 @@
       if (['street_address', 'secondary_street_address', 'city', 'zip_code'].includes(field)) {
         // Trim the value and store it, or empty string if null/undefined
         item[field] = value ? value.trim() : '';
+        
+        // If updating zip_code, clear any previous zipCodeId to ensure
+        // the server processes the new zip_code value
+        if (field === 'zip_code') {
+          // Clear the zipCodeId so the server will process the new zip_code
+          item.zipCodeId = null;
+          console.log('Updating zip code to:', value, '- cleared zipCodeId');
+        }
       } else {
         item[field] = value;
       }

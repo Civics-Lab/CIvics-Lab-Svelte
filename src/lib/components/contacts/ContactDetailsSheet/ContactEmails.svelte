@@ -16,8 +16,11 @@
     emails.update(items => [...items, { 
       email: '', 
       status: 'active',
-      isNew: true 
+      isNew: true,
+      isModified: false,
+      isDeleted: false
     }]);
+    console.log('Added new email with flags:', { isNew: true, isModified: false, isDeleted: false });
     handleChange();
   }
   
@@ -26,12 +29,19 @@
       const updatedItems = [...items];
       const item = updatedItems[index];
       
+      // Initialize flags if they don't exist
+      if (item.isNew === undefined) item.isNew = false;
+      if (item.isModified === undefined) item.isModified = false;
+      if (item.isDeleted === undefined) item.isDeleted = false;
+      
       if (item.id) {
         // For existing items, mark as deleted
         item.isDeleted = true;
+        console.log(`Email ${index} with ID ${item.id} marked as deleted`);
       } else {
         // For new items, just remove from array
         updatedItems.splice(index, 1);
+        console.log(`New email at index ${index} removed from array`);
       }
       
       return updatedItems;
@@ -44,9 +54,15 @@
       const updatedItems = [...items];
       const item = updatedItems[index];
       
+      // Initialize flags if they don't exist
+      if (item.isNew === undefined) item.isNew = false;
+      if (item.isModified === undefined) item.isModified = false;
+      if (item.isDeleted === undefined) item.isDeleted = false;
+      
       if (item.id && !item.isNew) {
         // Mark as modified for existing items
         item.isModified = true;
+        console.log(`Email ${index} marked as modified:`, item);
       }
       
       // For email field, ensure it's not null
@@ -54,7 +70,7 @@
         // Trim the value and store it, or empty string if null/undefined
         item[field] = value ? value.trim() : '';
       } else {
-        item[field] = value;
+        item[field] = value || 'active'; // Ensure default status is 'active' if null
       }
       
       return updatedItems;

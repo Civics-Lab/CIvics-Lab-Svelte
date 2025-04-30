@@ -177,15 +177,38 @@
         // Set addresses - try both property names
         if (possibleAddresses.length > 0) {
           console.log('Address data found:', possibleAddresses);
-          addresses.set(possibleAddresses.map(address => ({
-            id: address.id,
-            street_address: address.streetAddress || address.street_address || '',
-            secondary_street_address: address.secondaryStreetAddress || address.secondary_street_address || '',
-            city: address.city || '',
-            state_id: address.stateId || address.state_id || '',
-            zip_code: address.zipCode || address.zip_code || '',
-            status: address.status || 'active'
-          })));
+          
+          // Map addresses and log zip code data specifically
+          const mappedAddresses = possibleAddresses.map(address => {
+            const zipCode = address.zipCodeName || address.zipCode || '';
+            
+            // Log specific zip code details for debugging
+            console.log('Address zip code details:', {
+              addressId: address.id,
+              zipCodeId: address.zipCodeId,
+              zipCodeName: address.zipCodeName,
+              zipCode: address.zipCode,
+              finalZipValue: zipCode
+            });
+            
+            return {
+              id: address.id,
+              street_address: address.streetAddress || address.street_address || '',
+              secondary_street_address: address.secondaryStreetAddress || address.secondary_street_address || '',
+              city: address.city || '',
+              state_id: address.stateId || address.state_id || '',
+              zip_code: zipCode, // Use zipCodeName from API
+              zipCodeId: address.zipCodeId || '',
+              status: address.status || 'active',
+              isNew: false,
+              isModified: false,
+              isDeleted: false
+            };
+          });
+          
+          // Set the addresses store
+          addresses.set(mappedAddresses);
+          console.log('Mapped addresses for UI:', mappedAddresses);
         } else {
           console.log('No address data found');
           addresses.set([]);
@@ -252,31 +275,78 @@
           status: $formData.status
         },
         emails: $emails
-          .filter(email => email.isNew || email.isDeleted || email.isModified)
+          .filter(email => {
+            // Keep deleted items to ensure they're removed from DB
+            if (email.isDeleted) return true;
+            // Only include valid emails with content
+            return (email.isNew || email.isModified) && email.email && email.email.trim() !== '';
+          })
           .map(email => ({
-            // Keep properties as-is since service will map them
-            ...email
+            // Explicitly map all fields needed by the API
+            id: email.id,
+            email: email.email,
+            status: email.status || 'active',
+            isNew: !!email.isNew, // Ensure boolean type
+            isModified: !!email.isModified, // Ensure boolean type
+            isDeleted: !!email.isDeleted // Ensure boolean type
           })),
-        phoneNumbers: phonesToSend.map(phone => ({
+        phoneNumbers: phonesToSend
+          .filter(phone => {
+            // Keep deleted items to ensure they're removed from DB
+            if (phone.isDeleted) return true;
+            // Only include valid phone numbers with content
+            const phoneValue = phone.phone_number || '';
+            return phoneValue.trim() !== '';
+          })
+          .map(phone => ({
             // Explicitly map phone_number to phoneNumber for API
             id: phone.id,
             phoneNumber: phone.phone_number || '', // Ensure empty string instead of null
-            status: phone.status,
-            isNew: phone.isNew,
-            isDeleted: phone.isDeleted,
-            isModified: phone.isModified
+            status: phone.status || 'active',
+            isNew: !!phone.isNew, // Ensure boolean type
+            isDeleted: !!phone.isDeleted, // Ensure boolean type
+            isModified: !!phone.isModified // Ensure boolean type
           })),
         addresses: $addresses
-          .filter(address => address.isNew || address.isDeleted || address.isModified)
+          .filter(address => {
+            // Keep deleted items to ensure they're removed from DB
+            if (address.isDeleted) return true;
+            // Only include valid addresses with required fields
+            return (address.isNew || address.isModified) && 
+                   address.street_address && address.street_address.trim() !== '' &&
+                   address.city && address.city.trim() !== '';
+          })
           .map(address => ({
-            // Properties will be mapped in service
-            ...address
+            // Explicitly map all fields needed by the API
+            id: address.id,
+            streetAddress: address.street_address || '',
+            secondaryStreetAddress: address.secondary_street_address || '',
+            city: address.city || '',
+            stateId: address.state_id || '',
+            zipCode: address.zip_code || '',
+            status: address.status || 'active',
+            isNew: !!address.isNew, // Ensure boolean type
+            isModified: !!address.isModified, // Ensure boolean type
+            isDeleted: !!address.isDeleted // Ensure boolean type
           })),
         socialMedia: $socialMedia
-          .filter(social => social.isNew || social.isDeleted || social.isModified)
+          .filter(social => {
+            // Keep deleted items to ensure they're removed from DB
+            if (social.isDeleted) return true;
+            // Only include valid social media with required fields
+            return (social.isNew || social.isModified) && 
+                   social.social_media_account && social.social_media_account.trim() !== '' &&
+                   social.service_type;
+          })
           .map(social => ({
-            // Properties will be mapped in service
-            ...social
+            // Explicitly map all fields needed by the API
+            id: social.id,
+            socialMediaAccount: social.social_media_account || '',
+            serviceType: social.service_type || 'facebook',
+            status: social.status || 'active',
+            isNew: !!social.isNew, // Ensure boolean type
+            isModified: !!social.isModified, // Ensure boolean type
+            isDeleted: !!social.isDeleted // Ensure boolean type
           })),
         tags: $tags
       };
@@ -284,7 +354,24 @@
       // Debug the phone numbers data
       console.log('Phone numbers to be sent:', updateData.phoneNumbers);
       
+      // Add detailed logging to debug the update process
       console.log('Sending update data:', updateData);
+      
+      // Log detailed info about the email objects
+      console.log('Email data details:', updateData.emails.map(e => ({
+        email: e.email,
+        isNew: e.isNew,
+        isModified: e.isModified,
+        isDeleted: e.isDeleted
+      })));
+      
+      // Log detailed info about the phone objects
+      console.log('Phone data details:', updateData.phoneNumbers.map(p => ({
+        phoneNumber: p.phoneNumber,
+        isNew: p.isNew,
+        isModified: p.isModified,
+        isDeleted: p.isDeleted
+      })));
       
       // Call the API to update the contact
       await updateContact(contactId, updateData);

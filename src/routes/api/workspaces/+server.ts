@@ -200,3 +200,47 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     throw error(500, 'Failed to create workspace');
   }
 };
+
+// DEBUG endpoint to list user's workspaces and roles
+export const OPTIONS: RequestHandler = async ({ locals }) => {
+  const user = locals.user;
+  
+  if (!user) {
+    throw error(401, 'Authentication required');
+  }
+  
+  try {
+    console.log(`DEBUG: Getting workspaces for user ${user.id}`);
+    
+    // Get all workspaces the user has access to
+    const userWorkspacesData = await db
+      .select({
+        userWorkspace: userWorkspaces,
+        workspace: workspaces
+      })
+      .from(userWorkspaces)
+      .innerJoin(workspaces, eq(userWorkspaces.workspaceId, workspaces.id))
+      .where(eq(userWorkspaces.userId, user.id));
+    
+    // Extract just the data we need for debugging
+    const debugData = userWorkspacesData.map(item => ({
+      workspaceId: item.workspace.id,
+      workspaceName: item.workspace.name,
+      role: item.userWorkspace.role,
+      userId: user.id,
+      username: user.username
+    }));
+    
+    console.log('User workspaces:', debugData);
+    
+    return json({ debug: debugData });
+  } catch (err) {
+    console.error('Error in debug endpoint:', err);
+    
+    if (err instanceof Response) {
+      throw err;
+    }
+    
+    throw error(500, 'Debug info failed');
+  }
+};

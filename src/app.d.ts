@@ -1,5 +1,9 @@
 // See https://kit.svelte.dev/docs/types#app
 // for information about these interfaces
+
+import type { Workspace } from '$lib/types/supabase';
+import type { PgDatabase } from '$lib/db/drizzle/schema';
+
 declare global {
 	namespace App {
 		// Interface for general app types
@@ -12,6 +16,8 @@ declare global {
 				role: string;
 			};
 			token?: string;
+			db?: any; // Database instance
+			currentWorkspace?: Workspace; // Current workspace information
 		}
 		interface PageData {}
 		interface Platform {}

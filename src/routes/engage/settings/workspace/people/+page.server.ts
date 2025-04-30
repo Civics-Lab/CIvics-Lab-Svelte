@@ -16,7 +16,19 @@ export const load: PageServerLoad = async ({ locals, url, cookies, request }) =>
   const workspaceId = locals.currentWorkspace?.id;
   
   if (!workspaceId) {
-    console.error('No workspace ID found in server component');
+    console.error('No workspace ID found in server component, checking query parameter');
+    
+    // Get workspace ID from the URL query parameter as fallback
+    const urlWorkspaceId = url.searchParams.get('workspace');
+    
+    if (urlWorkspaceId) {
+      console.log(`Using workspace ID from URL: ${urlWorkspaceId}`);
+      // Set it in locals for future requests
+      locals.currentWorkspace = { id: urlWorkspaceId } as any;
+      // Continue with this workspace ID
+      return load({ locals: { ...locals, currentWorkspace: { id: urlWorkspaceId } }, url, cookies, request });
+    }
+    
     // Return an empty state that the client will handle
     return {
       members: [],

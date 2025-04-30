@@ -24,6 +24,44 @@ function createWorkspaceStore() {
   return {
     subscribe,
     
+    // Helper function to validate a workspace ID before using it
+    validateWorkspaceId: async (workspaceId: string): Promise<boolean> => {
+      console.log(`Validating workspace ID: ${workspaceId}`);
+      
+      if (!workspaceId || workspaceId.trim() === '') {
+        console.log('Empty workspace ID provided');
+        return false;
+      }
+      
+      try {
+        // Use the check endpoint to verify if the workspace exists
+        const response = await fetch(`/api/workspaces/check?id=${workspaceId}`);
+        
+        if (!response.ok) {
+          console.log(`Error validating workspace ID: ${response.status}`);
+          return false;
+        }
+        
+        const result = await response.json();
+        
+        if (!result.exists) {
+          console.log('Workspace does not exist in the database');
+          // If localStorage has this ID, clear it
+          if (typeof window !== 'undefined' && 
+              localStorage.getItem('currentWorkspaceId') === workspaceId) {
+            console.log('Removing invalid workspace ID from localStorage');
+            localStorage.removeItem('currentWorkspaceId');
+          }
+          return false;
+        }
+        
+        return true;
+      } catch (error) {
+        console.error('Error validating workspace ID:', error);
+        return false;
+      }
+    },
+    
     // Set the list of workspaces and optionally set a current workspace
     setWorkspaces: (workspaces: Workspace[], currentId?: string) => {
       console.log("setWorkspaces called with:", { 
@@ -71,8 +109,15 @@ function createWorkspaceStore() {
     },
     
     // Set the current workspace by ID
-    setCurrentWorkspace: (workspaceId: string, workspaceData?: Workspace) => {
+    setCurrentWorkspace: async (workspaceId: string, workspaceData?: Workspace) => {
       console.log("setCurrentWorkspace called with ID:", workspaceId);
+      
+      // First, validate the workspace ID
+      const isValid = await workspaceStore.validateWorkspaceId(workspaceId);
+      if (!isValid) {
+        console.warn(`Workspace ID ${workspaceId} is not valid, will not set as current`);
+        return;
+      }
       
       update(state => {
         let workspace = workspaceData;
@@ -85,6 +130,17 @@ function createWorkspaceStore() {
         if (typeof window !== 'undefined' && workspace) {
           console.log("Saving workspace ID to localStorage:", workspace.id);
           localStorage.setItem('currentWorkspaceId', workspace.id);
+          
+          // Also send to server to set in cookies
+          fetch('/api/workspaces/set-current', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ workspaceId: workspace.id })
+          }).catch(err => {
+            console.error('Error setting current workspace in cookies:', err);
+          });
         }
         
         return {
@@ -159,6 +215,19 @@ function createWorkspaceStore() {
         
         console.log("refreshWorkspaces - savedWorkspaceId from localStorage:", savedWorkspaceId);
         
+        // Validate the workspace ID from localStorage before using it
+        let savedWorkspaceIdValid = false;
+        if (savedWorkspaceId) {
+          savedWorkspaceIdValid = await workspaceStore.validateWorkspaceId(savedWorkspaceId);
+          console.log(`Saved workspace ID validation result: ${savedWorkspaceIdValid}`);
+          
+          // If invalid but still in localStorage, remove it
+          if (!savedWorkspaceIdValid && typeof window !== 'undefined') {
+            console.log('Removing invalid workspace ID from localStorage');
+            localStorage.removeItem('currentWorkspaceId');
+          }
+        }
+        
         // Update store with fetched workspaces
         update(state => {
           console.log("refreshWorkspaces - current state:", { 
@@ -170,14 +239,14 @@ function createWorkspaceStore() {
           // if it exists and is valid
           let currentWorkspace = null;
           
-          if (savedWorkspaceId) {
-          // Try to find the workspace with the saved ID
-          currentWorkspace = fetchedWorkspaces.find(w => w.id === savedWorkspaceId);
-          console.log("Using workspace from localStorage:", 
-          currentWorkspace ? 
-                { id: currentWorkspace.id, name: currentWorkspace.name, hasLogo: !!currentWorkspace.logo } : 
-          "Not found");
-    }
+          if (savedWorkspaceId && savedWorkspaceIdValid) {
+            // Try to find the workspace with the saved ID
+            currentWorkspace = fetchedWorkspaces.find(w => w.id === savedWorkspaceId);
+            console.log("Using workspace from localStorage:", 
+              currentWorkspace ? 
+              { id: currentWorkspace.id, name: currentWorkspace.name, hasLogo: !!currentWorkspace.logo } : 
+              "Not found");
+          }
           
           // If no valid workspace was found from localStorage, use the current one if it exists
           if (!currentWorkspace && state.currentWorkspace) {
@@ -194,6 +263,19 @@ function createWorkspaceStore() {
           
           // Ensure currentWorkspace is not undefined when returning
           currentWorkspace = currentWorkspace || null;
+          
+          // If we have a current workspace, sync it with the server
+          if (currentWorkspace) {
+            fetch('/api/workspaces/set-current', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ workspaceId: currentWorkspace.id })
+            }).catch(err => {
+              console.error('Error syncing current workspace with server:', err);
+            });
+          }
           
           return {
             ...state,

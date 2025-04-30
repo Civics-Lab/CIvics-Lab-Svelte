@@ -2,13 +2,37 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { writable } from 'svelte/store';
+  import { page } from '$app/stores';
   import { workspaceStore } from '$lib/stores/workspaceStore';
   import { toastStore } from '$lib/stores/toastStore';
   import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-  import { updateWorkspace, deleteWorkspace, uploadWorkspaceLogo, removeWorkspaceLogo } from '$lib/services/workspaceService';
+  import { 
+    updateWorkspace, 
+    deleteWorkspace, 
+    uploadWorkspaceLogo, 
+    removeWorkspaceLogo, 
+    updateWorkspaceStrict, 
+    testApiConnectivity,
+    updateWorkspaceDebug, 
+    checkWorkspaceDebug, 
+    updateWorkspaceSimple 
+  } from '$lib/services/workspaceService';
   import type { PageData } from './$types';
   
   export let data: PageData;
+  
+  // When page loads, validate current workspace
+  onMount(async () => {
+    if ($workspaceStore.currentWorkspace) {
+      // Validate current workspace
+      const isValid = await workspaceStore.validateWorkspaceId($workspaceStore.currentWorkspace.id);
+      
+      if (!isValid) {
+        console.warn('Current workspace is invalid, refreshing workspaces');
+        await workspaceStore.refreshWorkspaces();
+      }
+    }
+  });
   
   // Form state
   const workspaceName = writable('');
@@ -16,6 +40,11 @@
   const isDeleting = writable(false);
   const showDeleteConfirm = writable(false);
   const deleteConfirmText = writable('');
+  
+  // Diagnostic states
+  const isTesting = writable(false);
+  const testResults = writable<any>(null);
+  const errorText = writable<string | null>(null);
   
   // Logo state
   const logoFile = writable<File | null>(null);
@@ -119,10 +148,16 @@
     isRenaming.set(true);
     
     try {
-      console.log(`Renaming workspace ${$workspaceStore.currentWorkspace.id} to "${$workspaceName.trim()}"`);
-      const updatedWorkspace = await updateWorkspace($workspaceStore.currentWorkspace.id, {
-        name: $workspaceName.trim()
-      });
+      // Get the current workspace ID
+      const workspaceId = $workspaceStore.currentWorkspace.id;
+      
+      console.log(`Renaming workspace ${workspaceId} to "${$workspaceName.trim()}"`); 
+      
+      // Use our new simple update method instead of the problematic one
+      const updatedWorkspace = await updateWorkspaceSimple(
+        workspaceId, 
+        { name: $workspaceName.trim() }
+      );
       
       console.log('Workspace update result:', updatedWorkspace);
       
@@ -180,6 +215,399 @@
       toastStore.error(`Failed to delete workspace: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       isDeleting.set(false);
+    }
+  }
+  
+  // Test API connectivity
+  async function testApi() {
+    isTesting.set(true);
+    errorText.set(null);
+    testResults.set(null);
+    
+    try {
+      const results = await testApiConnectivity();
+      console.log('API test results:', results);
+      testResults.set(results);
+    } catch (err) {
+      console.error('API test error:', err);
+      errorText.set(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      isTesting.set(false);
+    }
+  }
+  
+  // Test the debug API
+  async function testDebugApi() {
+    if (!$workspaceStore.currentWorkspace) return;
+    
+    isTesting.set(true);
+    errorText.set(null);
+    testResults.set(null);
+    
+    try {
+      // First, check if the workspace exists using the debug endpoint
+      console.log('Testing debug API check for workspace');
+      const checkResult = await checkWorkspaceDebug($workspaceStore.currentWorkspace.id);
+      
+      // Then try to update the workspace
+      console.log('Testing debug API update for workspace');
+      const newName = `Debug Test ${Date.now().toString().slice(-4)}`;
+      const updateResult = await updateWorkspaceDebug(
+        $workspaceStore.currentWorkspace.id,
+        { name: newName }
+      );
+      
+      // If successful, update the store
+      if (updateResult) {
+        workspaceStore.updateCurrentWorkspace(updateResult);
+        console.log('Updated workspace via debug API:', updateResult);
+      }
+      
+      // Set test results
+      testResults.set({
+        checkResult,
+        updateResult,
+        workspaceId: $workspaceStore.currentWorkspace.id,
+        newName
+      });
+    } catch (err) {
+      console.error('Debug API test error:', err);
+      errorText.set(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      isTesting.set(false);
+    }
+  }
+  
+  // Test route parameters to diagnose dynamic route issues
+  async function testRouteParameters() {
+    if (!$workspaceStore.currentWorkspace) return;
+    
+    isTesting.set(true);
+    errorText.set(null);
+    testResults.set(null);
+    
+    const results: Record<string, any> = {};
+    const workspaceId = $workspaceStore.currentWorkspace.id;
+    const timestamp = Date.now();
+    
+    try {
+      // Test the /api/test-workspaces endpoint with ID parameter
+      console.log('Testing test-workspaces with ID parameter');
+      const testResponse = await fetch(`/api/test-workspaces/${workspaceId}`);
+      results.testWorkspacesEndpoint = {
+        status: testResponse.status,
+        data: testResponse.ok ? await testResponse.json() : 'Error'
+      };
+      
+      // Test the test-id endpoint
+      console.log('Testing test-id endpoint');
+      const testIdResponse = await fetch('/api/workspaces/test-id');
+      results.testIdEndpoint = {
+        status: testIdResponse.status,
+        data: testIdResponse.ok ? await testIdResponse.json() : 'Error'
+      };
+      
+      // Test the workspaces API with a specific ID
+      console.log('Testing workspaces API with specific ID');
+      const specificResponse = await fetch(`/api/workspaces/${workspaceId}`);
+      results.specificWorkspace = {
+        status: specificResponse.status,
+        data: specificResponse.ok ? await specificResponse.json() : 'Error'
+      };
+      
+      // Test PATCH on test-workspaces endpoint
+      console.log('Testing PATCH on test-workspaces endpoint');
+      const testPatchResponse = await fetch(`/api/test-workspaces/${workspaceId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ name: `Test ${timestamp}` })
+      });
+      results.testPatch = {
+        status: testPatchResponse.status,
+        data: testPatchResponse.ok ? await testPatchResponse.json() : 'Error'
+      };
+      
+      // Set test results
+      testResults.set({
+        routeTesting: results,
+        timestamp,
+        workspaceId
+      });
+    } catch (err) {
+      console.error('Route parameter test error:', err);
+      errorText.set(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      isTesting.set(false);
+    }
+  }
+  
+  // Test SvelteKit route patterns
+  async function testRoutePatterns() {
+    if (!$workspaceStore.currentWorkspace) return;
+    
+    isTesting.set(true);
+    errorText.set(null);
+    testResults.set(null);
+    
+    const results: Record<string, any> = {};
+    const workspaceId = $workspaceStore.currentWorkspace.id;
+    const timestamp = Date.now();
+    
+    try {
+      // First test the specific test endpoint
+      console.log('Testing workspaces test endpoint');
+      const testResponse = await fetch('/api/workspaces/test');
+      results.testEndpoint = {
+        status: testResponse.status,
+        data: testResponse.ok ? await testResponse.json() : 'Error'
+      };
+      
+      // Test with a random string ID
+      const randomId = `test-${timestamp}`;
+      const randomResponse = await fetch(`/api/workspaces/${randomId}`);
+      results.randomIdTest = {
+        status: randomResponse.status,
+        data: randomResponse.ok ? await randomResponse.json() : 'Error',
+        id: randomId
+      };
+      
+      // Test with the actual workspace ID
+      const workspaceResponse = await fetch(`/api/workspaces/${workspaceId}`);
+      results.workspaceIdTest = {
+        status: workspaceResponse.status,
+        data: workspaceResponse.ok ? await workspaceResponse.json() : 'Error',
+        id: workspaceId
+      };
+      
+      // Test update with a PATCH request
+      const patchBody = { name: `Route Test ${timestamp}` };
+      const patchResponse = await fetch(`/api/workspaces/${workspaceId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Route-Test': 'true'
+        },
+        body: JSON.stringify(patchBody)
+      });
+      results.patchTest = {
+        status: patchResponse.status,
+        data: patchResponse.ok ? await patchResponse.json() : 'Error',
+        body: patchBody
+      };
+      
+      // Set test results
+      testResults.set({
+        results,
+        timestamp,
+        workspaceId
+      });
+    } catch (err) {
+      console.error('Route pattern test error:', err);
+      errorText.set(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      isTesting.set(false);
+    }
+  }
+  
+  // Test workspace API endpoints
+  async function testWorkspaceEndpoints() {
+    isTesting.set(true);
+    errorText.set(null);
+    testResults.set(null);
+    
+    try {
+      // Test the specific test endpoint
+      console.log('Testing workspaces test endpoint');
+      const testResponse = await fetch('/api/workspaces/test');
+      console.log('Workspaces test endpoint status:', testResponse.status);
+      const testData = await testResponse.json();
+      console.log('Workspaces test endpoint data:', testData);
+      
+      // Try a direct test with a random ID
+      const randomId = `test-${Date.now()}`;
+      const directResponse = await fetch(`/api/workspaces/${randomId}`);
+      console.log('Direct test endpoint status:', directResponse.status);
+      let directData;
+      try {
+        directData = await directResponse.json();
+        console.log('Direct test endpoint data:', directData);
+      } catch (e) {
+        console.error('Error parsing direct test response:', e);
+        directData = { error: 'Failed to parse response' };
+      }
+      
+      // If we have a current workspace, try with that ID too
+      let workspaceTestData = null;
+      if ($workspaceStore.currentWorkspace) {
+        const workspaceTestResponse = await fetch(`/api/workspaces/${$workspaceStore.currentWorkspace.id}`);
+        console.log('Workspace ID test status:', workspaceTestResponse.status);
+        try {
+          workspaceTestData = await workspaceTestResponse.json();
+          console.log('Workspace ID test data:', workspaceTestData);
+        } catch (e) {
+          console.error('Error parsing workspace ID test response:', e);
+          workspaceTestData = { error: 'Failed to parse response' };
+        }
+      }
+      
+      // Set the test results
+      testResults.set({
+        testEndpoint: testData,
+        directTest: directData,
+        workspaceTest: workspaceTestData,
+        currentWorkspaceId: $workspaceStore.currentWorkspace?.id
+      });
+    } catch (err) {
+      console.error('Endpoint test error:', err);
+      errorText.set(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      isTesting.set(false);
+    }
+  }
+  
+  // Test the simple update API
+  async function testSimpleUpdate() {
+    if (!$workspaceStore.currentWorkspace) return;
+    
+    isTesting.set(true);
+    errorText.set(null);
+    testResults.set(null);
+    
+    try {
+      // Generate a test name with timestamp
+      const testName = `Simple API Test ${Date.now().toString().slice(-4)}`;
+      
+      // Try using the simple update API
+      console.log(`Testing simple update API for workspace ${$workspaceStore.currentWorkspace.id} with name "${testName}"`);
+      
+      const updatedWorkspace = await updateWorkspaceSimple(
+        $workspaceStore.currentWorkspace.id,
+        { name: testName }
+      );
+      
+      console.log('Simple update API response:', updatedWorkspace);
+      
+      // If successful, update the workspace in the store
+      if (updatedWorkspace) {
+        workspaceStore.updateCurrentWorkspace(updatedWorkspace);
+        console.log('Updated workspace in store:', updatedWorkspace);
+      }
+      
+      // Set test results
+      testResults.set({
+        success: true,
+        workspace: updatedWorkspace,
+        testName: testName,
+        workspaceId: $workspaceStore.currentWorkspace.id,
+        timestamp: new Date().toISOString()
+      });
+    } catch (err) {
+      console.error('Simple API test error:', err);
+      errorText.set(err instanceof Error ? err.message : 'Unknown error');
+      
+      testResults.set({
+        success: false,
+        error: err instanceof Error ? err.message : 'Unknown error',
+        workspaceId: $workspaceStore.currentWorkspace.id,
+        timestamp: new Date().toISOString()
+      });
+    } finally {
+      isTesting.set(false);
+    }
+  }
+  
+  // Test direct API call for workspace ID
+  async function testWorkspaceIdApi() {
+    if (!$workspaceStore.currentWorkspace) return;
+    
+    isTesting.set(true);
+    errorText.set(null);
+    testResults.set(null);
+    
+    try {
+      // Check if the echo endpoint works first
+      const echoId = $workspaceStore.currentWorkspace.id;
+      console.log(`Testing echo endpoint with ID ${echoId}`);
+      const echoResponse = await fetch(`/api/echo/${echoId}`);
+      console.log('Echo ID response status:', echoResponse.status);
+      let echoData;
+      try {
+        echoData = await echoResponse.json();
+        console.log('Echo ID response data:', echoData);
+      } catch (e) {
+        console.error('Error parsing echo response:', e);
+        echoData = { error: 'Failed to parse response' };
+      }
+      
+      // Test GET for workspace
+      console.log(`Testing GET for workspace ID ${$workspaceStore.currentWorkspace.id}`);
+      const getResponse = await fetch(`/api/workspaces/${$workspaceStore.currentWorkspace.id}`);
+      console.log('GET workspace ID response status:', getResponse.status);
+      let getData;
+      try {
+        getData = await getResponse.json();
+        console.log('GET workspace ID response data:', getData);
+      } catch (e) {
+        console.error('Error parsing GET response:', e);
+        getData = { error: 'Failed to parse response' };
+      }
+      
+      // Try direct DB check (using check endpoint)
+      console.log(`Testing check endpoint for workspace ID ${$workspaceStore.currentWorkspace.id}`);
+      const checkResponse = await fetch(`/api/workspaces/check?id=${$workspaceStore.currentWorkspace.id}`);
+      console.log('Check endpoint response status:', checkResponse.status);
+      let checkData;
+      try {
+        checkData = await checkResponse.json();
+        console.log('Check endpoint response data:', checkData);
+      } catch (e) {
+        console.error('Error parsing check response:', e);
+        checkData = { error: 'Failed to parse response' };
+      }
+      
+      // Test PATCH directly
+      console.log(`Testing PATCH for workspace ID ${$workspaceStore.currentWorkspace.id}`);
+      const testName = `${$workspaceStore.currentWorkspace.name} - test-${Date.now().toString().slice(-4)}`;
+      const patchResponse = await fetch(`/api/workspaces/${$workspaceStore.currentWorkspace.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Debug-Info': 'testWorkspaceIdApi'
+        },
+        body: JSON.stringify({ name: testName })
+      });
+      console.log('PATCH workspace ID response status:', patchResponse.status);
+      let patchData;
+      try {
+        patchData = await patchResponse.json();
+        console.log('PATCH workspace ID response data:', patchData);
+        
+        // If the update was successful, update the store
+        if (patchResponse.ok && patchData.workspace) {
+          workspaceStore.updateCurrentWorkspace(patchData.workspace);
+          console.log('Updated workspace in store:', patchData.workspace);
+        }
+      } catch (e) {
+        console.error('Error parsing PATCH response:', e);
+        patchData = { error: 'Failed to parse response' };
+      }
+      
+      testResults.set({
+        get: getData,
+        patch: patchData,
+        check: checkData,
+        echo: echoData,
+        workspaceId: $workspaceStore.currentWorkspace.id,
+        baseUrl: $page.url.origin,
+        testName
+      });
+    } catch (err) {
+      console.error('Workspace ID API test error:', err);
+      errorText.set(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      isTesting.set(false);
     }
   }
 </script>
@@ -298,6 +726,127 @@
           Rename Workspace
         {/if}
       </button>
+    </div>
+  </div>
+  
+  <!-- API Diagnostic Tools -->
+  <div class="mb-10 border-b pb-6">
+    <h3 class="text-lg font-medium mb-4">API Diagnostics</h3>
+    <div class="max-w-md">
+      <div class="flex flex-wrap gap-3 mb-4">
+        <button
+          type="button"
+          class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 disabled:opacity-50"
+          on:click={testApi}
+          disabled={$isTesting}
+        >
+          {#if $isTesting}
+            <div class="flex items-center">
+              <LoadingSpinner size="sm" color="gray" />
+              <span class="ml-2">Testing API...</span>
+            </div>
+          {:else}
+            Test API Connectivity
+          {/if}
+        </button>
+        
+        <button
+          type="button"
+          class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 disabled:opacity-50"
+          on:click={testWorkspaceIdApi}
+          disabled={$isTesting || !$workspaceStore.currentWorkspace}
+        >
+          {#if $isTesting}
+            <div class="flex items-center">
+              <LoadingSpinner size="sm" color="gray" />
+              <span class="ml-2">Testing...</span>
+            </div>
+          {:else}
+            Test Workspace ID API
+          {/if}
+        </button>
+        
+        <button
+          type="button"
+          class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 disabled:opacity-50"
+          on:click={() => {
+            if (!$workspaceStore.currentWorkspace) return;
+            workspaceName.set(`Test Rename ${Date.now().toString().slice(-4)}`);
+            handleRename();
+          }}
+          disabled={$isRenaming || !$workspaceStore.currentWorkspace}
+        >
+          {#if $isRenaming}
+            <div class="flex items-center">
+              <LoadingSpinner size="sm" color="gray" />
+              <span class="ml-2">Renaming...</span>
+            </div>
+          {:else}
+            Quick Rename Test
+          {/if}
+        </button>
+        
+        <button
+          type="button"
+          class="px-4 py-2 border border-orange-300 bg-orange-50 rounded-md shadow-sm text-sm font-medium text-orange-700 hover:bg-orange-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50"
+          on:click={testRoutePatterns}
+          disabled={$isTesting}
+        >
+          {#if $isTesting}
+            <div class="flex items-center">
+              <LoadingSpinner size="sm" color="orange" />
+              <span class="ml-2">Testing...</span>
+            </div>
+          {:else}
+            Test Route Patterns
+          {/if}
+        </button>
+        
+        <button
+          type="button"
+          class="px-4 py-2 border border-green-300 bg-green-50 rounded-md shadow-sm text-sm font-medium text-green-700 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
+          on:click={testDebugApi}
+          disabled={$isTesting || !$workspaceStore.currentWorkspace}
+        >
+          {#if $isTesting}
+            <div class="flex items-center">
+              <LoadingSpinner size="sm" color="green" />
+              <span class="ml-2">Testing Debug API...</span>
+            </div>
+          {:else}
+            Test Debug API
+          {/if}
+        </button>
+        
+        <button
+          type="button"
+          class="px-4 py-2 border border-blue-300 bg-blue-50 rounded-md shadow-sm text-sm font-medium text-blue-700 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+          on:click={testSimpleUpdate}
+          disabled={$isTesting || !$workspaceStore.currentWorkspace}
+        >
+          {#if $isTesting}
+            <div class="flex items-center">
+              <LoadingSpinner size="sm" color="blue" />
+              <span class="ml-2">Testing Simple API...</span>
+            </div>
+          {:else}
+            Test Simple API
+          {/if}
+        </button>
+      </div>
+      
+      {#if $errorText}
+        <div class="bg-red-50 border border-red-200 p-4 rounded-md mb-4">
+          <p class="text-red-700">{$errorText}</p>
+        </div>
+      {/if}
+      
+      {#if $testResults}
+        <div class="bg-gray-50 border border-gray-200 p-4 rounded-md mb-4 overflow-x-auto">
+          <h4 class="font-medium mb-2">Test Results:</h4>
+          <pre class="text-xs">{JSON.stringify($testResults, null, 2)}</pre>
+        </div>
+      {/if}
     </div>
   </div>
   
