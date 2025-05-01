@@ -9,6 +9,7 @@
     import { page } from '$app/stores';
     import { goto } from '$app/navigation';
     import { onMount } from 'svelte';
+    import { syncCurrentWorkspaceWithServer, reloadPageWithDelay } from '$lib/utils/workspace-sync';
     
     export let data: PageData;
     export let form: ActionData;
@@ -89,7 +90,7 @@
     
     // Navigate to the workspaces page
     function navigateToWorkspaces() {
-      goto('/engage/settings/workspace/general');
+      goto('/app/settings/workspace/general');
     }
     
     // On mount, ensure we have a workspace ID and load data
@@ -97,6 +98,10 @@
       console.log('Component mounted: Checking workspace state');
       // Check if we have a workspace ID in the store
       const currentWorkspace = $workspaceStore.currentWorkspace;
+      
+      // Add additional debugging
+      console.log('Current workspace in store:', currentWorkspace);
+      console.log('Local storage workspace ID:', localStorage.getItem('current_workspace_id'));
       
       if (!currentWorkspace && $workspaceStore.workspaces.length > 0) {
         // Set the first workspace as active
@@ -115,16 +120,10 @@
         
         try {
           // Sync the workspace with the server
-          await fetch('/api/workspaces/set-current', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ workspaceId: currentWorkspace.id })
-          });
+          await syncCurrentWorkspaceWithServer();
           
           // Reload the page to use the newly set workspace
-          window.location.reload();
+          reloadPageWithDelay();
         } catch (error) {
           console.error('Failed to sync workspace with server:', error);
         }
@@ -135,6 +134,17 @@
         await fetchWorkspaceInvites(currentWorkspace.id);
       } else {
         console.warn('No workspace available. Cannot load members or invites.');
+        
+        // Attempt to refresh workspaces from the API
+        console.log('Refreshing workspaces from API...');
+        await workspaceStore.refreshWorkspaces();
+        
+        // Check again if we have a workspace after refresh
+        if ($workspaceStore.currentWorkspace) {
+          console.log('Workspace loaded after refresh');
+          await syncCurrentWorkspaceWithServer();
+          reloadPageWithDelay();
+        }
       }
     });
   
@@ -302,9 +312,16 @@
             isInviting = true;
             
             return async ({ result, update }) => {
-              isInviting = false;
-              await update();
-            };
+            isInviting = false;
+            await update();
+              
+            // After adding a user, wait a moment then refresh the members list
+            setTimeout(async () => {
+              if ($workspaceStore.currentWorkspace?.id) {
+                await fetchWorkspaceMembers($workspaceStore.currentWorkspace.id);
+              }
+            }, 500);
+          };
           }} class="space-y-4">
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>

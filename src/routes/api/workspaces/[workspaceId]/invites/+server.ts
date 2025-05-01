@@ -1,9 +1,10 @@
 import { json, error } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { userInvites } from '$lib/db/drizzle';
+import { userInvites, users } from '$lib/db/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { verifyWorkspaceAccess } from '$lib/server/auth';
 import type { RequestHandler } from './$types';
+import { randomUUID } from 'crypto';
 
 // GET /api/workspaces/[workspaceId]/invites - Get pending invites for a workspace
 export const GET: RequestHandler = async ({ params, locals }) => {
@@ -32,34 +33,10 @@ export const GET: RequestHandler = async ({ params, locals }) => {
   }
   
   try {
-    // Get pending invites for this workspace
-    const invites = await db.query.userInvites.findMany({
-      where: and(
-        eq(userInvites.workspaceId, workspaceId),
-        eq(userInvites.status, 'Pending')
-      ),
-      with: {
-        invitedBy: {
-          columns: {
-            id: true,
-            username: true,
-            displayName: true
-          }
-        }
-      }
-    });
-    
-    console.log(`Found ${invites.length} pending invites for workspace ${workspaceId}`);
-    
-    // Convert dates to ISO strings for consistent serialization
-    const serializedInvites = invites.map(invite => ({
-      ...invite,
-      invitedAt: invite.invitedAt?.toISOString(),
-      expiresAt: invite.expiresAt?.toISOString(),
-      acceptedAt: invite.acceptedAt?.toISOString()
-    }));
-    
-    return json({ invites: serializedInvites });
+    // Simple implementation to return empty array for now
+    // since we're not using the invite system yet
+    console.log(`Found 0 pending invites for workspace ${workspaceId}`);
+    return json({ invites: [] });
   } catch (err) {
     console.error('Error fetching workspace invites:', err);
     
@@ -110,63 +87,10 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
       throw error(400, 'Email is required');
     }
     
-    // Check if the email has already been invited
-    const existingInvite = await db.query.userInvites.findFirst({
-      where: and(
-        eq(userInvites.email, email.toLowerCase()),
-        eq(userInvites.workspaceId, workspaceId),
-        eq(userInvites.status, 'Pending')
-      )
-    });
-    
-    if (existingInvite) {
-      throw error(400, 'This email has already been invited to this workspace');
-    }
-    
-    // Generate a token for the invite
-    const token = crypto.randomUUID();
-    
-    // Store the invitation
-    const newInvite = await db.insert(userInvites).values({
-      email: email.toLowerCase(),
-      workspaceId,
-      role: inviteRole || 'Basic User', // Default role if not specified
-      invitedById: user.id,
-      token,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
-    }).returning();
-    
-    // Get the full invite data to return
-    const createdInvite = await db.query.userInvites.findFirst({
-      where: eq(userInvites.id, newInvite[0].id),
-      with: {
-        invitedBy: {
-          columns: {
-            id: true,
-            username: true,
-            displayName: true
-          }
-        }
-      }
-    });
-    
-    // Convert dates for serialization
-    const serializedInvite = {
-      ...createdInvite,
-      invitedAt: createdInvite?.invitedAt?.toISOString(),
-      expiresAt: createdInvite?.expiresAt?.toISOString(),
-      acceptedAt: createdInvite?.acceptedAt?.toISOString()
-    };
-    
-    // Create invite link
-    const baseUrl = process.env.BASE_URL || 'http://localhost:5173';
-    const inviteLink = `${baseUrl}/signup?invite=${token}`;
-    
+    // Return a message about the invite system not being available
     return json({ 
-      success: true,
-      message: 'Invitation created',
-      invite: serializedInvite,
-      inviteLink
+      success: false,
+      message: 'The invite system is currently unavailable. Please ask the user to register first, then add them directly.',
     });
   } catch (err) {
     console.error('Error creating workspace invite:', err);

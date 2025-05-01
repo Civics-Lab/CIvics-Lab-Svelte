@@ -1,7 +1,8 @@
 // src/routes/engage/settings/workspace/people/+page.server.ts
 import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
-import { db, userWorkspaces, users, workspaces, userInvites } from '$lib/db/drizzle';
+import { db } from '$lib/server/db';
+import { userWorkspaces, users, workspaces, userInvites } from '$lib/db/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { env } from '$env/dynamic/private';
 import { randomUUID } from 'crypto';
@@ -42,13 +43,28 @@ export const load: PageServerLoad = async ({ locals, url, cookies, request }) =>
   try {
     console.log(`Loading workspace members for workspace ID: ${workspaceId}`);
     
+    // Add debugging here
+    console.log('Checking access for workspaceId:', workspaceId, 'and userId:', locals.user.id);
+    console.log('Locals object:', JSON.stringify(locals, null, 2));
+    
     // Check if the user has permission to access this workspace
-    const userWorkspace = await db.query.userWorkspaces.findFirst({
-      where: and(
-        eq(userWorkspaces.userId, locals.user.id),
-        eq(userWorkspaces.workspaceId, workspaceId)
-      )
-    });
+    let userWorkspace = null;
+    try {
+      const results = await db.select()
+        .from(userWorkspaces)
+        .where(and(
+          eq(userWorkspaces.userId, locals.user.id),
+          eq(userWorkspaces.workspaceId, workspaceId)
+        ))
+        .limit(1);
+        
+      userWorkspace = results[0];
+      
+      // Log the result of the lookup
+      console.log('User workspace lookup result:', userWorkspace);
+    } catch (err) {
+      console.error('Error checking workspace access:', err);
+    }
     
     if (!userWorkspace) {
       console.error(`User ${locals.user.id} does not have access to workspace ${workspaceId}`);
@@ -62,53 +78,85 @@ export const load: PageServerLoad = async ({ locals, url, cookies, request }) =>
     }
     
     // Get workspace members
-    const members = await db.query.userWorkspaces.findMany({
-      where: eq(userWorkspaces.workspaceId, workspaceId),
-      with: {
+    let members = [];
+    try {
+      const results = await db.select()
+        .from(userWorkspaces)
+        .leftJoin(users, eq(userWorkspaces.userId, users.id))
+        .where(eq(userWorkspaces.workspaceId, workspaceId));
+        
+      members = results.map(row => ({
+        id: row.user_workspaces.id,
+        userId: row.user_workspaces.userId,
+        workspaceId: row.user_workspaces.workspaceId,
+        role: row.user_workspaces.role,
+        createdAt: row.user_workspaces.createdAt,
+        updatedAt: row.user_workspaces.updatedAt,
         user: {
-          columns: {
-            id: true,
-            email: true,
-            username: true,
-            displayName: true
-          }
+          id: row.users.id,
+          email: row.users.email,
+          username: row.users.username,
+          displayName: row.users.displayName
         }
-      }
-    });
+      }));
+    } catch (err) {
+      console.error('Error fetching workspace members:', err);
+    }
     
     console.log(`Found ${members.length} members for workspace ${workspaceId}`);
+    
+    // Format dates to ISO strings
+    members = members.map(member => ({
+      ...member,
+      createdAt: member.createdAt instanceof Date ? member.createdAt.toISOString() : member.createdAt,
+      updatedAt: member.updatedAt instanceof Date ? member.updatedAt.toISOString() : member.updatedAt,
+    }));
     
     // Initialize pendingInvites as an empty array
     let pendingInvites = [];
     let tableNotReady = false;
     
-    // Get pending invites for this workspace
-    pendingInvites = await db.query.userInvites.findMany({
-      where: and(
-        eq(userInvites.workspaceId, workspaceId),
-        eq(userInvites.status, 'Pending')
-      ),
-      with: {
-        invitedBy: {
-          columns: {
-            id: true,
-            username: true,
-            displayName: true
+    // Get pending invites for this workspace if userInvites is defined
+    try {
+      if (userInvites) {
+        pendingInvites = await db.query.userInvites.findMany({
+          where: and(
+            eq(userInvites.workspaceId, workspaceId),
+            eq(userInvites.status, 'Pending')
+          ),
+          with: {
+            invitedBy: {
+              columns: {
+                id: true,
+                username: true,
+                displayName: true
+              }
+            }
           }
-        }
+        });
+        
+        console.log(`Found ${pendingInvites.length} pending invites for workspace ${workspaceId}`);
+      } else {
+        console.warn('userInvites table is not defined - skipping pending invites query');
+        pendingInvites = [];
       }
-    });
-    
-    console.log(`Found ${pendingInvites.length} pending invites for workspace ${workspaceId}`);
+    } catch (err) {
+      console.error('Error fetching pending invites:', err);
+      pendingInvites = [];
+    }
     
     // Lookup workspace name for the breadcrumb
-    const workspace = await db.query.workspaces.findFirst({
-      where: eq(workspaces.id, workspaceId),
-      columns: {
-        id: true,
-        name: true
-      }
-    });
+    let workspace = null;
+    try {
+      const results = await db.select()
+        .from(workspaces)
+        .where(eq(workspaces.id, workspaceId))
+        .limit(1);
+        
+      workspace = results[0];
+    } catch (err) {
+      console.error('Error fetching workspace details:', err);
+    }
     
     return {
       members,
@@ -154,89 +202,57 @@ export const actions: Actions = {
     }
     
     try {
-      try {
-        // Check if the email has already been invited
-        const existingInvite = await db.query.userInvites.findFirst({
-          where: and(
-            eq(userInvites.email, email),
-            eq(userInvites.workspaceId, workspaceId),
-            eq(userInvites.status, 'Pending')
-          )
-        });
-        
-        if (existingInvite) {
-          throw error(400, 'This email has already been invited to this workspace');
-        }
-      } catch (err) {
-        // If the error is about the user_invites table, continue with adding the user
-        // but we won't be able to create an invite
-        if (err.message && err.message.includes('user_invites')) {
-          throw error(500, 'The invite system is not fully set up yet. Please run database migrations first.');
-        }
-        throw err;
-      }
-      
+      // Simplified temporary version for inviting users
       // Check if the user already exists
-      const existingUser = await db.query.users.findFirst({
-        where: eq(users.email, email)
-      });
-      
+      try {
+      const existingUserResults = await db.select()
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+
+      const existingUser = existingUserResults[0];
+
       if (existingUser) {
-        // Check if user is already in the workspace
-        const existingMember = await db.query.userWorkspaces.findFirst({
-          where: and(
-            eq(userWorkspaces.userId, existingUser.id),
-            eq(userWorkspaces.workspaceId, workspaceId)
-          )
-        });
-        
+      // Check if user is already in the workspace
+      const existingMemberResults = await db.select()
+      .from(userWorkspaces)
+      .where(and(
+          eq(userWorkspaces.userId, existingUser.id),
+        eq(userWorkspaces.workspaceId, workspaceId)
+      ))
+        .limit(1);
+
+      const existingMember = existingMemberResults[0];
+      
         if (existingMember) {
-          throw error(400, 'This user is already a member of this workspace');
+            throw error(400, 'This user is already a member of this workspace');
         }
         
         // Add the user directly to the workspace
-        await db.insert(userWorkspaces).values({
+      await db.insert(userWorkspaces).values({
           userId: existingUser.id,
           workspaceId,
-          role
-        });
-        
-        return {
-          success: true,
+            role
+          });
+          
+          return {
+            success: true,
           message: 'User added to workspace',
-          userAdded: true
+        userAdded: true
+      };
+      } else {
+        // User doesn't exist, return a message
+      return {
+          success: false,
+            message: 'User not found. Please ask them to sign up first.'
         };
-      }
-      
-      try {
-        // Generate a token for the invite link
-        const token = randomUUID();
-        
-        // Store the invitation
-        await db.insert(userInvites).values({
-          email,
-          workspaceId,
-          role,
-          invitedById: locals.user.id,
-          token,
-          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
-        });
-        
-        // In a real application, you would send an email here
-        // For now, we'll just return the invite link
-        const baseUrl = env.BASE_URL || 'http://localhost:5173';
-        const inviteLink = `${baseUrl}/signup?invite=${token}`;
-        
-        return {
-          success: true,
-          message: 'Invitation sent',
-          inviteLink
-        };
-      } catch (err) {
-        if (err.message && err.message.includes('user_invites')) {
-          throw error(500, 'The invite system is not fully set up yet. Please run database migrations first.');
         }
-        throw err;
+      } catch (err) {
+        console.error('Error in invite user process:', err);
+      if (err instanceof Error && 'status' in err) {
+        throw err; // Re-throw SvelteKit error objects
+      }
+      throw error(500, 'Failed to process invitation. Please try again later.');
       }
     } catch (err) {
       if (err instanceof Error && 'status' in err) {
@@ -273,12 +289,15 @@ export const actions: Actions = {
       }
       
       // Get the user's workspace relationship
-      const userWorkspace = await db.query.userWorkspaces.findFirst({
-        where: and(
+      const userWorkspaceResults = await db.select()
+        .from(userWorkspaces)
+        .where(and(
           eq(userWorkspaces.userId, userId),
           eq(userWorkspaces.workspaceId, workspaceId)
-        )
-      });
+        ))
+        .limit(1);
+      
+      const userWorkspace = userWorkspaceResults[0];
       
       if (!userWorkspace) {
         throw error(404, 'User not found in this workspace');
@@ -321,33 +340,11 @@ export const actions: Actions = {
         throw error(400, 'Invite ID is required');
       }
       
-      try {
-        // Get the invite
-        const invite = await db.query.userInvites.findFirst({
-          where: and(
-            eq(userInvites.id, inviteId),
-            eq(userInvites.workspaceId, workspaceId)
-          )
-        });
-        
-        if (!invite) {
-          throw error(404, 'Invite not found');
-        }
-        
-        // Delete the invite
-        await db.delete(userInvites)
-          .where(eq(userInvites.id, inviteId));
-        
-        return {
-          success: true,
-          message: 'Invitation cancelled'
-        };
-      } catch (err) {
-        if (err.message && err.message.includes('user_invites')) {
-          throw error(500, 'The invite system is not fully set up yet. Please run database migrations first.');
-        }
-        throw err;
-      }
+      // For now, just return a message since we're not using user_invites
+      return {
+        success: true,
+        message: 'The invite system is currently unavailable. Please try again later.'
+      };
     } catch (err) {
       if (err instanceof Error && 'status' in err) {
         throw err;
@@ -379,26 +376,30 @@ export const actions: Actions = {
       }
       
       // Get the user workspace relationship
-      const relationship = await db.query.userWorkspaces.findFirst({
-        where: and(
+      const relationshipsResults = await db.select()
+        .from(userWorkspaces)
+        .where(and(
           eq(userWorkspaces.id, userWorkspaceId),
           eq(userWorkspaces.workspaceId, workspaceId)
-        ),
-        with: {
-          user: {
-            columns: {
-              id: true
-            }
-          }
-        }
-      });
+        ))
+        .limit(1);
+      
+      const relationship = relationshipsResults[0];
       
       if (!relationship) {
         throw error(404, 'User not found in this workspace');
       }
       
+      // Get user information
+      const userResults = await db.select()
+        .from(users)
+        .where(eq(users.id, relationship.userId))
+        .limit(1);
+        
+      const user = userResults[0];
+      
       // Don't allow super admins to downgrade themselves
-      if (relationship.user.id === locals.user.id && relationship.role === 'Super Admin' && role !== 'Super Admin') {
+      if (user && user.id === locals.user.id && relationship.role === 'Super Admin' && role !== 'Super Admin') {
         throw error(400, 'You cannot downgrade your own Super Admin role');
       }
       

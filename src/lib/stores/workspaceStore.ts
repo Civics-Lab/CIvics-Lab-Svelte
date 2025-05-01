@@ -48,9 +48,9 @@ function createWorkspaceStore() {
           console.log('Workspace does not exist in the database');
           // If localStorage has this ID, clear it
           if (typeof window !== 'undefined' && 
-              localStorage.getItem('currentWorkspaceId') === workspaceId) {
+              localStorage.getItem('current_workspace_id') === workspaceId) {
             console.log('Removing invalid workspace ID from localStorage');
-            localStorage.removeItem('currentWorkspaceId');
+            localStorage.removeItem('current_workspace_id');
           }
           return false;
         }
@@ -129,7 +129,7 @@ function createWorkspaceStore() {
         // Store the workspace ID in localStorage for persistence
         if (typeof window !== 'undefined' && workspace) {
           console.log("Saving workspace ID to localStorage:", workspace.id);
-          localStorage.setItem('currentWorkspaceId', workspace.id);
+          localStorage.setItem('current_workspace_id', workspace.id);
           
           // Also send to server to set in cookies
           fetch('/api/workspaces/set-current', {
@@ -210,7 +210,7 @@ function createWorkspaceStore() {
         
         // Get previously selected workspace ID from localStorage
         const savedWorkspaceId = typeof window !== 'undefined' 
-          ? localStorage.getItem('currentWorkspaceId') 
+          ? localStorage.getItem('current_workspace_id') 
           : null;
         
         console.log("refreshWorkspaces - savedWorkspaceId from localStorage:", savedWorkspaceId);
@@ -224,7 +224,7 @@ function createWorkspaceStore() {
           // If invalid but still in localStorage, remove it
           if (!savedWorkspaceIdValid && typeof window !== 'undefined') {
             console.log('Removing invalid workspace ID from localStorage');
-            localStorage.removeItem('currentWorkspaceId');
+            localStorage.removeItem('current_workspace_id');
           }
         }
         

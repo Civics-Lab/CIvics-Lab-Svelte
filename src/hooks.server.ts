@@ -176,6 +176,7 @@ const workspaceHandler: Handle = async ({ event, resolve }) => {
       // Check if this workspace exists and user has access to it
       if (event.locals.user && event.locals.db) {
         const { db } = event.locals;
+        const userId = event.locals.user.id;
         
         // Query the workspace to see if it exists
         const workspace = await db.query.workspaces.findFirst({
@@ -185,8 +186,24 @@ const workspaceHandler: Handle = async ({ event, resolve }) => {
         if (workspace) {
           console.log(`Found workspace: ${workspace.name}`);
           
-          // Add it to locals for all server components to access
-          event.locals.currentWorkspace = workspace;
+          // Check if user has access to this workspace
+          const userWorkspace = await db.query.userWorkspaces.findFirst({
+            where: (userWorkspaces, { eq, and }) => and(
+              eq(userWorkspaces.userId, userId),
+              eq(userWorkspaces.workspaceId, workspaceId)
+            )
+          });
+          
+          if (userWorkspace) {
+            console.log(`User ${userId} has access to workspace ${workspaceId} with role ${userWorkspace.role}`);
+            
+            // Add it to locals for all server components to access
+            event.locals.currentWorkspace = workspace;
+          } else {
+            console.log(`User ${userId} does not have access to workspace ${workspaceId}`);
+            // Don't add to locals, but don't clear the cookie either
+            // The application will handle showing an access denied message
+          }
         } else {
           console.log(`Workspace ${workspaceId} not found in database`);
           // Cookie refers to a workspace that doesn't exist, clear it

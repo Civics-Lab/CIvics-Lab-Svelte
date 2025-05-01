@@ -1,6 +1,7 @@
 // src/routes/+layout.server.ts
 import type { LayoutServerLoad } from './$types';
-import { db, workspaces, userWorkspaces } from '$lib/db/drizzle';
+import { db } from '$lib/server/db';
+import { workspaces, userWorkspaces } from '$lib/db/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 
 export const load: LayoutServerLoad = async ({ locals, cookies }) => {
@@ -15,20 +16,35 @@ export const load: LayoutServerLoad = async ({ locals, cookies }) => {
   if (user) {
     try {
       // Fetch user's workspaces
-      userWorkspacesList = await db.query.userWorkspaces.findMany({
-        where: eq(userWorkspaces.userId, user.id),
-        with: {
-          workspace: {
-            columns: {
-              id: true,
-              name: true,
-              createdAt: true,
-              updatedAt: true,
-              createdById: true
+      // Fetch user's workspaces
+      if (userWorkspaces) {
+        try {
+          const results = await db.select()
+            .from(userWorkspaces)
+            .leftJoin(workspaces, eq(userWorkspaces.workspaceId, workspaces.id))
+            .where(eq(userWorkspaces.userId, user.id));
+            
+          userWorkspacesList = results.map(item => ({
+            id: item.user_workspaces.id,
+            userId: item.user_workspaces.userId,
+            workspaceId: item.user_workspaces.workspaceId,
+            role: item.user_workspaces.role,
+            createdAt: item.user_workspaces.createdAt,
+            updatedAt: item.user_workspaces.updatedAt,
+            workspace: {
+              id: item.workspaces.id,
+              name: item.workspaces.name,
+              createdAt: item.workspaces.createdAt,
+              updatedAt: item.workspaces.updatedAt,
+              createdById: item.workspaces.createdBy
             }
-          }
+          }));
+        } catch (queryError) {
+          console.error('Error querying userWorkspaces:', queryError);
         }
-      });
+      } else {
+        console.warn('userWorkspaces table is not defined - skipping workspaces query');
+      }
       
       // Map to desired format
       const workspacesList = userWorkspacesList.map(uw => ({
