@@ -1,4 +1,4 @@
-<!-- src/routes/engage/settings/+layout.svelte -->
+<!-- src/routes/app/settings/+layout.svelte -->
 <script lang="ts">
     import { page } from '$app/stores';
     import { writable } from 'svelte/store';
@@ -11,15 +11,15 @@
       {
         title: 'Workspace',
         items: [
-          { label: 'General', href: '/engage/settings/workspace/general' },
-          { label: 'People', href: '/engage/settings/workspace/people' },
-          { label: 'Billing', href: '/engage/settings/workspace/billing' }
+          { label: 'General', href: '/app/settings/workspace/general' },
+          { label: 'People', href: '/app/settings/workspace/people' },
+          { label: 'Billing', href: '/app/settings/workspace/billing' }
         ]
       },
       {
         title: 'Account',
         items: [
-          { label: 'General', href: '/engage/settings/account/general' }
+          { label: 'General', href: '/app/settings/account/general' }
         ]
       }
     ];

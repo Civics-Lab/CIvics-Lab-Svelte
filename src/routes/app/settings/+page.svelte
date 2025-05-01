@@ -1,11 +1,11 @@
-<!-- src/routes/engage/settings/+page.svelte -->
+<!-- src/routes/app/settings/+page.svelte -->
 <script lang="ts">
     import { onMount } from 'svelte';
     import { goto } from '$app/navigation';
     
     onMount(() => {
       // Redirect to workspace general settings by default
-      goto('/engage/settings/workspace/general');
+      goto('/app/settings/workspace/general');
     });
   </script>
   

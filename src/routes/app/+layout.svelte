@@ -1,4 +1,4 @@
-<!-- src/routes/engage/+layout.svelte -->
+<!-- src/routes/app/+layout.svelte -->
 <script lang="ts">
     import { page } from '$app/stores';
     import { auth } from '$lib/auth/client';
@@ -18,10 +18,10 @@
     
     // Function to determine if a menu item is active
     function isActive(path: string): boolean {
-      if (path === '/engage' && $page.url.pathname === '/engage') {
+      if (path === '/app' && $page.url.pathname === '/app') {
         return true;
       }
-      return $page.url.pathname.startsWith(path) && path !== '/engage';
+      return $page.url.pathname.startsWith(path) && path !== '/app';
     }
 
     function handleLogout() {
@@ -66,7 +66,7 @@
             {#if $workspaceStore.currentWorkspace}
               {$workspaceStore.currentWorkspace.name}
             {:else}
-              Engage Portal
+              App Portal
             {/if}
           </div>
         </div>
