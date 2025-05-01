@@ -144,8 +144,5 @@
 				{loading ? 'Loading...' : 'Sign in'}
 			</button>
 		</div>
-		<div class="text-center text-sm">
-			<p>Don't have an account? <a href="/signup" class="text-blue-600 hover:underline">Sign up</a></p>
-		</div>
 	</div>
 </div>
