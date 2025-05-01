@@ -14,6 +14,9 @@
     export let form: ActionData;
     
     $: members = data.members || [];
+    $: workspaceId = $workspaceStore.currentWorkspace?.id;
+    $: hasMembersLoaded = false;
+    $: hasInvitesLoaded = false;
     $: pendingInvites = data.pendingInvites || [];
     $: workspaceRoles = data.workspaceRoles || [];
     $: noWorkspaceSelected = data.noWorkspaceSelected || false;
@@ -89,13 +92,15 @@
       goto('/engage/settings/workspace/general');
     }
     
-    // On mount, ensure we have a workspace ID
+    // On mount, ensure we have a workspace ID and load data
     onMount(async () => {
+      console.log('Component mounted: Checking workspace state');
       // Check if we have a workspace ID in the store
       const currentWorkspace = $workspaceStore.currentWorkspace;
       
       if (!currentWorkspace && $workspaceStore.workspaces.length > 0) {
         // Set the first workspace as active
+        console.log('No current workspace selected, using first available workspace');
         await workspaceStore.setCurrentWorkspace($workspaceStore.workspaces[0].id);
         
         // Wait for the current workspace to be synced to the server
@@ -123,8 +128,92 @@
         } catch (error) {
           console.error('Failed to sync workspace with server:', error);
         }
+      } else if (currentWorkspace) {
+        console.log(`Current workspace: ${currentWorkspace.id} (${currentWorkspace.name})`);
+        // If we have a workspace ID, load members from the API
+        await fetchWorkspaceMembers(currentWorkspace.id);
+        await fetchWorkspaceInvites(currentWorkspace.id);
+      } else {
+        console.warn('No workspace available. Cannot load members or invites.');
       }
     });
+  
+  // Function to fetch workspace members from API
+  async function fetchWorkspaceMembers(workspaceId) {
+    try {
+      hasMembersLoaded = false;
+      console.log(`Fetching members for workspace: ${workspaceId}`);
+      
+      const response = await fetch(`/api/workspaces/${workspaceId}/members`);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to fetch members: ${response.status} ${response.statusText}\n${errorText}`);
+      }
+      
+      const result = await response.json();
+      console.log('Members API response:', result);
+      
+      if (result.members) {
+        // Update the members list
+        members = result.members;
+        console.log(`Loaded ${members.length} members`);
+      } else {
+        console.warn('No members found in API response');
+        members = [];
+      }
+    } catch (error) {
+      console.error('Error fetching workspace members:', error);
+      toastStore.error('Failed to load workspace members');
+      members = []; // Reset on error
+    } finally {
+      hasMembersLoaded = true;
+    }
+  }
+  
+  // Function to fetch workspace invites
+  async function fetchWorkspaceInvites(workspaceId) {
+    try {
+      hasInvitesLoaded = false;
+      console.log(`Fetching invites for workspace: ${workspaceId}`);
+      
+      const response = await fetch(`/api/workspaces/${workspaceId}/invites`);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to fetch invites: ${response.status} ${response.statusText}\n${errorText}`);
+      }
+      
+      const result = await response.json();
+      console.log('Invites API response:', result);
+      
+      if (result.invites) {
+        // Update the invites list
+        pendingInvites = result.invites;
+        console.log(`Loaded ${pendingInvites.length} pending invites`);
+      } else {
+        console.warn('No invites found in API response');
+        pendingInvites = [];
+      }
+    } catch (error) {
+      console.error('Error fetching workspace invites:', error);
+      // Don't show error toast for invites as they may not be essential
+      pendingInvites = []; // Reset on error
+    } finally {
+      hasInvitesLoaded = true;
+    }
+  }
+  
+  // Watch for workspace changes
+  $: if (workspaceId && $workspaceStore.currentWorkspace) {
+    if (!hasMembersLoaded) {
+      fetchWorkspaceMembers(workspaceId);
+    }
+    
+    if (!hasInvitesLoaded) {
+      fetchWorkspaceInvites(workspaceId);
+    }
+  }
 </script>
   
 <svelte:head>
@@ -177,17 +266,7 @@
       </button>
     </div>
       
-      <!-- Current Workspace Info -->
-      {#if $workspaceStore.currentWorkspace}
-        <div class="mb-4 p-3 bg-blue-50 border border-blue-100 rounded flex items-center">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span class="text-blue-700">
-            Managing members for workspace: <strong>{$workspaceStore.currentWorkspace.name}</strong>
-          </span>
-        </div>
-      {/if}
+      <!-- Workspace members are loaded automatically from user_workspaces table -->
       
       <!-- Invite User Form -->
       {#if showInviteForm}
@@ -284,7 +363,7 @@
       <!-- Members List -->
       <div class="bg-white border rounded-lg overflow-hidden mb-8">
         <div class="px-6 py-4 border-b">
-          <h3 class="text-lg font-medium">Workspace Members</h3>
+          <h3 class="text-lg font-medium">{$workspaceStore.currentWorkspace ? $workspaceStore.currentWorkspace.name : ''} Members</h3>
         </div>
         
         {#if members.length === 0}
@@ -390,7 +469,7 @@
       <!-- Pending Invites -->
         <div class="bg-white border rounded-lg overflow-hidden">
           <div class="px-6 py-4 border-b">
-            <h3 class="text-lg font-medium">Pending Invitations</h3>
+            <h3 class="text-lg font-medium">Pending Invitations for {$workspaceStore.currentWorkspace ? $workspaceStore.currentWorkspace.name : ''}</h3>
           </div>
           
           {#if pendingInvites.length === 0}
