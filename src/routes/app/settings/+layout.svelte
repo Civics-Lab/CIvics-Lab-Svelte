@@ -30,45 +30,42 @@
     }
   </script>
   
-  <div class="h-full w-full p-6 overflow-y-auto">
-    <div class="max-w-6xl mx-auto">
-      <div class="mb-6">
-        <h1 class="text-2xl font-bold">Settings</h1>
-        <p class="text-gray-600">Manage your workspace and account settings</p>
+  <div class="h-full w-full flex">
+    <!-- Settings Sidebar -->
+    <aside class="w-64 bg-slate-50 shadow-md flex flex-col h-full">
+      <!-- Sidebar Header -->
+      <div class="p-4 border-b border-slate-200">
+        <h1 class="text-xl font-bold text-slate-800">Settings</h1>
       </div>
-  
-      <div class="flex flex-col md:flex-row gap-6">
-        <!-- Settings Sidebar -->
-        <aside class="w-full md:w-64 flex-shrink-0">
-          <div class="bg-white rounded-lg shadow overflow-hidden">
-            <nav class="p-2">
-              {#each settingsNav as section}
-                <div class="mb-4">
-                  <h3 class="text-xs font-semibold uppercase px-3 py-2 text-gray-500">
-                    {section.title}
-                  </h3>
-                  <ul class="space-y-1">
-                    {#each section.items as item}
-                      <li>
-                        <a 
-                          href={item.href} 
-                          class="block px-3 py-2 rounded-md text-sm font-medium {isActive(item.href) ? 'bg-teal-50 text-teal-700' : 'text-gray-700 hover:bg-gray-50'}"
-                        >
-                          {item.label}
-                        </a>
-                      </li>
-                    {/each}
-                  </ul>
-                </div>
+      
+      <!-- Settings Navigation -->
+      <nav class="flex-grow p-4 space-y-6 overflow-y-auto">
+        {#each settingsNav as section}
+          <div class="mb-4">
+            <h3 class="text-xs font-semibold uppercase px-3 py-2 text-slate-600">
+              {section.title}
+            </h3>
+            <ul class="space-y-1">
+              {#each section.items as item}
+                <li>
+                  <a 
+                    href={item.href} 
+                    class="flex items-center px-3 py-2 text-sm rounded-md {isActive(item.href) ? 'bg-slate-200 text-slate-800 font-medium' : 'text-slate-700 hover:bg-slate-200 hover:text-slate-800'}"
+                  >
+                    {item.label}
+                  </a>
+                </li>
               {/each}
-            </nav>
+            </ul>
           </div>
-        </aside>
-  
-        <!-- Settings Content -->
-        <div class="flex-1 bg-white rounded-lg shadow">
-          <slot />
-        </div>
+        {/each}
+      </nav>
+    </aside>
+
+    <!-- Settings Content -->
+    <main class="flex-1 overflow-y-auto">
+      <div class="p-6">
+        <slot />
       </div>
-    </div>
+    </main>
   </div>
