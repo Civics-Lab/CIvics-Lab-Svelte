@@ -1,8 +1,7 @@
-// src/routes/signup/+page.server.ts
 import { redirect } from '@sveltejs/kit'
 import type { PageServerLoad } from './$types'
-import { db, userInvites } from '$lib/db/drizzle';
-import { eq } from 'drizzle-orm';
+import { db } from '$lib/server/db';
+import { getInviteByToken } from '$lib/server/invites';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
   // if the user is already logged in redirect them
@@ -15,16 +14,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   
   if (inviteToken) {
     try {
-      // Look up the invite
-      const invite = await db.query.userInvites.findFirst({
-        where: eq(userInvites.token, inviteToken),
-        columns: {
-          id: true,
-          email: true,
-          status: true,
-          expiresAt: true
-        }
-      });
+      // Look up the invite using our utility function
+      const invite = await getInviteByToken(inviteToken);
       
       if (!invite) {
         return {

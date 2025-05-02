@@ -3,8 +3,8 @@ import { db } from '$lib/server/db';
 import { userInvites, users } from '$lib/db/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { verifyWorkspaceAccess } from '$lib/server/auth';
+import { createInvitation, listPendingInvites } from '$lib/server/invites';
 import type { RequestHandler } from './$types';
-import { randomUUID } from 'crypto';
 
 // GET /api/workspaces/[workspaceId]/invites - Get pending invites for a workspace
 export const GET: RequestHandler = async ({ params, locals }) => {
@@ -33,10 +33,11 @@ export const GET: RequestHandler = async ({ params, locals }) => {
   }
   
   try {
-    // Simple implementation to return empty array for now
-    // since we're not using the invite system yet
-    console.log(`Found 0 pending invites for workspace ${workspaceId}`);
-    return json({ invites: [] });
+    // Get all pending invites for this workspace
+    const invites = await listPendingInvites(workspaceId);
+    
+    console.log(`Found ${invites.length} pending invites for workspace ${workspaceId}`);
+    return json({ invites });
   } catch (err) {
     console.error('Error fetching workspace invites:', err);
     
@@ -87,10 +88,23 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
       throw error(400, 'Email is required');
     }
     
-    // Return a message about the invite system not being available
-    return json({ 
-      success: false,
-      message: 'The invite system is currently unavailable. Please ask the user to register first, then add them directly.',
+    // Create the invitation using our service
+    const result = await createInvitation({
+      email: email.toLowerCase(),
+      workspaceId,
+      role: inviteRole || 'Basic User',
+      invitedById: user.id
+    });
+    
+    if (!result.success) {
+      throw error(400, result.message);
+    }
+    
+    return json({
+      success: true,
+      message: result.message,
+      invite: result.invite,
+      inviteLink: result.inviteLink
     });
   } catch (err) {
     console.error('Error creating workspace invite:', err);

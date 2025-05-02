@@ -1,61 +1,46 @@
-// src/routes/api/invites/[token]/+server.ts
-import { json } from '@sveltejs/kit';
+import { json, error } from '@sveltejs/kit';
+import { getInviteByToken, acceptInvitation } from '$lib/server/invites';
 import type { RequestHandler } from './$types';
-import { error } from '@sveltejs/kit';
-import { db, userInvites, workspaces } from '$lib/db/drizzle';
-import { eq } from 'drizzle-orm';
 
-// GET handler to get invite details
+// GET /api/invites/[token] - Get an invitation by token
 export const GET: RequestHandler = async ({ params }) => {
+  const { token } = params;
+  
+  if (!token) {
+    throw error(400, 'Invitation token is required');
+  }
+  
   try {
-    const token = params.token;
-    
-    if (!token) {
-      throw error(400, 'Invite token is required');
-    }
-    
-    // Look up the invite
-    const invite = await db.query.userInvites.findFirst({
-      where: eq(userInvites.token, token),
-      with: {
-        workspace: {
-          columns: {
-            name: true
-          }
-        }
-      }
-    });
+    const invite = await getInviteByToken(token);
     
     if (!invite) {
-      throw error(404, 'Invite not found');
+      throw error(404, 'Invitation not found');
     }
     
-    // Check if expired
+    // Check if the invitation has expired
     if (invite.expiresAt && new Date(invite.expiresAt) < new Date()) {
       return json({
         success: false,
-        error: 'This invitation has expired',
-        isExpired: true,
+        message: 'Invitation has expired',
         invite: {
-          email: invite.email,
-          workspaceName: invite.workspace.name,
-          role: invite.role,
-          expiresAt: invite.expiresAt
+          ...invite,
+          invitedAt: invite.invitedAt instanceof Date ? invite.invitedAt.toISOString() : invite.invitedAt,
+          expiresAt: invite.expiresAt instanceof Date ? invite.expiresAt.toISOString() : invite.expiresAt,
+          acceptedAt: invite.acceptedAt instanceof Date ? invite.acceptedAt.toISOString() : invite.acceptedAt
         }
       });
     }
     
-    // Check if already accepted
+    // Check if the invitation has already been accepted
     if (invite.status !== 'Pending') {
       return json({
         success: false,
-        error: 'This invitation has already been used',
-        isUsed: true,
+        message: `Invitation has already been ${invite.status.toLowerCase()}`,
         invite: {
-          email: invite.email,
-          workspaceName: invite.workspace.name,
-          role: invite.role,
-          status: invite.status
+          ...invite,
+          invitedAt: invite.invitedAt instanceof Date ? invite.invitedAt.toISOString() : invite.invitedAt,
+          expiresAt: invite.expiresAt instanceof Date ? invite.expiresAt.toISOString() : invite.expiresAt,
+          acceptedAt: invite.acceptedAt instanceof Date ? invite.acceptedAt.toISOString() : invite.acceptedAt
         }
       });
     }
@@ -63,101 +48,63 @@ export const GET: RequestHandler = async ({ params }) => {
     return json({
       success: true,
       invite: {
-        id: invite.id,
-        email: invite.email,
-        workspaceId: invite.workspaceId,
-        workspaceName: invite.workspace.name,
-        role: invite.role,
-        invitedAt: invite.invitedAt,
-        expiresAt: invite.expiresAt
+        ...invite,
+        invitedAt: invite.invitedAt instanceof Date ? invite.invitedAt.toISOString() : invite.invitedAt,
+        expiresAt: invite.expiresAt instanceof Date ? invite.expiresAt.toISOString() : invite.expiresAt,
+        acceptedAt: invite.acceptedAt instanceof Date ? invite.acceptedAt.toISOString() : invite.acceptedAt
       }
     });
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : 'An error occurred';
-    const statusCode = err instanceof Error && 'status' in err ? (err as any).status : 500;
+    console.error('Error getting invitation by token:', err);
     
-    return json({
-      success: false,
-      error: errorMessage
-    }, { status: statusCode });
+    if (err instanceof Response) {
+      throw err;
+    }
+    
+    throw error(500, err instanceof Error ? err.message : 'Failed to get invitation');
   }
 };
 
-// POST handler to accept or decline an invite
-export const POST: RequestHandler = async ({ params, request }) => {
+// POST /api/invites/[token] - Accept an invitation
+export const POST: RequestHandler = async ({ params, request, locals }) => {
+  const { token } = params;
+  const user = locals.user;
+  
+  if (!token) {
+    throw error(400, 'Invitation token is required');
+  }
+  
+  if (!user) {
+    throw error(401, 'Authentication required');
+  }
+  
   try {
-    const token = params.token;
-    
-    if (!token) {
-      throw error(400, 'Invite token is required');
-    }
-    
-    // Parse request body
     const body = await request.json();
-    const { action } = body; // 'accept' or 'decline'
+    const { action } = body;
     
-    if (!action || (action !== 'accept' && action !== 'decline')) {
-      throw error(400, 'Action must be "accept" or "decline"');
-    }
-    
-    // Look up the invite
-    const invite = await db.query.userInvites.findFirst({
-      where: eq(userInvites.token, token)
-    });
-    
-    if (!invite) {
-      throw error(404, 'Invite not found');
-    }
-    
-    // Check if expired
-    if (invite.expiresAt && new Date(invite.expiresAt) < new Date()) {
-      return json({
-        success: false,
-        error: 'This invitation has expired'
-      });
-    }
-    
-    // Check if already accepted or declined
-    if (invite.status !== 'Pending') {
-      return json({
-        success: false,
-        error: `This invitation has already been ${invite.status.toLowerCase()}`
-      });
-    }
-    
-    // Update the invite status
     if (action === 'accept') {
-      await db.update(userInvites)
-        .set({ 
-          status: 'Accepted',
-          acceptedAt: new Date()
-        })
-        .where(eq(userInvites.id, invite.id));
+      const result = await acceptInvitation(token, user.id);
       
       return json({
-        success: true,
-        message: 'Invitation accepted'
+        success: result.success,
+        message: result.message
       });
-    } else {
-      await db.update(userInvites)
-        .set({ 
-          status: 'Declined',
-          acceptedAt: new Date() // Using acceptedAt to track when it was declined
-        })
-        .where(eq(userInvites.id, invite.id));
-      
+    } else if (action === 'decline') {
+      // For now, just return success - in the future we could mark the invitation as declined
       return json({
         success: true,
         message: 'Invitation declined'
       });
+    } else {
+      throw error(400, 'Invalid action specified');
     }
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : 'An error occurred';
-    const statusCode = err instanceof Error && 'status' in err ? (err as any).status : 500;
+    console.error('Error accepting/declining invitation:', err);
     
-    return json({
-      success: false,
-      error: errorMessage
-    }, { status: statusCode });
+    if (err instanceof Response) {
+      throw err;
+    }
+    
+    throw error(500, err instanceof Error ? err.message : 'Failed to process invitation');
   }
 };
