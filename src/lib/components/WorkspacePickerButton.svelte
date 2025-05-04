@@ -49,7 +49,7 @@
   <!-- Workspace Avatar Button -->
   <button
     id="workspace-picker-button"
-    class="h-10 w-10 flex items-center justify-center text-white font-semibold bg-teal-600 rounded-lg hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500"
+    class="h-10 w-10 flex items-center justify-center text-white font-semibold bg-slate-700 rounded-lg hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500"
     on:click={togglePopover}
     aria-expanded={$isOpen}
     aria-haspopup="true"
@@ -103,11 +103,11 @@
         {:else}
           {#each $workspaceStore.workspaces as workspace (workspace.id)}
             <button
-              class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center {$workspaceStore.currentWorkspace?.id === workspace.id ? 'bg-teal-50 text-teal-700 font-medium' : 'text-gray-700'}"
+              class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center {$workspaceStore.currentWorkspace?.id === workspace.id ? 'bg-slate-100 text-slate-900 font-medium' : 'text-gray-700'}"
               on:click={() => selectWorkspace(workspace)}
               role="menuitem"
             >
-              <div class="h-8 w-8 rounded-md flex items-center justify-center mr-3 bg-teal-100 text-teal-700 font-medium">
+              <div class="h-8 w-8 rounded-md flex items-center justify-center mr-3 bg-slate-200 text-slate-900 font-medium">
                 {getWorkspaceInitial(workspace.name)}
               </div>
               <span class="truncate">{workspace.name}</span>
@@ -119,7 +119,7 @@
       <!-- Create workspace button (sticky to bottom) -->
       <div class="border-t border-gray-200 bg-white sticky bottom-0">
         <button
-          class="w-full text-left px-4 py-3 text-sm text-teal-600 hover:bg-teal-50 flex items-center font-medium"
+          class="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-slate-100 flex items-center font-medium"
           on:click={openCreateWorkspaceModal}
           role="menuitem"
         >
