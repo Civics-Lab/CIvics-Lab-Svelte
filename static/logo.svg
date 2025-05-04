@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="125px" height="70px" viewBox="0 0 125 70" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>Civics Lab / Icon</title>
+    <g id="Civics-Lab-/-Icon" stroke="none" fill="none" fill-rule="evenodd" stroke-width="1">
+        <g id="Group">
+            <polygon id="Path" fill="#155DFC" fill-rule="nonzero" points="56 0 0 0 0 42 56 42"></polygon>
+            <polygon id="Path" fill="#FB2C36" fill-rule="nonzero" points="125 0 69 0 69 14 125 14"></polygon>
+            <polygon id="Path" fill="#FB2C36" fill-rule="nonzero" points="125 28 69 28 69 42 125 42"></polygon>
+            <polygon id="Path" fill="#FB2C36" fill-rule="nonzero" points="125 55 0 55 0 70 125 70"></polygon>
+        </g>
+    </g>
+</svg>
