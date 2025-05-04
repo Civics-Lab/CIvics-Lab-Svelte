@@ -49,7 +49,8 @@ export const GET: RequestHandler = async ({ params, locals }) => {
         id: row.users.id,
         email: row.users.email,
         username: row.users.username,
-        displayName: row.users.displayName
+        displayName: row.users.displayName,
+        avatar: row.users.avatar
       }
     }));
     
@@ -159,7 +160,8 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
         id: row.users.id,
         email: row.users.email,
         username: row.users.username,
-        displayName: row.users.displayName
+        displayName: row.users.displayName,
+        avatar: row.users.avatar
       }
     };
     

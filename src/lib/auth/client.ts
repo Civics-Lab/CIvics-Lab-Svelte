@@ -5,6 +5,7 @@ interface User {
   email: string;
   username: string;
   displayName?: string;
+  avatar?: string;
   role: string;
 }
 
@@ -183,6 +184,30 @@ const createAuthStore = () => {
         update(state => ({ ...state, loading: false, error: errorMessage }));
         throw error;
       }
+    },
+    
+    // Add a method to update user data and token without login
+    setUser: (userData: User, token: string | null = null) => {
+      // If a new token is provided, update it
+      const newToken = token || get(store).token;
+      
+      // Update localStorage if available
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('auth_user', JSON.stringify(userData));
+        
+        if (newToken) {
+          localStorage.setItem('auth_token', newToken);
+          // Update cookie
+          document.cookie = `auth_token=${newToken}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Strict`;
+        }
+      }
+      
+      // Update store
+      update(state => ({
+        ...state,
+        user: userData,
+        token: newToken || state.token
+      }));
     },
     
     logout: () => {

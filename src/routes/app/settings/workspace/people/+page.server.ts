@@ -96,7 +96,8 @@ export const load: PageServerLoad = async ({ locals, url, cookies, request }) =>
           id: row.users.id,
           email: row.users.email,
           username: row.users.username,
-          displayName: row.users.displayName
+          displayName: row.users.displayName,
+          avatar: row.users.avatar
         }
       }));
     } catch (err) {
@@ -129,7 +130,9 @@ export const load: PageServerLoad = async ({ locals, url, cookies, request }) =>
               columns: {
                 id: true,
                 username: true,
-                displayName: true
+                displayName: true,
+                email: true,
+                avatar: true
               }
             }
           }

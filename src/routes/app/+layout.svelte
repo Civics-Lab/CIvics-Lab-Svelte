@@ -154,16 +154,24 @@
           on:click={toggleAccountPopover}
         >
           <div class="flex items-center">
-            <!-- User avatar placeholder -->
-            <div class="w-8 h-8 rounded-full bg-slate-700 mr-2 flex items-center justify-center">
-              {#if $auth.user?.displayName}
-                <span>{$auth.user.displayName.charAt(0).toUpperCase()}</span>
-              {:else if $auth.user?.username}
-                <span>{$auth.user.username.charAt(0).toUpperCase()}</span>
-              {:else}
-                <span>U</span>
-              {/if}
-            </div>
+            <!-- User avatar or placeholder -->
+            {#if $auth.user?.avatar}
+              <img 
+                src={$auth.user.avatar} 
+                alt="User profile" 
+                class="w-8 h-8 rounded-full mr-2 object-cover border border-slate-600"
+              />
+            {:else}
+              <div class="w-8 h-8 rounded-full bg-slate-700 mr-2 flex items-center justify-center">
+                {#if $auth.user?.displayName}
+                  <span>{$auth.user.displayName.charAt(0).toUpperCase()}</span>
+                {:else if $auth.user?.username}
+                  <span>{$auth.user.username.charAt(0).toUpperCase()}</span>
+                {:else}
+                  <span>U</span>
+                {/if}
+              </div>
+            {/if}
             <div class="text-left">
               <div class="font-medium">
                 {#if $auth.user?.displayName}
@@ -188,6 +196,44 @@
             id="account-menu"
             class="absolute bottom-16 left-4 w-56 bg-slate-800 rounded-md shadow-lg overflow-hidden z-10"
           >
+            <div class="p-3 border-b border-slate-700">
+              <div class="flex items-center space-x-3">
+                <!-- User avatar or placeholder in the menu -->
+                {#if $auth.user?.avatar}
+                  <img 
+                    src={$auth.user.avatar} 
+                    alt="User profile" 
+                    class="w-10 h-10 rounded-full object-cover border border-slate-600"
+                  />
+                {:else}
+                  <div class="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center">
+                    {#if $auth.user?.displayName}
+                      <span class="text-lg">{$auth.user.displayName.charAt(0).toUpperCase()}</span>
+                    {:else if $auth.user?.username}
+                      <span class="text-lg">{$auth.user.username.charAt(0).toUpperCase()}</span>
+                    {:else}
+                      <span class="text-lg">U</span>
+                    {/if}
+                  </div>
+                {/if}
+                
+                <div>
+                  <div class="font-medium text-white">
+                    {#if $auth.user?.displayName}
+                      {$auth.user.displayName}
+                    {:else}
+                      User
+                    {/if}
+                  </div>
+                  <div class="text-xs text-slate-400">
+                    {#if $auth.user?.username}
+                      @{$auth.user.username}
+                    {/if}
+                  </div>
+                </div>
+              </div>
+            </div>
+            
             <ul>
               <li>
                 <a 

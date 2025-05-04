@@ -360,7 +360,9 @@ export async function listPendingInvites(workspaceId: string): Promise<any[]> {
       invitedBy: row.users ? {
         id: row.users.id,
         username: row.users.username,
-        displayName: row.users.displayName
+        displayName: row.users.displayName,
+        email: row.users.email,
+        avatar: row.users.avatar
       } : null
     }));
   } catch (error) {

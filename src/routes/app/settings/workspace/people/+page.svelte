@@ -414,11 +414,19 @@
                   <td class="px-6 py-4 whitespace-nowrap">
                     <div class="flex items-center">
                       <div class="flex-shrink-0 h-10 w-10">
-                        <div class="h-10 w-10 rounded-full bg-teal-100 flex items-center justify-center">
-                          <span class="text-xl font-medium text-teal-800">
-                            {(member.user.displayName?.[0] || member.user.username?.[0] || '?').toUpperCase()}
-                          </span>
-                        </div>
+                        {#if member.user.avatar}
+                          <img 
+                            src={member.user.avatar} 
+                            alt="{member.user.displayName || member.user.username}" 
+                            class="h-10 w-10 rounded-full object-cover border border-slate-200"
+                          />
+                        {:else}
+                          <div class="h-10 w-10 rounded-full bg-teal-100 flex items-center justify-center">
+                            <span class="text-xl font-medium text-teal-800">
+                              {(member.user.displayName?.split(' ')[0]?.[0] || member.user.email?.split('@')[0]?.[0] || member.user.username?.[0] || '?').toUpperCase()}
+                            </span>
+                          </div>
+                        {/if}
                       </div>
                       <div class="ml-4">
                         <div class="text-sm font-medium text-gray-900">
@@ -529,7 +537,26 @@
                       </span>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {invite.invitedBy ? (invite.invitedBy.displayName || invite.invitedBy.username) : 'Unknown'}
+                      {#if invite.invitedBy}
+                        <div class="flex items-center">
+                          {#if invite.invitedBy.avatar}
+                            <img 
+                              src={invite.invitedBy.avatar} 
+                              alt="{invite.invitedBy.displayName || invite.invitedBy.username}" 
+                              class="h-6 w-6 rounded-full object-cover border border-slate-200 mr-2"
+                            />
+                          {:else}
+                            <div class="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center mr-2">
+                              <span class="text-xs font-medium text-blue-800">
+                                {(invite.invitedBy.displayName?.split(' ')[0]?.[0] || invite.invitedBy.email?.split('@')[0]?.[0] || invite.invitedBy.username?.[0] || '?').toUpperCase()}
+                              </span>
+                            </div>
+                          {/if}
+                          <span>{invite.invitedBy.displayName || invite.invitedBy.username}</span>
+                        </div>
+                      {:else}
+                        Unknown
+                      {/if}
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {formatDate(invite.invitedAt)}
