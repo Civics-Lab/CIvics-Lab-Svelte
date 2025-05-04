@@ -104,7 +104,7 @@
       <!-- Sidebar Menu -->
       <nav class="flex-grow p-4 space-y-1 overflow-y-auto text-white">
         <div class="mb-6">
-          <p class="text-xs font-semibold text-white uppercase tracking-wider mb-3 px-3">
+          <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 px-3">
             Main Menu
           </p>
           
