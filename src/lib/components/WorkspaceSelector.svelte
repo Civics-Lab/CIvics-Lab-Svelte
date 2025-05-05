@@ -3,6 +3,7 @@
   import { writable } from 'svelte/store';
   import { workspaceStore } from '$lib/stores/workspaceStore';
   import type { Workspace } from '$lib/types/supabase';
+  import type { WorkspaceRole } from '$lib/types/supabase';
   import LoadingSpinner from './LoadingSpinner.svelte';
   import WorkspaceLogo from './WorkspaceLogo.svelte';
   import { onMount } from 'svelte';
@@ -18,11 +19,27 @@
     }
   });
   
+  // Function to check if the user has super admin role in any workspace
+  function isSuperAdmin(): boolean {
+    if (!$workspaceStore.workspaces || $workspaceStore.workspaces.length === 0) {
+      return false;
+    }
+    
+    return $workspaceStore.workspaces.some(workspace => 
+      workspace.userRole === 'Super Admin'
+    );
+  }
+  
   function togglePopover() {
     isOpen.update(value => !value);
   }
   
-  function selectWorkspace(workspace: Workspace) {
+  // Define the extended workspace type that includes userRole
+  type WorkspaceWithRole = Workspace & {
+    userRole?: WorkspaceRole | null;
+  };
+  
+  function selectWorkspace(workspace: WorkspaceWithRole) {
     console.log("User selected workspace:", workspace.name, workspace.id);
     // Explicitly store in localStorage first
     if (typeof window !== 'undefined') {
@@ -115,25 +132,27 @@
           {/each}
         {/if}
         
-        <!-- Create workspace button -->
-        <div class="border-t mt-1 pt-1">
-          <button
-            class="w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50"
-            on:click={() => {
-              isOpen.set(false);
-              // Dispatch an event that can be caught by a parent component
-              const event = new CustomEvent('createWorkspace');
-              window.dispatchEvent(event);
-            }}
-          >
-            <div class="flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-              </svg>
-              Create New Workspace
-            </div>
-          </button>
-        </div>
+        <!-- Create workspace button - only show for Super Admin role -->
+        {#if isSuperAdmin()}
+          <div class="border-t mt-1 pt-1">
+            <button
+              class="w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50"
+              on:click={() => {
+                isOpen.set(false);
+                // Dispatch an event that can be caught by a parent component
+                const event = new CustomEvent('createWorkspace');
+                window.dispatchEvent(event);
+              }}
+            >
+              <div class="flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                Create New Workspace
+              </div>
+            </button>
+          </div>
+        {/if}
       </div>
     </div>
   {/if}

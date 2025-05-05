@@ -5,6 +5,7 @@
     import { goto } from '$app/navigation';
     import { onMount } from 'svelte';
     import { workspaceStore } from '$lib/stores/workspaceStore';
+    import { hasServiceAccess, SERVICES } from '$lib/utils/serviceGuard';
     import ToastContainer from '$lib/components/ToastContainer.svelte';
     import WorkspacePickerButton from '$lib/components/WorkspacePickerButton.svelte';
     import CreateWorkspaceModal from '$lib/components/CreateWorkspaceModal.svelte';
@@ -18,7 +19,8 @@
         Settings, 
         HelpCircle, 
         LogOut,
-        ChevronDown
+        ChevronDown,
+        MessageSquare
     } from '@lucide/svelte';
     
     export let data: LayoutData;
@@ -116,6 +118,13 @@
             <LayoutDashboard class="h-5 w-5 mr-2" />
             Dashboard
           </a>
+        </div>
+        
+        {#if $workspaceStore.currentWorkspace && hasServiceAccess($workspaceStore.currentWorkspace, SERVICES.ENGAGE)}
+        <div class="mb-6">
+          <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 px-3">
+            Engage
+          </p>
           
           <!-- Contacts -->
           <a 
@@ -144,6 +153,7 @@
             Donations
           </a>
         </div>
+        {/if}
       </nav>
       
       <!-- Sidebar Footer - Account Button (Replacing the previous Account section) -->
