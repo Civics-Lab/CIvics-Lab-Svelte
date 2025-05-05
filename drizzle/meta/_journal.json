@@ -11,7 +11,7 @@
     },
     {
       "idx": 1,
-      "version": "6", 
+      "version": "6",
       "when": 1743881000000,
       "tag": "0001_donation_views_table",
       "breakpoints": true
@@ -21,6 +21,13 @@
       "version": "6",
       "when": 1743881100000,
       "tag": "0002_donation_tags_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1746403773999,
+      "tag": "0003_nifty_blade",
       "breakpoints": true
     }
   ]

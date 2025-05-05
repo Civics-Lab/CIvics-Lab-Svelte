@@ -34,6 +34,11 @@ export const workspaces = pgTable('workspaces', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
   logo: text('logo'),
+  hasEngage: boolean('has_engage').default(true).notNull(),
+  hasHelpdesk: boolean('has_helpdesk').default(false).notNull(),
+  hasPathway: boolean('has_pathway').default(false).notNull(),
+  hasPulse: boolean('has_pulse').default(false).notNull(),
+  hasCompass: boolean('has_compass').default(false).notNull(),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
   createdById: uuid('created_by').references(() => users.id)
