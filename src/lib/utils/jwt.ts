@@ -7,6 +7,7 @@ export interface JwtPayload {
   username: string;
   email: string;
   role: string;
+  isGlobalSuperAdmin?: boolean;
   // Additional custom claims
   iat?: number; // Issued at
   exp?: number; // Expiration time

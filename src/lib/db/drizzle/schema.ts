@@ -26,7 +26,8 @@ export const users = pgTable('users', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
   lastLoginAt: timestamp('last_login_at'),
   isActive: boolean('is_active').default(true).notNull(),
-  role: text('role').default('user').notNull()
+  role: text('role').default('user').notNull(),
+  isGlobalSuperAdmin: boolean('is_global_super_admin').default(false).notNull()
 });
 
 // Main Tables from Supabase Schema
@@ -332,6 +333,17 @@ export const userInvites = pgTable('user_invites', {
   expiresAt: timestamp('expires_at'),
   acceptedAt: timestamp('accepted_at'),
   token: text('token').notNull().unique()
+});
+
+// Audit logs for Super Admin actions
+export const auditLogs = pgTable('audit_logs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id),
+  action: text('action').notNull(),
+  workspaceId: uuid('workspace_id').references(() => workspaces.id),
+  details: jsonb('details'),
+  ipAddress: text('ip_address'),
+  timestamp: timestamp('timestamp').defaultNow().notNull()
 });
 
 // Define relations

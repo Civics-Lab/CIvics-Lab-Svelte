@@ -6,6 +6,7 @@
 import { db } from '$lib/server/db';
 import { workspaces, userWorkspaces } from '$lib/db/drizzle/schema';
 import { and, eq } from 'drizzle-orm';
+import { isGlobalSuperAdmin, hasWorkspaceAccess } from '$lib/middleware/superadmin/access';
 
 /**
  * Log details about a workspace request for debugging
@@ -28,10 +29,27 @@ export async function checkWorkspaceAccess(workspaceId: string, userId: string) 
     .where(eq(workspaces.id, workspaceId));
     
   if (!workspace) {
-    return { exists: false, hasAccess: false, role: null };
+    return { 
+      exists: false, 
+      hasAccess: false, 
+      role: null, 
+      isGlobalSuperAdmin: false 
+    };
   }
   
-  // Check if user has access
+  // Check if user is a global Super Admin
+  const isSuperAdmin = await isGlobalSuperAdmin(userId);
+  
+  if (isSuperAdmin) {
+    return { 
+      exists: true, 
+      hasAccess: true, 
+      role: 'Super Admin', 
+      isGlobalSuperAdmin: true 
+    };
+  }
+  
+  // Check if user has specific access to this workspace
   const [userWorkspace] = await db
     .select()
     .from(userWorkspaces)
@@ -43,8 +61,18 @@ export async function checkWorkspaceAccess(workspaceId: string, userId: string) 
     );
     
   if (!userWorkspace) {
-    return { exists: true, hasAccess: false, role: null };
+    return { 
+      exists: true, 
+      hasAccess: false, 
+      role: null, 
+      isGlobalSuperAdmin: false 
+    };
   }
   
-  return { exists: true, hasAccess: true, role: userWorkspace.role };
+  return { 
+    exists: true, 
+    hasAccess: true, 
+    role: userWorkspace.role,
+    isGlobalSuperAdmin: false
+  };
 }

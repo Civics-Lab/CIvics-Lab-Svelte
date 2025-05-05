@@ -1,0 +1,17 @@
+export async function up(db) {
+  await db.schema
+    .alterTable('users')
+    .addColumn('is_global_super_admin', 'boolean', (col) => col.notNull().default(false))
+    .execute();
+  
+  console.log('Added is_global_super_admin column to users table');
+}
+
+export async function down(db) {
+  await db.schema
+    .alterTable('users')
+    .dropColumn('is_global_super_admin')
+    .execute();
+  
+  console.log('Removed is_global_super_admin column from users table');
+}

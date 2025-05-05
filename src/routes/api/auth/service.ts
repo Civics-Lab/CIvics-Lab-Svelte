@@ -135,7 +135,8 @@ export const authService = {
         id: user.id,
         username: user.username,
         email: user.email,
-        role: user.role
+        role: user.role,
+        isGlobalSuperAdmin: user.isGlobalSuperAdmin || false
       };
       
       console.log('Generating JWT token...');
@@ -315,7 +316,8 @@ export const authService = {
         id: newUser.id,
         username: newUser.username,
         email: newUser.email,
-        role: newUser.role
+        role: newUser.role,
+        isGlobalSuperAdmin: false
       };
       
       const token = await this.generateToken(payload);

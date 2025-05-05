@@ -1,0 +1,22 @@
+export async function up(db) {
+  await db.schema
+    .createTable('audit_logs')
+    .addColumn('id', 'uuid', (col) => col.primaryKey().defaultRandom())
+    .addColumn('user_id', 'uuid', (col) => col.notNull().references('users.id'))
+    .addColumn('action', 'text', (col) => col.notNull())
+    .addColumn('workspace_id', 'uuid', (col) => col.references('workspaces.id'))
+    .addColumn('details', 'jsonb')
+    .addColumn('ip_address', 'text')
+    .addColumn('timestamp', 'timestamp', (col) => col.notNull().defaultNow())
+    .execute();
+  
+  console.log('Created audit_logs table');
+}
+
+export async function down(db) {
+  await db.schema
+    .dropTable('audit_logs')
+    .execute();
+  
+  console.log('Dropped audit_logs table');
+}
