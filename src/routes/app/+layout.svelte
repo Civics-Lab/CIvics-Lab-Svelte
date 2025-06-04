@@ -20,7 +20,8 @@
         HelpCircle, 
         LogOut,
         ChevronDown,
-        MessageSquare
+        MessageSquare,
+        ShieldAlert
     } from '@lucide/svelte';
     
     export let data: LayoutData;
@@ -30,6 +31,9 @@
     
     // State for account popover
     let isAccountPopoverOpen = false;
+    
+    // State to track if user is a Super Admin
+    let isGlobalSuperAdmin = false;
     
     // Function to determine if a menu item is active
     function isActive(path: string): boolean {
@@ -69,8 +73,23 @@
     }
     
     // Load workspaces when component mounts and select the first one if needed
-    onMount(() => {
+    onMount(async () => {
       workspaceStore.refreshWorkspaces();
+      
+      // Check if the user is a global Super Admin
+      try {
+        const response = await fetch('/api/admin/access', {
+          headers: {
+            'Authorization': `Bearer ${$auth.token || ''}`
+          }
+        });
+        
+        // If access is successful, the user is a global Super Admin
+        isGlobalSuperAdmin = response.status === 200;
+      } catch (error) {
+        console.error('Error checking Super Admin status:', error);
+        isGlobalSuperAdmin = false;
+      }
       
       // Listen for create workspace event
       const handleCreateWorkspace = () => {

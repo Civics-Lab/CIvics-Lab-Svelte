@@ -1,35 +1,31 @@
-import { json } from '@sveltejs/kit';
+import { json, error } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { users } from '$lib/db/drizzle/schema';
 import { eq } from 'drizzle-orm';
-import { jwtUtils } from '$lib/utils/jwt';
-import { isGlobalSuperAdmin } from '$lib/middleware/superadmin/access';
+import { isGlobalSuperAdmin } from '$lib/server/auth';
 import { logSuperAdminAction } from '$lib/middleware/superadmin/audit';
+import type { RequestHandler } from './$types';
 
-// Remove Super Admin privileges
-export async function DELETE({ params, request }) {
+// DELETE /api/admin/super-admins/[userId] - Remove Super Admin privileges
+export const DELETE: RequestHandler = async ({ params, request, locals }) => {
   try {
     const { userId } = params;
+    const user = locals.user;
     
-    // Extract and verify token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return json({ error: 'Unauthorized' }, { status: 401 });
+    if (!user) {
+      throw error(401, 'Authentication required');
     }
     
-    const token = authHeader.substring(7);
-    const payload = await jwtUtils.verifyToken(token);
-    
-    // Only Super Admins can manage other Super Admins
-    const isSuperAdmin = await isGlobalSuperAdmin(payload.id);
+    // Check if the user is a Super Admin
+    const isSuperAdmin = await isGlobalSuperAdmin(user.id);
     
     if (!isSuperAdmin) {
-      return json({ error: 'Forbidden - Requires Super Admin privileges' }, { status: 403 });
+      throw error(403, 'Forbidden - Requires Super Admin privileges');
     }
     
-    // Can't remove your own Super Admin privileges
-    if (userId === payload.id) {
-      return json({ error: 'Cannot remove your own Super Admin privileges' }, { status: 400 });
+    // Prevent removing your own Super Admin privileges
+    if (userId === user.id) {
+      throw error(400, 'Cannot remove your own Super Admin privileges');
     }
     
     // Check if user exists and is a Super Admin
@@ -39,11 +35,11 @@ export async function DELETE({ params, request }) {
       .where(eq(users.id, userId));
       
     if (!targetUser) {
-      return json({ error: 'User not found' }, { status: 404 });
+      throw error(404, 'User not found');
     }
     
     if (!targetUser.isGlobalSuperAdmin) {
-      return json({ error: 'User is not a Super Admin' }, { status: 400 });
+      throw error(400, 'User is not a Super Admin');
     }
     
     // Remove Super Admin privileges
@@ -54,7 +50,7 @@ export async function DELETE({ params, request }) {
     
     // Log the action
     await logSuperAdminAction({
-      userId: payload.id,
+      userId: user.id,
       action: 'REMOVE_SUPER_ADMIN',
       details: {
         targetUserId: userId,
@@ -67,8 +63,13 @@ export async function DELETE({ params, request }) {
       message: 'Super Admin privileges have been removed',
       userId
     });
-  } catch (error) {
-    console.error('Error removing Super Admin privileges:', error);
-    return json({ error: 'Internal server error' }, { status: 500 });
+  } catch (err) {
+    console.error('Error removing Super Admin privileges:', err);
+    
+    if (err instanceof Response) {
+      throw err;
+    }
+    
+    throw error(500, 'Internal server error');
   }
-}
+};

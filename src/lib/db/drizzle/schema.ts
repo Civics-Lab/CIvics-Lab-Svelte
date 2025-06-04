@@ -332,7 +332,8 @@ export const userInvites = pgTable('user_invites', {
   invitedAt: timestamp('invited_at').defaultNow(),
   expiresAt: timestamp('expires_at'),
   acceptedAt: timestamp('accepted_at'),
-  token: text('token').notNull().unique()
+  token: text('token').notNull().unique(),
+  isSuperAdmin: boolean('is_super_admin').default(false).notNull()
 });
 
 // Audit logs for Super Admin actions

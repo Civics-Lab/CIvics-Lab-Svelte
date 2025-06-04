@@ -2,12 +2,33 @@
 <script lang="ts">
     import { page } from '$app/stores';
     import { writable } from 'svelte/store';
+    import { onMount } from 'svelte';
     import type { LayoutData } from './$types';
     
     export let data: LayoutData;
+    
+    // Check if the user is a global Super Admin
+    let isGlobalSuperAdmin = false;
+    
+    onMount(async () => {
+      // Check if the user is a global Super Admin
+      try {
+        const response = await fetch('/api/admin/access', {
+          headers: {
+            'Authorization': `Bearer ${data.session?.token || ''}`
+          }
+        });
+        
+        // If access is successful, the user is a global Super Admin
+        isGlobalSuperAdmin = response.status === 200;
+      } catch (error) {
+        console.error('Error checking Super Admin status:', error);
+        isGlobalSuperAdmin = false;
+      }
+    });
   
     // Define the sidebar navigation structure
-    const settingsNav = [
+    $: settingsNav = [
       {
         title: 'Workspace',
         items: [
@@ -21,7 +42,14 @@
         items: [
           { label: 'General', href: '/app/settings/account/general' }
         ]
-      }
+      },
+      // Only show the Admin section if the user is a global Super Admin
+      ...isGlobalSuperAdmin ? [{
+        title: 'Admin',
+        items: [
+          { label: 'Super Admins', href: '/app/settings/admin/super-admins' }
+        ]
+      }] : []
     ];
   
     // Helper function to check if a route is active

@@ -164,12 +164,14 @@ export async function createInvitation({
   email,
   workspaceId,
   role,
-  invitedById
+  invitedById,
+  isSuperAdmin = false
 }: {
   email: string;
-  workspaceId: string;
+  workspaceId: string | null;
   role: WorkspaceRole;
   invitedById: string;
+  isSuperAdmin?: boolean;
 }): Promise<{ success: boolean; message: string; invite?: any; inviteLink?: string }> {
   try {
     const normalizedEmail = email.toLowerCase();
@@ -204,6 +206,8 @@ export async function createInvitation({
     
     // Step 4: Create the invitation in the database
     try {
+      // For Super Admin invites, we'll store null in the workspaceId
+      // This indicates it's a global Super Admin invite, not tied to a specific workspace
       const newInvite = await db.insert(userInvites)
         .values({
           email: normalizedEmail,
@@ -212,7 +216,8 @@ export async function createInvitation({
           invitedById,
           token,
           status: 'Pending',
-          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+          isSuperAdmin // Add this field to store if it's a Super Admin invite
         })
         .returning();
         
@@ -312,6 +317,24 @@ export async function acceptInvitation(token: string, userId: string): Promise<{
       return { success: false, message: `Invitation has already been ${invite.status.toLowerCase()}` };
     }
     
+    // If this is a Super Admin invite, set the user as a global Super Admin
+    if (invite.isSuperAdmin) {
+      await db.update(users)
+        .set({ isGlobalSuperAdmin: true })
+        .where(eq(users.id, userId));
+      
+      // Update the invitation status
+      await db.update(userInvites)
+        .set({
+          status: 'Accepted',
+          acceptedAt: new Date()
+        })
+        .where(eq(userInvites.id, invite.id));
+      
+      return { success: true, message: 'You are now a Super Admin' };
+    }
+    
+    // Regular workspace invitation
     // Add the user to the workspace
     const { success, message } = await addUserToWorkspace(userId, invite.workspaceId, invite.role);
     

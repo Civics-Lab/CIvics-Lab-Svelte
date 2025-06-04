@@ -1,28 +1,25 @@
-import { json } from '@sveltejs/kit';
+import { json, error } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { users } from '$lib/db/drizzle/schema';
 import { eq } from 'drizzle-orm';
-import { jwtUtils } from '$lib/utils/jwt';
-import { isGlobalSuperAdmin } from '$lib/middleware/superadmin/access';
+import { isGlobalSuperAdmin } from '$lib/server/auth';
 import { logSuperAdminAction } from '$lib/middleware/superadmin/audit';
+import type { RequestHandler } from './$types';
 
-// Get all super admins
-export async function GET({ request }) {
+// GET /api/admin/super-admins - Get all super admins
+export const GET: RequestHandler = async ({ request, locals }) => {
   try {
-    // Extract and verify token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return json({ error: 'Unauthorized' }, { status: 401 });
+    const user = locals.user;
+    
+    if (!user) {
+      throw error(401, 'Authentication required');
     }
     
-    const token = authHeader.substring(7);
-    const payload = await jwtUtils.verifyToken(token);
-    
-    // Only Super Admins can manage other Super Admins
-    const isSuperAdmin = await isGlobalSuperAdmin(payload.id);
+    // Check if the user is a Super Admin
+    const isSuperAdmin = await isGlobalSuperAdmin(user.id);
     
     if (!isSuperAdmin) {
-      return json({ error: 'Forbidden - Requires Super Admin privileges' }, { status: 403 });
+      throw error(403, 'Forbidden - Requires Super Admin privileges');
     }
     
     // Get all Super Admins
@@ -38,37 +35,49 @@ export async function GET({ request }) {
     
     // Log the action
     await logSuperAdminAction({
-      userId: payload.id,
+      userId: user.id,
       action: 'LIST_SUPER_ADMINS',
       details: { count: superAdmins.length }
     });
     
     return json({ superAdmins });
-  } catch (error) {
-    console.error('Error fetching Super Admins:', error);
-    return json({ error: 'Internal server error' }, { status: 500 });
-  }
-}
-
-// Add a new super admin
-export async function POST({ request }) {
-  try {
-    const { userId } = await request.json();
+  } catch (err) {
+    console.error('Error fetching Super Admins:', err);
     
-    // Extract and verify token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return json({ error: 'Unauthorized' }, { status: 401 });
+    // If the error is about the missing column, return a specific error
+    if (err instanceof Error && 
+        err.message && 
+        err.message.includes('is_global_super_admin')) {
+      return json({ 
+        error: 'Database migration required for Super Admin functionality',
+        needsMigration: true
+      }, { status: 500 });
     }
     
-    const token = authHeader.substring(7);
-    const payload = await jwtUtils.verifyToken(token);
+    throw error(500, 'Internal server error');
+  }
+};
+
+// POST /api/admin/super-admins - Add a new super admin
+export const POST: RequestHandler = async ({ request, locals }) => {
+  try {
+    const user = locals.user;
     
-    // Only Super Admins can manage other Super Admins
-    const isSuperAdmin = await isGlobalSuperAdmin(payload.id);
+    if (!user) {
+      throw error(401, 'Authentication required');
+    }
+    
+    // Check if the user is a Super Admin
+    const isSuperAdmin = await isGlobalSuperAdmin(user.id);
     
     if (!isSuperAdmin) {
-      return json({ error: 'Forbidden - Requires Super Admin privileges' }, { status: 403 });
+      throw error(403, 'Forbidden - Requires Super Admin privileges');
+    }
+    
+    const { userId } = await request.json();
+    
+    if (!userId) {
+      throw error(400, 'User ID is required');
     }
     
     // Check if user exists
@@ -78,7 +87,7 @@ export async function POST({ request }) {
       .where(eq(users.id, userId));
       
     if (!existingUser) {
-      return json({ error: 'User not found' }, { status: 404 });
+      throw error(404, 'User not found');
     }
     
     // Update user to be a Super Admin
@@ -89,7 +98,7 @@ export async function POST({ request }) {
     
     // Log the action
     await logSuperAdminAction({
-      userId: payload.id,
+      userId: user.id,
       action: 'ADD_SUPER_ADMIN',
       details: {
         targetUserId: userId,
@@ -102,8 +111,8 @@ export async function POST({ request }) {
       message: 'User has been given Super Admin privileges',
       user: existingUser
     });
-  } catch (error) {
-    console.error('Error adding Super Admin:', error);
-    return json({ error: 'Internal server error' }, { status: 500 });
+  } catch (err) {
+    console.error('Error adding Super Admin:', err);
+    throw error(500, 'Internal server error');
   }
-}
+};

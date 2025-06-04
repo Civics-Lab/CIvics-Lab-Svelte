@@ -21,7 +21,8 @@
 		"db:setup-invites-direct": "node scripts/setup-invites.js",
 		"db:migrate:avatar": "tsx src/lib/db/run-migrations.ts",
 		"db:add-avatar": "node scripts/migrate-avatar.mjs",
-		"migrate": "tsx src/lib/db/migrate.ts"
+		"migrate": "tsx src/lib/db/migrate.ts",
+		"add:super-admin": "node scripts/add_super_admin_column.mjs"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-vercel": "^5.6.3",
