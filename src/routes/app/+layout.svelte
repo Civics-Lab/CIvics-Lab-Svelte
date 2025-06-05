@@ -26,6 +26,8 @@
     } from '@lucide/svelte';
     
     export let data: LayoutData;
+    // Mark data as used for build
+    $: data;
     
     // State for create workspace modal
     let isCreateModalOpen = false;

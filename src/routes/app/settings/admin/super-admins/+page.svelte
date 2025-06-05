@@ -2,7 +2,7 @@
   import { enhance } from '$app/forms';
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
-  import { Trash, Plus, ShieldAlert, UserPlus } from 'lucide-svelte';
+  import { Trash, Plus, ShieldAlert, UserPlus } from '@lucide/svelte';
 
   // Get data from the server
   export let data;

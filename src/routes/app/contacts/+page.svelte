@@ -16,6 +16,8 @@
   import ContactsViewModals from '$lib/components/contacts/ContactsViewModals.svelte';
   
   export let data: PageData;
+  // Mark data as used for build
+  $: data;
   
   // State for modals
   const isContactModalOpen = writable(false);

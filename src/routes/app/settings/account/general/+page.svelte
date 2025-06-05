@@ -8,6 +8,8 @@
     import type { PageData } from './$types';
     
     export let data: PageData;
+    // Mark data as used for build
+    $: data;
     
     // User profile form state
     const profile = writable({
@@ -503,7 +505,7 @@
               {/if}
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700">Profile Picture</label>
+              <label for="avatar-upload" class="block text-sm font-medium text-gray-700">Profile Picture</label>
               <div class="mt-1 flex items-center">
                 <input
                   type="file"
