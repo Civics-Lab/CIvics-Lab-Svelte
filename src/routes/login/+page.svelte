@@ -101,10 +101,10 @@
 		<div class="w-full max-w-sm bg-gray-50 p-8 md:p-10">
 			<!-- Company Logo/Name -->
 			<div class="flex items-center justify-center mb-8">
-				<div class="flex items-center space-x-3">
-					<img src="/logo.svg" alt="Civics Lab" class="w-8 h-8" />
-					<span class="text-xl font-semibold text-gray-900">Civics Lab</span>
-				</div>
+			<a href="/" class="flex items-center space-x-3 hover:opacity-80 transition-opacity">
+			<img src="/logo.svg" alt="Civics Lab" class="w-8 h-8" />
+			<span class="text-xl font-semibold text-gray-900">Civics Lab</span>
+			</a>
 			</div>
 
 			<!-- Login Header -->
