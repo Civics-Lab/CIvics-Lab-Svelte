@@ -6,6 +6,7 @@
   import DetailsSheetOverlay from '$lib/components/DetailsSheetOverlay.svelte';
   import { toastStore } from '$lib/stores/toastStore';
   import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+  import { X, AlertTriangle } from '@lucide/svelte';
   
   // Import subcomponents
   import DonationBasicInfo from './DonationDetailsSheet/DonationBasicInfo.svelte';
@@ -389,56 +390,50 @@
       >
         <div class="h-full w-full flex flex-col bg-white shadow-xl overflow-y-scroll">
           <!-- Header -->
-          <div class="px-4 py-6 bg-gray-50 sm:px-6 sticky top-0 z-10 border-b">
-            <div class="flex items-start justify-between">
-              <div>
-                <h2 class="text-lg font-medium text-gray-900">
-                  {#if $isLoading}
-                    Loading...
-                  {:else if $error}
-                    Error Loading Donation
+          <div class="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 px-6">
+            <div class="min-w-0 flex-1">
+              <h2 class="text-lg font-semibold text-slate-900">
+                {#if $isLoading}
+                  Loading...
+                {:else if $error}
+                  Error Loading Donation
+                {:else}
+                  {#if $donor}
+                    Donation from {$donor.name}
                   {:else}
-                    {#if $donor}
-                      Donation from {$donor.name}
-                    {:else}
-                      Donation Details
-                    {/if}
+                    Donation Details
                   {/if}
-                </h2>
-                <p class="mt-1 text-sm {$hasChanges ? 'text-orange-500 font-medium' : 'text-gray-500'}">
-                  {#if $hasChanges}
-                    You have unsaved changes
-                  {:else}
-                    Donation details
-                  {/if}
-                </p>
-              </div>
-              <button
-                type="button"
-                class="rounded-md text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                on:click|stopPropagation={handleClose}
-              >
-                <span class="sr-only">Close panel</span>
-                <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+                {/if}
+              </h2>
+              <p class="text-sm text-slate-500 mt-1">
+                {#if $hasChanges}
+                  <span class="text-amber-600 font-medium">You have unsaved changes</span>
+                {:else}
+                  Donation details
+                {/if}
+              </p>
             </div>
+            <button
+              type="button"
+              class="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2 transition-colors"
+              on:click|stopPropagation={handleClose}
+            >
+              <span class="sr-only">Close panel</span>
+              <X size={20} />
+            </button>
           </div>
           
           <!-- Content -->
-          <div class="relative flex-1 px-4 py-6 sm:px-6">
+          <div class="flex-1 overflow-y-auto px-6 py-6">
             {#if $isLoading}
-              <div class="flex items-center justify-center h-40">
+              <div class="flex h-32 items-center justify-center">
                 <LoadingSpinner size="lg" />
               </div>
             {:else if $error}
-              <div class="bg-red-50 p-4 rounded-md mb-6">
+              <div class="rounded-md border border-red-200 bg-red-50 p-4">
                 <div class="flex">
                   <div class="flex-shrink-0">
-                    <svg class="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-                    </svg>
+                    <AlertTriangle class="h-5 w-5 text-red-400" />
                   </div>
                   <div class="ml-3">
                     <h3 class="text-sm font-medium text-red-800">Error</h3>
@@ -471,43 +466,41 @@
           </div>
           
           <!-- Footer with action buttons -->
-          <div class="px-4 py-4 sm:px-6 bg-gray-50 border-t sticky bottom-0">
-            <div class="flex justify-end space-x-3">
-              {#if $hasChanges}
-                <button
-                  type="button"
-                  class="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
-                  on:click|stopPropagation={cancelChanges}
-                  disabled={$isSaving}
-                >
-                  Discard Changes
-                </button>
-                
-                <button
-                  type="button"
-                  class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
-                  on:click|stopPropagation={saveChanges}
-                  disabled={$isSaving}
-                >
-                  {#if $isSaving}
-                    <div class="flex items-center">
-                      <LoadingSpinner size="sm" color="white" />
-                      <span class="ml-2">Saving...</span>
-                    </div>
-                  {:else}
-                    Save Changes
-                  {/if}
-                </button>
-              {:else}
-                <button
-                  type="button"
-                  class="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
-                  on:click|stopPropagation={handleClose}
-                >
-                  Close
-                </button>
-              {/if}
-            </div>
+          <div class="flex shrink-0 justify-end gap-3 border-t border-slate-200 px-6 py-4">
+            {#if $hasChanges}
+              <button
+                type="button"
+                class="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-950 disabled:pointer-events-none disabled:opacity-50"
+                on:click|stopPropagation={cancelChanges}
+                disabled={$isSaving}
+              >
+                Discard Changes
+              </button>
+              
+              <button
+                type="button"
+                class="inline-flex h-9 items-center justify-center rounded-md bg-purple-600 px-3 text-sm font-medium text-white shadow transition-colors hover:bg-purple-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-purple-600 disabled:pointer-events-none disabled:opacity-50"
+                on:click|stopPropagation={saveChanges}
+                disabled={$isSaving}
+              >
+                {#if $isSaving}
+                  <div class="flex items-center gap-2">
+                    <LoadingSpinner size="sm" color="white" />
+                    <span>Saving...</span>
+                  </div>
+                {:else}
+                  Save Changes
+                {/if}
+              </button>
+            {:else}
+              <button
+                type="button"
+                class="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-950"
+                on:click|stopPropagation={handleClose}
+              >
+                Close
+              </button>
+            {/if}
           </div>
         </div>
       </div>
@@ -515,53 +508,49 @@
   
     <!-- Unsaved changes confirmation dialog -->
     {#if $showUnsavedChangesDialog}
-      <div class="fixed inset-0 z-[60] overflow-y-auto">
-        <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-          <div 
-            class="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg"
-            transition:fly={{ duration: 200, y: 10 }}
-            on:click|stopPropagation={() => {}}
-          >
-            <div class="bg-white px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
-              <div class="sm:flex sm:items-start">
-                <div class="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
-                  <svg class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-                  </svg>
-                </div>
-                <div class="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
-                  <h3 class="text-base font-semibold leading-6 text-gray-900">Unsaved Changes</h3>
-                  <div class="mt-2">
-                    <p class="text-sm text-gray-500">
-                      You have unsaved changes. Are you sure you want to close without saving? Your changes will be lost.
-                    </p>
-                  </div>
+      <div class="fixed inset-0 z-[60] flex min-h-full items-center justify-center p-4">
+        <div 
+          class="relative w-full max-w-lg transform overflow-hidden rounded-lg border border-slate-200 bg-white text-left shadow-lg transition-all"
+          transition:fly={{ duration: 200, y: 10 }}
+          on:click|stopPropagation={() => {}}
+        >
+          <div class="px-6 pb-4 pt-6">
+            <div class="flex items-start gap-4">
+              <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100">
+                <AlertTriangle class="h-5 w-5 text-amber-600" />
+              </div>
+              <div class="min-w-0 flex-1">
+                <h3 class="text-base font-semibold text-slate-900">Unsaved Changes</h3>
+                <div class="mt-2">
+                  <p class="text-sm text-slate-500">
+                    You have unsaved changes. Are you sure you want to close without saving? Your changes will be lost.
+                  </p>
                 </div>
               </div>
             </div>
-            <div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
-              <button 
-                type="button" 
-                class="inline-flex w-full justify-center rounded-md bg-purple-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-purple-500 sm:ml-3 sm:w-auto"
-                on:click|stopPropagation={saveChangesAndClose}
-              >
-                Save Changes
-              </button>
-              <button 
-                type="button" 
-                class="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto"
-                on:click|stopPropagation={discardChangesAndClose}
-              >
-                Discard
-              </button>
-              <button 
-                type="button" 
-                class="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto mr-auto"
-                on:click|stopPropagation={() => showUnsavedChangesDialog.set(false)}
-              >
-                Cancel
-              </button>
-            </div>
+          </div>
+          <div class="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
+            <button 
+              type="button" 
+              class="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-950"
+              on:click|stopPropagation={() => showUnsavedChangesDialog.set(false)}
+            >
+              Cancel
+            </button>
+            <button 
+              type="button" 
+              class="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-950"
+              on:click|stopPropagation={discardChangesAndClose}
+            >
+              Discard
+            </button>
+            <button 
+              type="button" 
+              class="inline-flex h-9 items-center justify-center rounded-md bg-purple-600 px-3 text-sm font-medium text-white shadow transition-colors hover:bg-purple-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-purple-600"
+              on:click|stopPropagation={saveChangesAndClose}
+            >
+              Save Changes
+            </button>
           </div>
         </div>
       </div>

@@ -89,7 +89,7 @@
   });
 </script>
 
-<div class="flex-1 overflow-auto relative">
+<div class="flex-1 overflow-auto relative px-6">
   <div class="bg-white rounded-lg shadow overflow-hidden">
     {#if isLoading}
       <div class="flex justify-center items-center py-20">

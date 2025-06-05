@@ -1,19 +1,24 @@
-<!-- src/routes/engage/donations/+page.svelte -->
+<!-- src/routes/app/donations/+page.svelte -->
 <script lang="ts">
   import { onMount } from 'svelte';
   import { writable } from 'svelte/store';
   import { workspaceStore } from '$lib/stores/workspaceStore';
   import { toastStore } from '$lib/stores/toastStore';
   import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
-  import type { PageData } from './$types';
+  
+  // Import services
+  import { 
+    fetchDonations, 
+    createDonation, 
+    updateDonation, 
+    deleteDonation 
+  } from '$lib/services/donationService';
   
   // Import components
   import DonationsViewNavbar from '$lib/components/donations/DonationsViewNavbar.svelte';
   import DonationsFilterSortBar from '$lib/components/donations/DonationsFilterSortBar.svelte';
   import DonationsDataGrid from '$lib/components/donations/DonationsDataGrid.svelte';
   import DonationsViewModals from '$lib/components/donations/DonationsViewModals.svelte';
-  
-  export let data: PageData;
   
   // State for modals
   const isDonationModalOpen = writable(false);
@@ -59,8 +64,10 @@
   const availableFields = writable([
     { id: 'amount', label: 'Amount' },
     { id: 'status', label: 'Status' },
-    { id: 'payment_type', label: 'Payment Type' },
-    { id: 'notes', label: 'Notes' }
+    { id: 'paymentType', label: 'Payment Type' },
+    { id: 'notes', label: 'Notes' },
+    { id: 'donorName', label: 'Donor Name' },
+    { id: 'donorType', label: 'Donor Type' }
   ]);
   
   // Filters state
@@ -95,11 +102,6 @@
     applyFiltersAndSorting();
   }
   
-  function handleRetryFetchViews() {
-    viewsError.set(null);
-    fetchViews();
-  }
-  
   function handleToggleField(event) {
     toggleField(event.detail);
   }
@@ -111,7 +113,7 @@
   
   function handleOpenEditViewModal() {
     if ($currentView) {
-      newViewName.set($currentView.view_name);
+      newViewName.set($currentView.viewName);
       isEditViewModalOpen.set(true);
     }
   }
@@ -124,47 +126,16 @@
     isDonationModalOpen.set(true);
   }
   
-  // Handle closing the donation modal from any event
   function handleCloseDonationModal() {
     isDonationModalOpen.set(false);
   }
   
   function handleDonationCreated() {
-    // Modal is already closed in the DonationsViewModals component
-    fetchDonations();
+    fetchDonationsData();
   }
   
   function handleDonationUpdated() {
-    fetchDonations();
-  }
-  
-  // Function to ensure views exist even on error
-  function createLocalFallbackView() {
-    // Create a temporary view that will not be saved to the database
-    const tempView = {
-      id: 'temp-' + Math.random().toString(36).substring(2, 11),
-      view_name: 'Default View (Local Only)',
-      workspace_id: $workspaceStore.currentWorkspace?.id || '',
-      amount: true,
-      status: true,
-      payment_type: true,
-      notes: false,
-      filters: [],
-      sorting: [],
-      created_at: new Date(),
-      updated_at: new Date(),
-      temporary: true // Flag to indicate this is a temporary view
-    };
-    
-    // Set the view and notify user
-    views.set([tempView]);
-    currentView.set(tempView);
-    filters.set([]);
-    sorting.set([]);
-    
-    // Notify user of the database error with more helpful message
-    toastStore.warning('Database issue detected: The donation_views table does not exist. Using a local view instead. Please contact your administrator.');
-    viewsError.set('Database table missing. Using a local view as fallback.');
+    fetchDonationsData();
   }
   
   function handleAddFilter() {
@@ -204,6 +175,7 @@
   }
   
   function handleSearchChanged(event) {
+    // Update the searchQuery store with the value from the event
     if (event && event.detail !== undefined) {
       searchQuery.set(event.detail);
     }
@@ -282,21 +254,7 @@
       }
     } catch (error) {
       console.error('Error fetching views:', error);
-      viewsError.set(error.message || 'Failed to load views');
-      
-      // Check for database relation not exist error - this is a severe error that needs fallback
-      if (error.message && error.message.includes('relation "donation_views" does not exist')) {
-        console.warn('Missing donation_views table detected - using local fallback view');
-        createLocalFallbackView();
-      } else {
-        // For other errors, try once more after a short delay
-        setTimeout(() => {
-          // Only retry if error is still present and we don't have a fallback view
-          if ($viewsError && $views.length === 0) {
-            createLocalFallbackView();
-          }
-        }, 2000);
-      }
+      viewsError.set('Failed to load views');
     } finally {
       viewsLoading.set(false);
     }
@@ -308,12 +266,14 @@
     
     try {
       const defaultView = {
-        view_name: 'Default View',
-        workspace_id: $workspaceStore.currentWorkspace.id,
+        viewName: 'Default View',
+        workspaceId: $workspaceStore.currentWorkspace.id,
         amount: true,
         status: true,
-        payment_type: true,
+        paymentType: true,
         notes: false,
+        donorName: true,
+        donorType: false,
         filters: [],
         sorting: []
       };
@@ -342,15 +302,7 @@
       
     } catch (error) {
       console.error('Error creating default view:', error);
-      viewsError.set(error.message || 'Failed to create default view');
-      
-      // Check if error is due to missing table and create a local fallback view if needed
-      if (error.message && error.message.includes('relation "donation_views" does not exist')) {
-        createLocalFallbackView();
-      } else {
-        // Create a temporary view when API call fails for other reasons
-        createLocalFallbackView();
-      }
+      viewsError.set('Failed to create default view');
     }
   }
   
@@ -362,12 +314,14 @@
     try {
       // Create the view with default fields visible
       const newView = {
-        view_name: viewName.trim(),
-        workspace_id: $workspaceStore.currentWorkspace.id,
+        viewName: viewName.trim(),
+        workspaceId: $workspaceStore.currentWorkspace.id,
         amount: true,
         status: true,
-        payment_type: true,
+        paymentType: true,
         notes: true,
+        donorName: true,
+        donorType: true,
         filters: [],
         sorting: []
       };
@@ -420,55 +374,7 @@
       return;
     }
     
-    // Handle temporary views
-    if ($currentView.temporary) {
-      let updatedViewName = '';
-      
-      // Determine the new view name
-      if (event && event.detail) {
-        // Get name from event if available
-        updatedViewName = event.detail.trim();
-      } else if ($isEditViewModalOpen && $newViewName.trim()) {
-        // Get name from store if modal is open
-        updatedViewName = $newViewName.trim();
-      } else {
-        // Fallback to current name
-        updatedViewName = $currentView.view_name;
-      }
-      
-      if (!updatedViewName) {
-        console.error('No valid view name for update');
-        return;
-      }
-      
-      // Create updated view object
-      const updatedView = {
-        ...$currentView,
-        view_name: updatedViewName,
-        filters: $filters,
-        sorting: $sorting
-      };
-      
-      // Update the views list locally
-      views.update(viewsList => 
-        viewsList.map(view => view.id === $currentView.id 
-          ? updatedView 
-          : view
-        )
-      );
-      
-      // Update current view
-      currentView.set(updatedView);
-      
-      // Close the edit modal if it's open
-      if ($isEditViewModalOpen) {
-        isEditViewModalOpen.set(false);
-        newViewName.set('');
-      }
-      
-      toastStore.info('View updated in temporary mode. Changes will not be saved to the database.');
-      return;
-    }
+    console.log('Received update event:', event?.detail);
     
     try {
       let updatedViewName = '';
@@ -477,12 +383,15 @@
       if (event && event.detail) {
         // Get name from event if available
         updatedViewName = event.detail.trim();
+        console.log('Using name from event:', updatedViewName);
       } else if ($isEditViewModalOpen && $newViewName.trim()) {
         // Get name from store if modal is open
         updatedViewName = $newViewName.trim();
+        console.log('Using name from store:', updatedViewName);
       } else {
         // Fallback to current name
-        updatedViewName = $currentView.view_name;
+        updatedViewName = $currentView.viewName;
+        console.log('Using current name:', updatedViewName);
       }
       
       if (!updatedViewName) {
@@ -490,13 +399,17 @@
         return;
       }
       
-      // Create updated view object
+      console.log('Updating view with name:', updatedViewName);
+      
+      // Create updated view object with proper property names
       const updatedView = {
-        ...$currentView,
-        view_name: updatedViewName,
+        viewName: updatedViewName,
         filters: $filters,
         sorting: $sorting
       };
+      
+      console.log('Will update view ID:', $currentView.id);
+      console.log('Full updated view:', updatedView);
       
       // Use the API endpoint to update the view
       const response = await fetch(`/api/donation-views/${$currentView.id}`, {
@@ -512,16 +425,18 @@
         throw new Error(errorData.message || 'Failed to update view');
       }
       
+      console.log('API update successful');
+      
       // Update the views list
       views.update(viewsList => 
         viewsList.map(view => view.id === $currentView.id 
-          ? updatedView 
+          ? { ...view, ...updatedView } 
           : view
         )
       );
       
       // Update current view
-      currentView.set(updatedView);
+      currentView.update(view => ({ ...view, ...updatedView }));
       
       // Close the edit modal if it's open
       if ($isEditViewModalOpen) {
@@ -583,24 +498,9 @@
   async function toggleField(fieldId) {
     if (!$currentView) return;
     
-    // If we're using a temporary view, just update it locally
-    if ($currentView.temporary) {
-      const updatedView = { 
-        ...$currentView, 
-        [fieldId]: !$currentView[fieldId] 
-      };
-      currentView.set(updatedView);
-      views.update(v => 
-        v.map(view => view.id === $currentView.id 
-          ? updatedView 
-          : view
-        )
-      );
-      return;
-    }
-    
     try {
-      const updatedView = { ...$currentView, [fieldId]: !$currentView[fieldId] };
+      // Create the field update object with the toggled field
+      const fieldUpdate = { [fieldId]: !$currentView[fieldId] };
       
       // Use the API endpoint to update the field visibility
       const response = await fetch(`/api/donation-views/${$currentView.id}`, {
@@ -608,7 +508,7 @@
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ [fieldId]: !$currentView[fieldId] })
+        body: JSON.stringify(fieldUpdate)
       });
       
       if (!response.ok) {
@@ -617,12 +517,15 @@
       }
       
       // Update the current view
-      currentView.set(updatedView);
+      currentView.update(view => ({
+        ...view,
+        [fieldId]: !view[fieldId]
+      }));
       
       // Update the view in the list
       views.update(v => 
         v.map(view => view.id === $currentView.id 
-          ? updatedView 
+          ? { ...view, [fieldId]: !view[fieldId] } 
           : view
         )
       );
@@ -693,79 +596,38 @@
     applyFiltersAndSorting();
   }
   
-  // Function to fetch donations using the API endpoints
-  async function fetchDonations() {
+  // Function to fetch donations using the donation service
+  async function fetchDonationsData() {
     if (!$workspaceStore.currentWorkspace) return;
     
     isLoadingDonations.set(true);
     donationsError.set(null);
     
     try {
-      // Use the API endpoint that returns donations for a workspace
-      const response = await fetch(`/api/donations?workspace_id=${$workspaceStore.currentWorkspace.id}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to fetch donations');
-      }
-      
-      const data = await response.json();
-      const fetchedDonations = data.donations || [];
-      
-      // Adapt field names for compatibility with existing code
-      const formattedDonations = fetchedDonations.map(donation => ({
-        id: donation.id,
-        amount: donation.amount,
-        status: donation.status,
-        payment_type: donation.paymentType,
-        notes: donation.notes,
-        created_at: donation.createdAt,
-        updated_at: donation.updatedAt,
-        contact_id: donation.contactId,
-        business_id: donation.businessId,
-        // Format the contact and business properties to match the old structure
-        contacts: donation.contact ? {
-          id: donation.contact.id,
-          first_name: donation.contact.firstName,
-          last_name: donation.contact.lastName
-        } : null,
-        businesses: donation.business ? {
-          id: donation.business.id,
-          business_name: donation.business.businessName
-        } : null
-      }));
-      
-      donations.set(formattedDonations);
+      // Use the donation service
+      const donationData = await fetchDonations($workspaceStore.currentWorkspace.id);
+      donations.set(donationData || []);
       applyFiltersAndSorting();
       
       // Calculate donation stats
-      if (formattedDonations && formattedDonations.length > 0) {
-        const totalAmount = formattedDonations.reduce((sum, donation) => sum + donation.amount, 0);
-        const averageAmount = totalAmount / formattedDonations.length;
+      if (donationData && donationData.length > 0) {
+        const totalAmount = donationData.reduce((sum, donation) => sum + (donation.amount || 0), 0);
+        const averageAmount = totalAmount / donationData.length;
         
         // Count unique donors
-        const contactDonorIds = new Set();
-        const businessDonorIds = new Set();
-        
-        formattedDonations.forEach(donation => {
-          if (donation.contacts && donation.contacts.id) {
-            contactDonorIds.add(donation.contacts.id);
-          } else if (donation.businesses && donation.businesses.id) {
-            businessDonorIds.add(donation.businesses.id);
+        const uniqueDonors = new Set();
+        donationData.forEach(donation => {
+          if (donation.contactId) {
+            uniqueDonors.add(`contact_${donation.contactId}`);
+          } else if (donation.businessId) {
+            uniqueDonors.add(`business_${donation.businessId}`);
           }
         });
-        
-        const uniqueDonorCount = contactDonorIds.size + businessDonorIds.size;
         
         donationStats.set({
           totalAmount,
           averageAmount,
-          donorCount: uniqueDonorCount
+          donorCount: uniqueDonors.size
         });
       } else {
         donationStats.set({
@@ -776,7 +638,7 @@
       }
     } catch (error) {
       console.error('Error fetching donations:', error);
-      donationsError.set(error.message || 'Failed to load donations');
+      donationsError.set('Failed to load donations');
     } finally {
       isLoadingDonations.set(false);
     }
@@ -831,16 +693,13 @@
           return String(field).toLowerCase().includes(query);
         };
         
-        // Search donor name
-        const donorName = getDonorName(donation);
-        if (donorName.toLowerCase().includes(query)) return true;
-        
-        // Search in other fields
+        // Search in donation fields
         return (
           fieldIncludes(donation.amount) ||
           fieldIncludes(donation.status) ||
-          fieldIncludes(donation.payment_type) ||
-          fieldIncludes(donation.notes)
+          fieldIncludes(donation.paymentType) ||
+          fieldIncludes(donation.notes) ||
+          fieldIncludes(donation.donorName)
         );
       });
     }
@@ -878,16 +737,6 @@
     filteredDonations.set(result);
   }
   
-  // Get donor name from donation
-  function getDonorName(donation) {
-    if (donation.contacts && donation.contacts.first_name) {
-      return `${donation.contacts.first_name} ${donation.contacts.last_name || ''}`.trim();
-    } else if (donation.businesses && donation.businesses.business_name) {
-      return donation.businesses.business_name;
-    }
-    return '—';
-  }
-  
   // Watch for changes that should trigger filtering/sorting
   $: if ($searchQuery !== undefined) {
     applyFiltersAndSorting();
@@ -905,19 +754,19 @@
   onMount(() => {
     if ($workspaceStore.currentWorkspace) {
       fetchViews();
-      fetchDonations();
+      fetchDonationsData();
     }
   });
   
   // Fetch data when workspace changes
   $: if ($workspaceStore.currentWorkspace) {
     fetchViews();
-    fetchDonations();
+    fetchDonationsData();
   }
 </script>
 
 <svelte:head>
-  <title>Donations | Engagement Portal</title>
+  <title>Donations | Civics Lab</title>
 </svelte:head>
 
 <div class="h-full flex flex-col">
@@ -943,7 +792,6 @@
       isViewSettingsOpen={$isViewSettingsOpen}
       availableFields={$availableFields}
       on:selectView={handleSelectView}
-      on:retryFetchViews={handleRetryFetchViews}
       on:toggleField={handleToggleField}
       on:openCreateViewModal={handleOpenCreateViewModal}
       on:openEditViewModal={handleOpenEditViewModal}
@@ -951,7 +799,7 @@
       on:openDonationModal={handleOpenDonationModal}
     />
     
-    <!-- Filter, sort, search and stats bar -->
+    <!-- Filter, sort, and search bar -->
     <DonationsFilterSortBar 
       isFilterPopoverOpen={$isFilterPopoverOpen}
       isSortPopoverOpen={$isSortPopoverOpen}
@@ -978,23 +826,21 @@
       isLoading={$isLoadingDonations}
       error={$donationsError}
       visibleColumns={$currentView ? Object.entries($currentView)
-        .filter(([key, value]) => value === true && !key.startsWith('_'))
+        .filter(([key, value]) => value === true && key !== 'id' && key !== 'viewName' && key !== 'workspaceId' && key !== 'filters' && key !== 'sorting' && key !== 'createdById' && key !== 'createdAt' && key !== 'updatedAt')
         .map(([key]) => key) : []}
       availableFields={$availableFields}
-      supabase={data.supabase}
       on:addDonation={handleAddDonation}
       on:donationUpdated={handleDonationUpdated}
     />
     
     <!-- Modals for donation and view management -->
     <DonationsViewModals 
-      bind:isDonationModalOpen={$isDonationModalOpen}
-      bind:isCreateViewModalOpen={$isCreateViewModalOpen}
-      bind:isEditViewModalOpen={$isEditViewModalOpen}
-      bind:isDeleteViewModalOpen={$isDeleteViewModalOpen}
+      isDonationModalOpen={$isDonationModalOpen}
+      isCreateViewModalOpen={$isCreateViewModalOpen}
+      isEditViewModalOpen={$isEditViewModalOpen}
+      isDeleteViewModalOpen={$isDeleteViewModalOpen}
       newViewName={$newViewName}
       currentView={$currentView}
-      supabase={data.supabase}
       on:closeDonationModal={handleCloseDonationModal}
       on:donationCreated={handleDonationCreated}
       on:createView={createView}

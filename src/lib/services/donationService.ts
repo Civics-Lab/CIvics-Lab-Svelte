@@ -5,6 +5,38 @@
 import type { Donation } from '$lib/types/donation';
 
 /**
+ * Fetch all donations for a workspace
+ */
+export async function fetchDonations(workspaceId: string): Promise<Donation[]> {
+  try {
+    console.log('Fetching donations for workspace ID:', workspaceId);
+    
+    const response = await fetch(`/api/donations?workspace_id=${workspaceId}`);
+    console.log('Donations API response status:', response.status);
+    
+    if (!response.ok) {
+      try {
+        const error = await response.json();
+        console.error('API error response:', error);
+        throw new Error(error.message || 'Failed to fetch donations');
+      } catch (jsonError) {
+        // If the response body isn't valid JSON
+        console.error('Failed to parse error response:', jsonError);
+        throw new Error(`Failed to fetch donations: ${response.status} ${response.statusText}`);
+      }
+    }
+    
+    const data = await response.json();
+    console.log(`Found ${data.donations?.length || 0} donations for workspace`);
+    
+    return data.donations || [];
+  } catch (error) {
+    console.error('Error in fetchDonations:', error);
+    throw error;
+  }
+}
+
+/**
  * Fetch donations for a specific contact
  */
 export async function fetchContactDonations(contactId: string): Promise<Donation[]> {
@@ -131,13 +163,37 @@ export async function createBusinessDonation(businessId: string, donationData: {
 }
 
 /**
- * Create a new donation (legacy function for backwards compatibility)
+ * Create a new donation
  */
-export async function createDonation(contactId: string, donationData: {
+export async function createDonation(donationData: {
+  workspaceId: string;
+  contactId?: string;
+  businessId?: string;
   amount: number;
   status: string;
+  notes?: string;
+  paymentType?: string;
 }): Promise<Donation> {
-  return createContactDonation(contactId, donationData);
+  try {
+    const response = await fetch('/api/donations', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(donationData)
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to create donation');
+    }
+    
+    const data = await response.json();
+    return data.donation;
+  } catch (error) {
+    console.error('Error in createDonation:', error);
+    throw error;
+  }
 }
 
 /**

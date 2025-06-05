@@ -3,7 +3,7 @@
 	import { auth } from '$lib/auth/client';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	let username = '';
+	let email = '';
 	let password = '';
 	let loading = false;
 	let passwordVisible = false;
@@ -43,12 +43,13 @@
 		try {
 			loading = true;
 			error = '';
-			console.log('Starting login process for:', username);
+			console.log('Starting login process for:', email);
 			
 			// Reset any loop counters
 			sessionStorage.removeItem('redirect_loop_count');
 			
-			const result = await auth.login(username, password);
+			// Use email instead of username for the auth.login call
+			const result = await auth.login(email, password);
 			console.log('Login successful, preparing to navigate');
 			
 			// Verify we have a token before redirecting
@@ -93,56 +94,110 @@
 	<title>Login | Civics Lab</title>
 </svelte:head>
 
-<div class="min-h-screen flex items-center justify-center bg-gray-50">
-	<div class="w-full max-w-md bg-white p-8 rounded-lg shadow-md flex flex-col">
-		<div>
-			<h1 class="header text-2xl font-bold">Welcome Back</h1>
-			<p class="description font-semibold text-gray-600">Sign in to your account.</p>
+<!-- Desktop and Mobile Layout -->
+<div class="min-h-screen bg-gray-50 flex items-center justify-center md:grid md:grid-cols-2 md:p-0">
+	<!-- Left side: Login Form -->
+	<div class="w-full flex items-center justify-center md:h-screen p-6 md:p-8 bg-gray-50">
+		<div class="w-full max-w-sm bg-gray-50 p-8 md:p-10">
+			<!-- Company Logo/Name -->
+			<div class="flex items-center justify-center mb-8">
+				<div class="flex items-center space-x-3">
+					<img src="/logo.svg" alt="Civics Lab" class="w-8 h-8" />
+					<span class="text-xl font-semibold text-gray-900">Civics Lab</span>
+				</div>
+			</div>
+
+			<!-- Login Header -->
+			<div class="text-center mb-8">
+				<h1 class="text-2xl font-bold text-gray-900 mb-2">Login to your account</h1>
+				<p class="text-gray-600">Enter your username below to login to your account</p>
+			</div>
+
+			<!-- Error Message -->
 			{#if error}
-			<div class="bg-red-100 border border-red-500 text-red-800 p-3 mb-4 rounded">
-				{error}
-			</div>
+				<div class="bg-red-50 border border-red-200 text-red-800 p-3 mb-6 rounded-lg text-sm">
+					{error}
+				</div>
 			{/if}
-		</div>
-		<div class="mb-4">
-			<label for="username" class="block text-sm font-medium mb-1">Username</label>
-			<input
-				id="username"
-				bind:value={username}
-				class="w-full p-2 border rounded"
-				type="text"
-				placeholder="Your username"
-				required
-			/>
-		</div>
-		<div class="mb-4">
-			<label for="password" class="block text-sm font-medium mb-1">Password</label>
-			<div class="relative">
-				<input
-					id="password"
-					bind:value={password}
-					class="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm w-full"
-					type={passwordVisible ? "text" : "password"}
-					placeholder="Your password"
-					required
-				/>
-				<button
-					type="button"
-					class="absolute top-1/2 right-2 -translate-y-1/2 text-gray-500"
-					on:click={togglePasswordVisibility}
+
+			<!-- Login Form -->
+			<form on:submit|preventDefault={handleLogin} class="space-y-6">
+				<!-- Username Field -->
+				<div class="space-y-2">
+					<label for="username" class="block text-sm font-medium text-gray-900">Username</label>
+					<input
+						id="username"
+						bind:value={email}
+						class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-colors bg-white text-gray-900 placeholder-gray-500"
+						type="text"
+						placeholder="username"
+						required
+					/>
+				</div>
+
+				<!-- Password Field -->
+				<div class="space-y-2">
+					<div class="flex items-center justify-between">
+						<label for="password" class="block text-sm font-medium text-gray-900">Password</label>
+						<a href="/forgot-password" class="text-sm text-gray-600 hover:text-gray-900 transition-colors">
+							Forgot your password?
+						</a>
+					</div>
+					<div class="relative">
+						<input
+							id="password"
+							bind:value={password}
+							class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-colors bg-white text-gray-900 placeholder-gray-500"
+							type={passwordVisible ? "text" : "password"}
+							placeholder="••••••••"
+							required
+						/>
+						<button
+							type="button"
+							class="absolute top-1/2 right-3 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
+							on:click={togglePasswordVisibility}
+						>
+							<span class="sr-only">{passwordVisible ? "Hide password" : "Show password"}</span>
+							{#if passwordVisible}
+								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21"></path>
+								</svg>
+							{:else}
+								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+								</svg>
+							{/if}
+						</button>
+					</div>
+				</div>
+
+				<!-- Login Button -->
+				<button 
+					type="submit"
+					class="w-full bg-gray-900 text-white py-2.5 px-4 rounded-lg font-medium hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+					disabled={loading}
 				>
-					{passwordVisible ? "Hide" : "Show"}
+					{loading ? 'Logging in...' : 'Login'}
 				</button>
-			</div>
+
+				<!-- Sign Up Link -->
+				<div class="text-center mt-6">
+					<span class="text-sm text-gray-600">Don't have an account?</span>
+					<a href="/signup" class="text-sm text-gray-900 hover:underline font-medium ml-1">
+						Sign up
+					</a>
+				</div>
+			</form>
 		</div>
-		<div class="mb-6">
-			<button 
-				on:click|preventDefault={handleLogin}
-				class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-slate-950 text-white hover:bg-slate-800 h-10 px-4 py-2 w-full"
-				disabled={loading}
-			>
-				{loading ? 'Loading...' : 'Sign in'}
-			</button>
-		</div>
+	</div>
+
+	<!-- Right side: Image (hidden on mobile, visible on tablet/desktop) -->
+	<div class="hidden md:block md:h-screen bg-gray-100 relative overflow-hidden">
+		<img 
+			src="/images/civil-rights-march.jpg" 
+			alt="Civil rights march" 
+			class="w-full h-full object-cover"
+		/>
 	</div>
 </div>

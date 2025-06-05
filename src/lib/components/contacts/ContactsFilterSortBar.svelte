@@ -186,7 +186,7 @@
     });
 </script>
 
-<div class="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between">
+<div class="bg-white px-6 py-3 flex items-center justify-between">
   <div class="flex-1 max-w-lg">
     <div class="relative rounded-md shadow-sm">
       <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">

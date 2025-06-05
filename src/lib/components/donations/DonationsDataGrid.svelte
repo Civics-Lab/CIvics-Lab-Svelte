@@ -68,7 +68,7 @@
 </script>
 
 <!-- Data Grid -->
-<div class="flex-1 overflow-hidden flex flex-col bg-white">
+<div class="flex-1 overflow-hidden flex flex-col bg-white px-6">
   <!-- Donation Details Sheet -->
   <DonationDetailsSheet 
     isOpen={$isDetailsSheetOpen} 

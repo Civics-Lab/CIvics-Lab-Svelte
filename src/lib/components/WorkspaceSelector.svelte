@@ -74,86 +74,158 @@
 <div class="relative">
   <button
     id="workspace-button"
-    class="flex items-center space-x-2 px-4 py-2 bg-white border rounded-lg shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+    class="flex h-10 w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-slate-50/80 transition-colors"
     on:click={togglePopover}
   >
-    {#if $workspaceStore.isLoading}
-      <LoadingSpinner size="sm" color="gray" />
-      <span class="ml-2 flex-1 text-left">Loading...</span>
-    {:else if $workspaceStore.currentWorkspace}
-      <WorkspaceLogo 
-        logo={$workspaceStore.currentWorkspace.logo} 
-        name={$workspaceStore.currentWorkspace.name} 
-        size="sm" 
-      />
-      <span class="flex-1 text-left truncate max-w-[180px] ml-2">
-        {$workspaceStore.currentWorkspace.name}
-      </span>
-    {:else if $workspaceStore.error}
-      <span class="flex-1 text-left">Error loading workspaces</span>
-    {:else}
-      <span class="flex-1 text-left">Select Workspace</span>
-    {/if}
-    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
-      <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+    <div class="flex items-center space-x-2 flex-1 min-w-0">
+      {#if $workspaceStore.isLoading}
+        <LoadingSpinner size="sm" color="gray" />
+        <span class="text-slate-600">Loading...</span>
+      {:else if $workspaceStore.currentWorkspace}
+        <WorkspaceLogo 
+          logo={$workspaceStore.currentWorkspace.logo} 
+          name={$workspaceStore.currentWorkspace.name} 
+          size="sm" 
+        />
+        <span class="truncate text-slate-900 font-medium">
+          {$workspaceStore.currentWorkspace.name}
+        </span>
+      {:else if $workspaceStore.error}
+        <span class="text-slate-600">Error loading workspaces</span>
+      {:else}
+        <span class="text-slate-500">Select workspace...</span>
+      {/if}
+    </div>
+    <svg 
+      xmlns="http://www.w3.org/2000/svg" 
+      class="h-4 w-4 shrink-0 text-slate-500 transition-transform duration-200 {$isOpen ? 'rotate-180' : ''}" 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor"
+      stroke-width="2"
+    >
+      <path d="m6 9 6 6 6-6"/>
     </svg>
   </button>
   
   {#if $isOpen}
     <div
       id="workspace-popover"
-      class="absolute left-0 mt-2 w-60 bg-white border rounded-md shadow-lg z-10"
+      class="absolute left-0 top-full z-50 mt-1 w-full min-w-[8rem] overflow-hidden rounded-md border border-slate-200 bg-white p-1 text-slate-950 shadow-md animate-in fade-in-0 zoom-in-95 slide-in-from-top-2"
     >
-      <div class="py-1">
-        {#if $workspaceStore.isLoading}
-          <div class="px-4 py-2 text-sm text-gray-500 flex items-center">
-            <LoadingSpinner size="sm" color="gray" />
-            <span class="ml-2">Loading workspaces...</span>
-          </div>
-        {:else if $workspaceStore.error}
-          <div class="px-4 py-2 text-sm text-red-500">{$workspaceStore.error}</div>
-        {:else if $workspaceStore.workspaces.length === 0}
-          <div class="px-4 py-2 text-sm text-gray-500">No workspaces found</div>
-        {:else}
-          {#each $workspaceStore.workspaces as workspace (workspace.id)}
-            <button
-              class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 {$workspaceStore.currentWorkspace?.id === workspace.id ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'}"
-              on:click={() => selectWorkspace(workspace)}
-            >
-              <div class="flex items-center">
-                <WorkspaceLogo 
-                  logo={workspace.logo} 
-                  name={workspace.name} 
-                  size="sm" 
-                />
-                <span class="ml-2 truncate">{workspace.name}</span>
-              </div>
-            </button>
-          {/each}
-        {/if}
-        
-        <!-- Create workspace button - only show for Super Admin role -->
-        {#if isSuperAdmin()}
-          <div class="border-t mt-1 pt-1">
-            <button
-              class="w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50"
-              on:click={() => {
-                isOpen.set(false);
-                // Dispatch an event that can be caught by a parent component
-                const event = new CustomEvent('createWorkspace');
-                window.dispatchEvent(event);
-              }}
-            >
-              <div class="flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+      {#if $workspaceStore.isLoading}
+        <div class="flex items-center px-2 py-1.5 text-sm text-slate-600">
+          <LoadingSpinner size="sm" color="gray" />
+          <span class="ml-2">Loading workspaces...</span>
+        </div>
+      {:else if $workspaceStore.error}
+        <div class="px-2 py-1.5 text-sm text-red-600">{$workspaceStore.error}</div>
+      {:else if $workspaceStore.workspaces.length === 0}
+        <div class="px-2 py-1.5 text-sm text-slate-600">No workspaces found</div>
+      {:else}
+        {#each $workspaceStore.workspaces as workspace (workspace.id)}
+          <button
+            class="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-slate-100 focus:bg-slate-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 {$workspaceStore.currentWorkspace?.id === workspace.id ? 'bg-slate-100 font-medium' : ''}"
+            on:click={() => selectWorkspace(workspace)}
+          >
+            <div class="flex items-center gap-2 w-full">
+              <WorkspaceLogo 
+                logo={workspace.logo} 
+                name={workspace.name} 
+                size="sm" 
+              />
+              <span class="truncate text-slate-900">{workspace.name}</span>
+              {#if $workspaceStore.currentWorkspace?.id === workspace.id}
+                <svg 
+                  xmlns="http://www.w3.org/2000/svg" 
+                  class="ml-auto h-4 w-4 text-slate-600" 
+                  viewBox="0 0 24 24" 
+                  fill="none" 
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M20 6 9 17l-5-5"/>
                 </svg>
-                Create New Workspace
-              </div>
-            </button>
-          </div>
-        {/if}
-      </div>
+              {/if}
+            </div>
+          </button>
+        {/each}
+      {/if}
+      
+      <!-- Create workspace button - only show for Super Admin role -->
+      {#if isSuperAdmin()}
+        <div class="border-t border-slate-200 mt-1 pt-1">
+          <button
+            class="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-slate-100 focus:bg-slate-100 text-slate-700"
+            on:click={() => {
+              isOpen.set(false);
+              // Dispatch an event that can be caught by a parent component
+              const event = new CustomEvent('createWorkspace');
+              window.dispatchEvent(event);
+            }}
+          >
+            <div class="flex items-center gap-2">
+              <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                class="h-4 w-4 text-slate-500" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M5 12h14"/>
+                <path d="M12 5v14"/>
+              </svg>
+              <span>Create New Workspace</span>
+            </div>
+          </button>
+        </div>
+      {/if}
     </div>
   {/if}
 </div>
+
+<style>
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  
+  @keyframes zoom-in {
+    from {
+      transform: scale(0.95);
+    }
+    to {
+      transform: scale(1);
+    }
+  }
+  
+  @keyframes slide-in-from-top {
+    from {
+      transform: translateY(-2px);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+  
+  .animate-in {
+    animation: fade-in 150ms ease-out, zoom-in 150ms ease-out, slide-in-from-top 150ms ease-out;
+  }
+  
+  .fade-in-0 {
+    animation-duration: 150ms;
+  }
+  
+  .zoom-in-95 {
+    animation-duration: 150ms;
+  }
+  
+  .slide-in-from-top-2 {
+    animation-duration: 150ms;
+  }
+</style>

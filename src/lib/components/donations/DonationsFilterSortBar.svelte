@@ -104,7 +104,7 @@
 </script>
 
 <!-- Stats row with donation metrics -->
-<div class="grid grid-cols-3 gap-4 p-4 bg-white border-b border-gray-200">
+<div class="grid grid-cols-3 gap-4 p-4 bg-white">
   <div class="p-3 bg-gray-50 rounded-lg">
     <h3 class="text-sm font-medium text-gray-500">Total Donations</h3>
     <p class="text-2xl font-bold text-gray-900" id="totalDonations">{formatCurrency(donationStats.totalAmount)}</p>
@@ -122,7 +122,7 @@
 </div>
 
 <!-- Filter, sort, and search bar -->
-<div class="bg-white border-b border-gray-200 p-4 flex items-center justify-between">
+<div class="bg-white p-4 flex items-center justify-between">
   <!-- Search -->
   <div class="max-w-lg w-full lg:max-w-xs">
     <label for="search" class="sr-only">Search</label>

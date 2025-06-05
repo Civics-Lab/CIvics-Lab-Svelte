@@ -5,6 +5,7 @@
     import { goto } from '$app/navigation';
     import { onMount } from 'svelte';
     import { workspaceStore } from '$lib/stores/workspaceStore';
+    import { sidebarVisible } from '$lib/stores/sidebarStore';
     import { hasServiceAccess, SERVICES } from '$lib/utils/serviceGuard';
     import ToastContainer from '$lib/components/ToastContainer.svelte';
     import WorkspacePickerButton from '$lib/components/WorkspacePickerButton.svelte';
@@ -108,7 +109,7 @@
   
   <div class="flex h-screen w-screen overflow-hidden">
     <!-- Sidebar -->
-    <aside class="w-64 bg-slate-900 shadow-md flex flex-col h-full border-r border-slate-200">
+    <aside class="{$sidebarVisible ? 'w-64' : 'w-0'} bg-slate-900 shadow-md flex flex-col h-full border-r border-slate-200 transition-all duration-300 ease-in-out overflow-hidden">
       <!-- Sidebar Header - Logo and Workspace Selector -->
       <div class="p-4 flex items-center justify-between">
         <!-- Logo -->
