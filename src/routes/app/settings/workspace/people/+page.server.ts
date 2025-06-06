@@ -6,6 +6,7 @@ import { userWorkspaces, users, workspaces, userInvites } from '$lib/db/drizzle/
 import { eq, and } from 'drizzle-orm';
 import { env } from '$env/dynamic/private';
 import { randomUUID } from 'crypto';
+import { createInvitation, listPendingInvites } from '$lib/server/invites';
 
 export const load: PageServerLoad = async ({ locals, url, cookies, request }) => {
   // Ensure user is authenticated
@@ -45,7 +46,7 @@ export const load: PageServerLoad = async ({ locals, url, cookies, request }) =>
     
     // Add debugging here
     console.log('Checking access for workspaceId:', workspaceId, 'and userId:', locals.user.id);
-    console.log('Locals object:', JSON.stringify(locals, null, 2));
+    // console.log('Locals object:', JSON.stringify(locals, null, 2)); // Removed to prevent circular reference error
     
     // Check if the user has permission to access this workspace
     let userWorkspace = null;
@@ -113,36 +114,11 @@ export const load: PageServerLoad = async ({ locals, url, cookies, request }) =>
       updatedAt: member.updatedAt instanceof Date ? member.updatedAt.toISOString() : member.updatedAt,
     }));
     
-    // Initialize pendingInvites as an empty array
+    // Get pending invites for this workspace using the new service
     let pendingInvites = [];
-    let tableNotReady = false;
-    
-    // Get pending invites for this workspace if userInvites is defined
     try {
-      if (userInvites) {
-        pendingInvites = await db.query.userInvites.findMany({
-          where: and(
-            eq(userInvites.workspaceId, workspaceId),
-            eq(userInvites.status, 'Pending')
-          ),
-          with: {
-            invitedBy: {
-              columns: {
-                id: true,
-                username: true,
-                displayName: true,
-                email: true,
-                avatar: true
-              }
-            }
-          }
-        });
-        
-        console.log(`Found ${pendingInvites.length} pending invites for workspace ${workspaceId}`);
-      } else {
-        console.warn('userInvites table is not defined - skipping pending invites query');
-        pendingInvites = [];
-      }
+      pendingInvites = await listPendingInvites(workspaceId);
+      console.log(`Found ${pendingInvites.length} pending invites for workspace ${workspaceId}`);
     } catch (err) {
       console.error('Error fetching pending invites:', err);
       pendingInvites = [];
@@ -205,64 +181,37 @@ export const actions: Actions = {
     }
     
     try {
-      // Simplified temporary version for inviting users
-      // Check if the user already exists
-      try {
-      const existingUserResults = await db.select()
-      .from(users)
-      .where(eq(users.email, email))
-      .limit(1);
-
-      const existingUser = existingUserResults[0];
-
-      if (existingUser) {
-      // Check if user is already in the workspace
-      const existingMemberResults = await db.select()
-      .from(userWorkspaces)
-      .where(and(
-          eq(userWorkspaces.userId, existingUser.id),
-        eq(userWorkspaces.workspaceId, workspaceId)
-      ))
-        .limit(1);
-
-      const existingMember = existingMemberResults[0];
+      // Use the new invitation service
+      const result = await createInvitation({
+        email,
+        workspaceId,
+        role,
+        invitedById: locals.user.id,
+        isSuperAdmin: false
+      });
       
-        if (existingMember) {
-            throw error(400, 'This user is already a member of this workspace');
-        }
-        
-        // Add the user directly to the workspace
-      await db.insert(userWorkspaces).values({
-          userId: existingUser.id,
-          workspaceId,
-            role
-          });
-          
-          return {
-            success: true,
-          message: 'User added to workspace',
-        userAdded: true
-      };
-      } else {
-        // User doesn't exist, return a message
-      return {
-          success: false,
-            message: 'User not found. Please ask them to sign up first.'
+      if (result.success) {
+        return {
+          success: true,
+          message: result.message,
+          inviteLink: result.inviteLink,
+          userAdded: result.message === 'User added to workspace'
         };
-        }
-      } catch (err) {
-        console.error('Error in invite user process:', err);
-      if (err instanceof Error && 'status' in err) {
-        throw err; // Re-throw SvelteKit error objects
-      }
-      throw error(500, 'Failed to process invitation. Please try again later.');
+      } else {
+        return {
+          success: false,
+          error: result.message
+        };
       }
     } catch (err) {
+      console.error('Error inviting user:', err);
       if (err instanceof Error && 'status' in err) {
         throw err;
       }
-      console.error('Error inviting user:', err);
-      throw error(500, err instanceof Error ? err.message : 'Failed to send invitation');
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : 'Failed to send invitation'
+      };
     }
   },
   
@@ -343,17 +292,30 @@ export const actions: Actions = {
         throw error(400, 'Invite ID is required');
       }
       
-      // For now, just return a message since we're not using user_invites
-      return {
-        success: true,
-        message: 'The invite system is currently unavailable. Please try again later.'
-      };
+      // Use the new invitation service
+      const { cancelInvitation } = await import('$lib/server/invites');
+      const result = await cancelInvitation(inviteId);
+      
+      if (result.success) {
+        return {
+          success: true,
+          message: result.message
+        };
+      } else {
+        return {
+          success: false,
+          error: result.message
+        };
+      }
     } catch (err) {
       if (err instanceof Error && 'status' in err) {
         throw err;
       }
       console.error('Error cancelling invite:', err);
-      throw error(500, err instanceof Error ? err.message : 'Failed to cancel invitation');
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : 'Failed to cancel invitation'
+      };
     }
   },
   

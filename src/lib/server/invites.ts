@@ -2,7 +2,7 @@
 import { db } from '$lib/server/db';
 import { userInvites, users, userWorkspaces, workspaces } from '$lib/db/drizzle/schema';
 import { eq, and } from 'drizzle-orm';
-import { sendInviteEmail } from './email';
+import { sendInviteEmail, sendSuperAdminInviteEmail } from './email';
 import { env } from '$env/dynamic/private';
 import { randomUUID } from 'crypto';
 import type { WorkspaceRole } from '$lib/types/supabase';
@@ -87,18 +87,27 @@ export async function addUserToWorkspace(userId: string, workspaceId: string, ro
 /**
  * Check if a user has already been invited to a workspace
  */
-export async function hasExistingInvite(email: string, workspaceId: string): Promise<{ hasInvite: boolean; invite?: any }> {
+export async function hasExistingInvite(email: string, workspaceId: string | null): Promise<{ hasInvite: boolean; invite?: any }> {
   try {
     // Make sure the userInvites table exists and is accessible
     try {
-      const result = await db.select()
+      let query = db.select()
         .from(userInvites)
         .where(and(
           eq(userInvites.email, email.toLowerCase()),
+          eq(userInvites.status, 'Pending')
+        ));
+
+      // If workspaceId is provided, include it in the filter
+      if (workspaceId) {
+        query = query.where(and(
+          eq(userInvites.email, email.toLowerCase()),
           eq(userInvites.workspaceId, workspaceId),
           eq(userInvites.status, 'Pending')
-        ))
-        .limit(1);
+        ));
+      }
+
+      const result = await query.limit(1);
         
       if (result.length === 0) {
         return { hasInvite: false };
@@ -179,8 +188,22 @@ export async function createInvitation({
     // Step 1: Check if user already exists
     const { exists: userExists, user } = await userExistsByEmail(normalizedEmail);
     
-    // If user exists, add them directly to the workspace
-    if (userExists && user) {
+    // If user exists and this is a Super Admin invite
+    if (userExists && user && isSuperAdmin) {
+      // Make the user a Super Admin
+      await db.update(users)
+        .set({ isGlobalSuperAdmin: true })
+        .where(eq(users.id, user.id));
+      
+      return {
+        success: true,
+        message: 'User is now a Super Admin',
+        invite: null
+      };
+    }
+    
+    // If user exists and this is a workspace invite, add them directly to the workspace
+    if (userExists && user && workspaceId) {
       const { success, message, userWorkspace } = await addUserToWorkspace(user.id, workspaceId, role);
       
       return {
@@ -196,7 +219,7 @@ export async function createInvitation({
     if (hasInvite && invite) {
       return {
         success: false,
-        message: 'This email has already been invited to this workspace',
+        message: 'This email has already been invited',
         invite
       };
     }
@@ -229,26 +252,53 @@ export async function createInvitation({
       const baseUrl = env.BASE_URL || 'http://localhost:5173';
       const inviteLink = `${baseUrl}/signup?invite=${token}`;
       
-      // Step 6: Get workspace and inviter details for the email
-      const workspace = await getWorkspaceById(workspaceId);
+      // Step 6: Get inviter details for the email
       const inviter = await getUserById(invitedById);
       
-      if (!workspace || !inviter) {
+      if (!inviter) {
         return { 
           success: true, 
-          message: 'Invitation created, but email could not be sent due to missing workspace or inviter details',
+          message: 'Invitation created, but email could not be sent due to missing inviter details',
           invite: newInvite[0],
           inviteLink
         };
       }
       
       // Step 7: Send the invitation email
-      const emailResult = await sendInviteEmail({
-        email: normalizedEmail,
-        workspaceName: workspace.name,
-        inviterName: inviter.displayName || inviter.username,
-        inviteLink
-      });
+      let emailResult;
+      
+      if (isSuperAdmin) {
+        // Send Super Admin invite email
+        emailResult = await sendSuperAdminInviteEmail({
+          email: normalizedEmail,
+          inviterName: inviter.displayName || inviter.username,
+          inviteLink
+        });
+      } else if (workspaceId) {
+        // Send workspace invite email
+        const workspace = await getWorkspaceById(workspaceId);
+        
+        if (!workspace) {
+          return { 
+            success: true, 
+            message: 'Invitation created, but email could not be sent due to missing workspace details',
+            invite: newInvite[0],
+            inviteLink
+          };
+        }
+        
+        emailResult = await sendInviteEmail({
+          email: normalizedEmail,
+          workspaceName: workspace.name,
+          inviterName: inviter.displayName || inviter.username,
+          inviteLink
+        });
+      } else {
+        return { 
+          success: false, 
+          message: 'Invalid invitation: must be either workspace or Super Admin invite' 
+        };
+      }
       
       return {
         success: true,
@@ -335,6 +385,10 @@ export async function acceptInvitation(token: string, userId: string): Promise<{
     }
     
     // Regular workspace invitation
+    if (!invite.workspaceId) {
+      return { success: false, message: 'Invalid invitation: missing workspace' };
+    }
+    
     // Add the user to the workspace
     const { success, message } = await addUserToWorkspace(userId, invite.workspaceId, invite.role);
     
@@ -380,6 +434,7 @@ export async function listPendingInvites(workspaceId: string): Promise<any[]> {
       invitedAt: row.user_invites.invitedAt,
       expiresAt: row.user_invites.expiresAt,
       acceptedAt: row.user_invites.acceptedAt,
+      isSuperAdmin: row.user_invites.isSuperAdmin,
       invitedBy: row.users ? {
         id: row.users.id,
         username: row.users.username,
@@ -390,6 +445,44 @@ export async function listPendingInvites(workspaceId: string): Promise<any[]> {
     }));
   } catch (error) {
     console.error('Error listing pending invites:', error);
+    return [];
+  }
+}
+
+/**
+ * List all pending Super Admin invites
+ */
+export async function listPendingSuperAdminInvites(): Promise<any[]> {
+  try {
+    const result = await db.select()
+      .from(userInvites)
+      .leftJoin(users, eq(userInvites.invitedById, users.id))
+      .where(and(
+        eq(userInvites.isSuperAdmin, true),
+        eq(userInvites.status, 'Pending')
+      ));
+      
+    return result.map(row => ({
+      id: row.user_invites.id,
+      email: row.user_invites.email,
+      workspaceId: row.user_invites.workspaceId,
+      role: row.user_invites.role,
+      status: row.user_invites.status,
+      token: row.user_invites.token,
+      invitedAt: row.user_invites.invitedAt,
+      expiresAt: row.user_invites.expiresAt,
+      acceptedAt: row.user_invites.acceptedAt,
+      isSuperAdmin: row.user_invites.isSuperAdmin,
+      invitedBy: row.users ? {
+        id: row.users.id,
+        username: row.users.username,
+        displayName: row.users.displayName,
+        email: row.users.email,
+        avatar: row.users.avatar
+      } : null
+    }));
+  } catch (error) {
+    console.error('Error listing pending Super Admin invites:', error);
     return [];
   }
 }
@@ -410,6 +503,82 @@ export async function cancelInvitation(inviteId: string): Promise<{ success: boo
     return { success: true, message: 'Invitation cancelled successfully' };
   } catch (error) {
     console.error('Error cancelling invitation:', error);
+    throw error;
+  }
+}
+
+/**
+ * Process all pending invitations for a user after they sign up
+ */
+export async function processPendingInvitations(email: string, userId: string): Promise<{ processed: number; errors: string[] }> {
+  try {
+    const normalizedEmail = email.toLowerCase();
+    
+    // Get all pending invitations for this email
+    const pendingInvites = await db.select()
+      .from(userInvites)
+      .where(and(
+        eq(userInvites.email, normalizedEmail),
+        eq(userInvites.status, 'Pending')
+      ));
+    
+    let processed = 0;
+    const errors: string[] = [];
+    
+    for (const invite of pendingInvites) {
+      try {
+        // Check if invitation has expired
+        if (invite.expiresAt && new Date(invite.expiresAt) < new Date()) {
+          // Mark as expired
+          await db.update(userInvites)
+            .set({ status: 'Expired' })
+            .where(eq(userInvites.id, invite.id));
+          errors.push(`Invitation to ${invite.workspaceId ? 'workspace' : 'Super Admin'} has expired`);
+          continue;
+        }
+        
+        if (invite.isSuperAdmin) {
+          // Make user a Super Admin
+          await db.update(users)
+            .set({ isGlobalSuperAdmin: true })
+            .where(eq(users.id, userId));
+            
+          // Mark invitation as accepted
+          await db.update(userInvites)
+            .set({
+              status: 'Accepted',
+              acceptedAt: new Date()
+            })
+            .where(eq(userInvites.id, invite.id));
+          
+          processed++;
+        } else if (invite.workspaceId) {
+          // Add user to workspace
+          const { success } = await addUserToWorkspace(userId, invite.workspaceId, invite.role);
+          
+          if (success) {
+            // Mark invitation as accepted
+            await db.update(userInvites)
+              .set({
+                status: 'Accepted',
+                acceptedAt: new Date()
+              })
+              .where(eq(userInvites.id, invite.id));
+            
+            processed++;
+          } else {
+            errors.push(`Failed to add user to workspace ${invite.workspaceId}`);
+          }
+        }
+      } catch (error) {
+        console.error('Error processing invite:', error);
+        errors.push(`Error processing invitation: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+    
+    return { processed, errors };
+  } catch (error) {
+    console.error('Error processing pending invitations:', error);
     throw error;
   }
 }

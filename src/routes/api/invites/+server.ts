@@ -4,7 +4,7 @@ import type { RequestHandler } from './$types';
 import { error } from '@sveltejs/kit';
 import { db, userInvites, users, userWorkspaces, workspaces } from '$lib/db/drizzle';
 import { eq, and } from 'drizzle-orm';
-import { randomUUID } from 'crypto';
+import { createInvitation, listPendingInvites, cancelInvitation } from '$lib/server/invites';
 import { env } from '$env/dynamic/private';
 
 // GET handler to fetch all invites for the current user's workspace
@@ -31,24 +31,21 @@ export const GET: RequestHandler = async ({ locals, url }) => {
     throw error(403, 'You do not have access to this workspace');
   }
   
-  // Get all invites for this workspace
-  const invites = await db.query.userInvites.findMany({
-    where: eq(userInvites.workspaceId, workspaceId),
-    with: {
-      invitedBy: {
-        columns: {
-          id: true,
-          username: true,
-          displayName: true
-        }
-      }
-    }
-  });
-  
-  return json({
-    success: true,
-    data: invites
-  });
+  try {
+    // Get all pending invites for this workspace using the service
+    const invites = await listPendingInvites(workspaceId);
+    
+    return json({
+      success: true,
+      data: invites
+    });
+  } catch (err) {
+    console.error('Error fetching invites:', err);
+    return json({
+      success: false,
+      error: 'Failed to fetch invites'
+    }, { status: 500 });
+  }
 };
 
 // POST handler to create a new invite
@@ -90,55 +87,23 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       throw error(400, 'Invalid email address');
     }
     
-    // Check if the email has already been invited
-    const existingInvite = await db.query.userInvites.findFirst({
-      where: and(
-        eq(userInvites.email, email.toLowerCase()),
-        eq(userInvites.workspaceId, workspaceId),
-        eq(userInvites.status, 'Pending')
-      )
+    // Use the invitation service to create the invite
+    const result = await createInvitation({
+      email,
+      workspaceId,
+      role,
+      invitedById: locals.user.id,
+      isSuperAdmin: false
     });
     
-    if (existingInvite) {
-      throw error(400, 'This email has already been invited to this workspace');
-    }
-    
-    // Check if the user already exists
-    const existingUser = await db.query.users.findFirst({
-      where: eq(users.email, email.toLowerCase())
-    });
-    
-    if (existingUser) {
-      // Check if user is already in the workspace
-      const existingMember = await db.query.userWorkspaces.findFirst({
-        where: and(
-          eq(userWorkspaces.userId, existingUser.id),
-          eq(userWorkspaces.workspaceId, workspaceId)
-        )
-      });
-      
-      if (existingMember) {
-        throw error(400, 'This user is already a member of this workspace');
-      }
-      
-      // Add the user directly to the workspace
-      await db.insert(userWorkspaces).values({
-        userId: existingUser.id,
-        workspaceId,
-        role
-      });
-      
+    if (!result.success) {
       return json({
-        success: true,
-        message: 'User added to workspace',
-        userAdded: true
-      });
+        success: false,
+        error: result.message
+      }, { status: 400 });
     }
     
-    // Generate a token for the invite link
-    const token = randomUUID();
-    
-    // Get workspace info for the email
+    // Get workspace info for response
     const workspace = await db.query.workspaces.findFirst({
       where: eq(workspaces.id, workspaceId),
       columns: {
@@ -146,31 +111,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       }
     });
     
-    // Store the invitation
-    const [newInvite] = await db.insert(userInvites)
-      .values({
-        email: email.toLowerCase(),
-        workspaceId,
-        role,
-        invitedById: locals.user.id,
-        token,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
-      })
-      .returning();
-    
-    // In a real application, you would send an email here
-    // For now, we'll just return the invite link
-    const baseUrl = env.BASE_URL || 'http://localhost:5173';
-    const inviteLink = `${baseUrl}/signup?invite=${token}`;
-    
     return json({
       success: true,
-      message: 'Invitation sent',
-      invite: newInvite,
-      inviteLink,
-      workspace: workspace?.name
+      message: result.message,
+      invite: result.invite,
+      inviteLink: result.inviteLink,
+      workspace: workspace?.name,
+      userAdded: result.message === 'User added to workspace'
     });
   } catch (err) {
+    console.error('Error creating invite:', err);
     const errorMessage = err instanceof Error ? err.message : 'An error occurred';
     const statusCode = err instanceof Error && 'status' in err ? (err as any).status : 500;
     
@@ -214,7 +164,7 @@ export const DELETE: RequestHandler = async ({ request, locals }) => {
       throw error(400, 'Invite ID is required');
     }
     
-    // Get the invite
+    // Verify the invite belongs to this workspace
     const invite = await db.query.userInvites.findFirst({
       where: and(
         eq(userInvites.id, inviteId),
@@ -226,15 +176,22 @@ export const DELETE: RequestHandler = async ({ request, locals }) => {
       throw error(404, 'Invite not found');
     }
     
-    // Delete the invite
-    await db.delete(userInvites)
-      .where(eq(userInvites.id, inviteId));
+    // Use the invitation service to cancel the invite
+    const result = await cancelInvitation(inviteId);
+    
+    if (!result.success) {
+      return json({
+        success: false,
+        error: result.message
+      }, { status: 400 });
+    }
     
     return json({
       success: true,
-      message: 'Invitation cancelled'
+      message: result.message
     });
   } catch (err) {
+    console.error('Error cancelling invite:', err);
     const errorMessage = err instanceof Error ? err.message : 'An error occurred';
     const statusCode = err instanceof Error && 'status' in err ? (err as any).status : 500;
     

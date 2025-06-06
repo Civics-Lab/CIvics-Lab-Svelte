@@ -3,6 +3,7 @@ import { eq, or, and } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { users, userInvites, userWorkspaces } from '$lib/db/drizzle/schema';
 import { env } from '$env/dynamic/private';
+import { processPendingInvitations } from '$lib/server/invites';
 // Import node-compatible crypto functions instead of browser APIs
 import crypto from 'crypto';
 
@@ -210,105 +211,22 @@ export const authService = {
       
       console.log('User created successfully:', JSON.stringify(newUser));
       
-      let acceptedInvites = [];
-      let pendingInvites = [];
-      let defaultWorkspaceCreated = false;
+      // Process all pending invitations for this email using the service
+      console.log('Processing pending invitations...');
+      const { processed, errors } = await processPendingInvitations(email, newUser.id);
       
-      // Check for an invite token if provided
-      if (inviteToken) {
-        console.log(`Processing invite token: ${inviteToken}`);
-        const invite = await db.query.userInvites.findFirst({
-          where: eq(userInvites.token, inviteToken)
-        });
-        
-        if (invite) {
-          console.log('Found invite:', JSON.stringify(invite));
-          // Verify the invite is for this email
-          if (invite.email.toLowerCase() === email.toLowerCase()) {
-            // Update invite status to accepted
-            console.log('Accepting invite...');
-            await db.update(userInvites)
-              .set({ 
-                status: 'Accepted',
-                acceptedAt: new Date()
-              })
-              .where(eq(userInvites.id, invite.id));
-            
-            // Create user-workspace relationship
-            console.log('Adding user to workspace...');
-            try {
-            // Verify the user still exists
-            const userExists = await db
-            .select({ id: users.id })
-            .from(users)
-              .where(eq(users.id, newUser.id));
-                
-              if (!userExists || userExists.length === 0) {
-                console.error(`User with ID ${newUser.id} not found when adding to workspace`);
-              throw new Error(`User with ID ${newUser.id} no longer exists in database`);
-            }
-            
-            await db.insert(userWorkspaces)
-              .values({
-                userId: newUser.id,
-                workspaceId: invite.workspaceId,
-                role: invite.role
-              });
-              
-            acceptedInvites.push(invite);
-            console.log('Invite processed successfully');  
-          } catch (err) {
-            console.error('Error adding user to workspace:', err);
-            throw err;
-          }
-          }
-        }
+      console.log(`Processed ${processed} invitations`);
+      if (errors.length > 0) {
+        console.warn('Invitation processing errors:', errors);
       }
       
-      // Check for any other pending invites for this email
-      console.log('Checking for other pending invites...');
-      pendingInvites = await db.select()
-        .from(userInvites)
-        .where(
-          and(
-            eq(userInvites.email, email),
-            eq(userInvites.status, 'Pending')
-          )
-        );
+      // Check if user is now a Super Admin
+      const updatedUser = await db.select()
+        .from(users)
+        .where(eq(users.id, newUser.id))
+        .limit(1);
       
-      console.log(`Found ${pendingInvites.length} additional pending invites`);
-      
-      // Accept all other pending invites for this email
-      if (pendingInvites.length > 0) {
-        for (const invite of pendingInvites) {
-          // Skip the one we already processed
-          if (invite.token === inviteToken) continue;
-          
-          console.log(`Processing additional invite: ${invite.id}`);
-          
-          // Update invite status to accepted
-          await db.update(userInvites)
-            .set({ 
-              status: 'Accepted',
-              acceptedAt: new Date()
-            })
-            .where(eq(userInvites.id, invite.id));
-          
-          // Create user-workspace relationship
-          await db.insert(userWorkspaces)
-            .values({
-              userId: newUser.id,
-              workspaceId: invite.workspaceId,
-              role: invite.role
-            });
-          
-          acceptedInvites.push(invite);
-          console.log('Additional invite processed successfully');
-        }
-      }
-      
-      // We'll no longer automatically create a default workspace
-      // Only use workspaces that come from accepted invites
+      const isNowSuperAdmin = updatedUser[0]?.isGlobalSuperAdmin || false;
       
       // Generate JWT
       console.log('Generating JWT token...');
@@ -317,7 +235,7 @@ export const authService = {
         username: newUser.username,
         email: newUser.email,
         role: newUser.role,
-        isGlobalSuperAdmin: false
+        isGlobalSuperAdmin: isNowSuperAdmin
       };
       
       const token = await this.generateToken(payload);
@@ -325,9 +243,13 @@ export const authService = {
       
       return {
         token,
-        user: newUser,
-        invites: acceptedInvites,
-        hasAcceptedInvites: acceptedInvites.length > 0
+        user: {
+          ...newUser,
+          isGlobalSuperAdmin: isNowSuperAdmin
+        },
+        invitesProcessed: processed,
+        inviteErrors: errors,
+        hasAcceptedInvites: processed > 0
       };
     } catch (error) {
       console.error('Signup error details:', error);
