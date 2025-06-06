@@ -69,7 +69,7 @@
       use:moveModalToBody
     >
       <!-- Background overlay -->
-      <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
+      <div class="fixed inset-0 bg-slate-500/75 transition-opacity" aria-hidden="true"></div>
       
       <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
         <!-- Centering trick -->
