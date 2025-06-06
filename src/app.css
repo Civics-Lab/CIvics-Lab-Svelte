@@ -1,3 +1,66 @@
 @import 'tailwindcss';
 @plugin '@tailwindcss/typography';
-@plugin '@tailwindcss/forms'
+@plugin '@tailwindcss/forms';
+
+/* Z-index hierarchy for consistent layering */
+.z-dropdown { z-index: 1000; }
+.z-tooltip { z-index: 1010; }
+.z-sidebar-popover { z-index: 1020; }
+.z-modal-backdrop { z-index: 2147483646; }
+.z-modal { z-index: 2147483647 !important; }
+
+/* Ensure proper pointer events for modals */
+.z-modal-backdrop {
+  pointer-events: auto;
+}
+
+.z-modal {
+  pointer-events: auto;
+}
+
+/* Modal supremacy - override everything */
+div.z-modal,
+[style*="z-index: 99999"],
+.fixed.inset-0.z-modal {
+  z-index: 2147483647 !important; /* Maximum safe integer for z-index */
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+}
+
+/* Ensure modal content is above everything */
+.z-modal .bg-white,
+.z-modal .rounded-lg,
+.z-modal .shadow-xl {
+  z-index: 2147483647 !important;
+  position: relative !important;
+}
+
+/* Force all page content below modals */
+section, 
+.section,
+[class*="section"],
+main,
+.main,
+aside,
+.aside,
+header,
+.header,
+footer,
+.footer,
+div[class*="h-full"],
+div[class*="flex-col"],
+nav,
+.nav {
+  z-index: auto !important;
+}
+
+/* Ensure modals are never contained within other elements */
+.z-modal {
+  contain: none !important;
+  isolation: auto !important;
+}

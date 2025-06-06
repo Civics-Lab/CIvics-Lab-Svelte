@@ -5,7 +5,7 @@
 
   // Props
   export let isOpen = false;
-  export let zIndex = 50;
+  export let zIndex = 9998; // Use z-modal-backdrop class by default
   
   const dispatch = createEventDispatcher();
   

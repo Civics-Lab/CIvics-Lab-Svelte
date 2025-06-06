@@ -29,6 +29,7 @@
     }
     
     let modalContainer: HTMLDivElement;
+    let modalElement: HTMLDivElement;
     
     onMount(() => {
       document.addEventListener('keydown', handleKeydown);
@@ -36,28 +37,48 @@
     
     onDestroy(() => {
       document.removeEventListener('keydown', handleKeydown);
+      // Clean up modal element if it exists
+      if (modalElement && modalElement.parentNode) {
+        modalElement.parentNode.removeChild(modalElement);
+      }
     });
+    
+    // Function to move modal to body when it opens
+    function moveModalToBody(node: HTMLDivElement) {
+      if (isOpen && node) {
+        document.body.appendChild(node);
+        modalElement = node;
+      }
+      return {
+        destroy() {
+          if (node && node.parentNode) {
+            node.parentNode.removeChild(node);
+          }
+        }
+      };
+    }
   </script>
   
   {#if isOpen}
     <div 
       bind:this={modalContainer} 
-      class="fixed inset-0 z-50 overflow-y-auto" 
+      class="fixed inset-0 z-modal overflow-y-auto"
+      style="z-index: 2147483647 !important; position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;" 
       on:click={handleClickOutside}
       transition:fade={{ duration: 200 }}
+      use:moveModalToBody
     >
+      <!-- Background overlay -->
+      <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
+      
       <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-        <!-- Background overlay -->
-        <div class="fixed inset-0 transition-opacity" aria-hidden="true">
-          <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
-        </div>
-        
         <!-- Centering trick -->
         <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
         
         <!-- Modal panel -->
         <div 
-          class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:w-full {maxWidth}"
+          class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:w-full {maxWidth} relative"
+          style="z-index: 2147483647 !important; position: relative !important;"
           transition:fly={{ y: 30, duration: 300 }}
         >
           <!-- Modal header -->
