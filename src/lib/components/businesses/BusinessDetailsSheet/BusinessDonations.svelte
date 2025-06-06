@@ -1,7 +1,8 @@
+<!-- src/lib/components/businesses/BusinessDetailsSheet/BusinessDonations.svelte -->
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { writable, derived } from 'svelte/store';
-  import { formatCurrency } from '$lib/utils/formatters';
+  import { DollarSign, TrendingUp, Calendar, Eye, X } from '@lucide/svelte';
   import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
   import { toastStore } from '$lib/stores/toastStore';
   import type { TypedSupabaseClient } from '$lib/types/supabase';
@@ -29,6 +30,16 @@
   
   // Derivations
   const donationCount = derived(donations, $donations => $donations.length);
+
+  // Format currency
+  function formatCurrency(amount: number) {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount);
+  }
 
   // Format date to YYYY-MM-DD
   function formatDate(dateString: string) {
@@ -118,169 +129,198 @@
     selectedDonation.set(null);
   }
   
+  function getStatusBadgeClass(status) {
+    switch (status) {
+      case 'promise':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'donated':
+        return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'processing':
+        return 'bg-purple-100 text-purple-800 border-purple-200';
+      case 'cleared':
+        return 'bg-green-100 text-green-800 border-green-200';
+      default:
+        return 'bg-slate-100 text-slate-800 border-slate-200';
+    }
+  }
+  
   // Initial fetch
   $: if (businessId) {
     fetchDonations();
   }
 </script>
 
-<div class="rounded-md bg-white shadow-sm border border-gray-200 overflow-hidden">
-  <div class="px-4 py-5 sm:p-6">
-    <h3 class="text-base font-semibold leading-6 text-gray-900 flex items-center">
-      <span>Donations</span>
+<div class="space-y-6">
+  <div class="border-b border-slate-200 pb-4">
+    <h3 class="text-lg font-semibold leading-6 text-slate-900 flex items-center gap-2">
+      <DollarSign class="h-5 w-5" />
+      Business Donations
       {#if $isLoading}
-        <LoadingSpinner size="sm" class="ml-2" />
+        <LoadingSpinner size="sm" />
       {/if}
     </h3>
-    
-    {#if $error}
-      <div class="mt-3 text-sm text-red-600">{$error}</div>
-    {:else}
-      <!-- Donation Stats Grid -->
-      <div class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-        <!-- Total Amount -->
-        <div class="bg-gray-50 p-4 rounded-md shadow-sm border border-gray-200">
-          <p class="text-sm font-medium text-gray-500">Total Donations</p>
-          <p class="mt-2 text-xl font-semibold text-gray-900">{formatCurrency($totalDonationAmount)}</p>
-        </div>
-        
-        <!-- Average Donation -->
-        <div class="bg-gray-50 p-4 rounded-md shadow-sm border border-gray-200">
-          <p class="text-sm font-medium text-gray-500">Average Donation</p>
-          <p class="mt-2 text-xl font-semibold text-gray-900">{formatCurrency($averageDonationAmount)}</p>
-        </div>
-        
-        <!-- Total Count -->
-        <div class="bg-gray-50 p-4 rounded-md shadow-sm border border-gray-200">
-          <p class="text-sm font-medium text-gray-500">Total # of Donations</p>
-          <p class="mt-2 text-xl font-semibold text-gray-900">{$donationCount}</p>
-        </div>
-        
-        <!-- This Month -->
-        <div class="bg-gray-50 p-4 rounded-md shadow-sm border border-gray-200">
-          <p class="text-sm font-medium text-gray-500">This Month</p>
-          <p class="mt-2 text-xl font-semibold text-gray-900">{$donationsThisMonth} ({formatCurrency($donationsThisMonthAmount)})</p>
+    <p class="mt-1 text-sm text-slate-600">View donation history and statistics for this business.</p>
+  </div>
+  
+  {#if $error}
+    <div class="rounded-md border border-red-200 bg-red-50 p-4">
+      <p class="text-sm text-red-700">{$error}</p>
+    </div>
+  {:else}
+    <!-- Donation Stats Grid -->
+    <div class="grid gap-4 md:grid-cols-4">
+      <!-- Total Amount -->
+      <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex items-center gap-2">
+          <DollarSign class="h-5 w-5 text-green-600" />
+          <div>
+            <p class="text-sm font-medium text-slate-600">Total Raised</p>
+            <p class="text-lg font-semibold text-slate-900">{formatCurrency($totalDonationAmount)}</p>
+          </div>
         </div>
       </div>
       
-      <!-- Donation List -->
-      <div class="mt-6">
-        <h4 class="text-sm font-medium text-gray-500 mb-3">Donation History</h4>
-        
-        {#if $donations.length === 0}
-          <p class="text-sm text-gray-500 italic">No donations recorded yet.</p>
-        {:else}
-          <div class="overflow-hidden border border-gray-200 sm:rounded-md">
-            <ul class="divide-y divide-gray-200">
-              {#each $donations as donation (donation.id)}
-                <li 
-                  class="px-4 py-3 sm:px-6 hover:bg-gray-50 cursor-pointer transition-colors"
-                  on:click={() => handleDonationClick(donation)}
-                >
-                  <div class="flex items-center justify-between">
-                    <div>
-                      <p class="text-sm font-medium text-gray-900">
-                        {donation.formattedAmount}
-                      </p>
-                      <p class="text-xs text-gray-500">
-                        {donation.formattedDate}
-                      </p>
-                    </div>
-                    <div>
-                      <span class="inline-flex rounded-full px-2 text-xs font-semibold leading-5 
-                        {donation.status === 'cleared' ? 'bg-green-100 text-green-800' : 
-                         donation.status === 'promise' ? 'bg-yellow-100 text-yellow-800' : 
-                         donation.status === 'donated' ? 'bg-blue-100 text-blue-800' : 
-                         donation.status === 'processing' ? 'bg-purple-100 text-purple-800' : 
-                         'bg-gray-100 text-gray-800'}">
-                        {donation.status.charAt(0).toUpperCase() + donation.status.slice(1)}
-                      </span>
-                    </div>
-                  </div>
-                </li>
-              {/each}
-            </ul>
+      <!-- Average Donation -->
+      <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex items-center gap-2">
+          <TrendingUp class="h-5 w-5 text-blue-600" />
+          <div>
+            <p class="text-sm font-medium text-slate-600">Average</p>
+            <p class="text-lg font-semibold text-slate-900">{formatCurrency($averageDonationAmount)}</p>
           </div>
-        {/if}
+        </div>
+      </div>
+      
+      <!-- Total Count -->
+      <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex items-center gap-2">
+          <Eye class="h-5 w-5 text-purple-600" />
+          <div>
+            <p class="text-sm font-medium text-slate-600">Total Count</p>
+            <p class="text-lg font-semibold text-slate-900">{$donationCount}</p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- This Month -->
+      <div class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex items-center gap-2">
+          <Calendar class="h-5 w-5 text-orange-600" />
+          <div>
+            <p class="text-sm font-medium text-slate-600">This Month</p>
+            <p class="text-lg font-semibold text-slate-900">{$donationsThisMonth}</p>
+            <p class="text-xs text-slate-500">{formatCurrency($donationsThisMonthAmount)}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Donation List -->
+    {#if $donations.length === 0}
+      <div class="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+        <DollarSign class="h-8 w-8 text-slate-400 mb-3" />
+        <h3 class="text-sm font-medium text-slate-900 mb-1">No donations yet</h3>
+        <p class="text-sm text-slate-600">Donations from this business will appear here once received.</p>
+      </div>
+    {:else}
+      <div class="space-y-3">
+        <h4 class="text-sm font-medium text-slate-900">Recent Donations</h4>
+        <div class="space-y-2 max-h-64 overflow-y-auto">
+          {#each $donations as donation (donation.id)}
+            <div 
+              class="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-3 text-sm hover:bg-slate-50 cursor-pointer transition-colors"
+              on:click={() => handleDonationClick(donation)}
+            >
+              <div class="flex items-center gap-3">
+                <DollarSign class="h-4 w-4 text-green-600" />
+                <div>
+                  <p class="font-medium text-slate-900">{donation.formattedAmount}</p>
+                  <p class="text-slate-500">{donation.formattedDate}</p>
+                </div>
+              </div>
+              
+              <span class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium {getStatusBadgeClass(donation.status)}">
+                {donation.status.charAt(0).toUpperCase() + donation.status.slice(1)}
+              </span>
+            </div>
+          {/each}
+        </div>
       </div>
     {/if}
-  </div>
+  {/if}
 </div>
 
 <!-- Donation Details Modal -->
 {#if $showDonationModal && $selectedDonation}
-  <div class="fixed inset-0 z-[70] overflow-y-auto" on:click|stopPropagation={closeModal}>
-    <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-      <div 
-        class="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg"
-        on:click|stopPropagation={() => {}}
-      >
-        <div class="bg-white px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
-          <div class="sm:flex sm:items-start">
-            <div class="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 sm:mx-0 sm:h-10 sm:w-10">
-              <svg class="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-            </div>
-            <div class="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
-              <h3 class="text-base font-semibold leading-6 text-gray-900">Donation Details</h3>
-              <div class="mt-4 space-y-3">
-                <div class="grid grid-cols-2 gap-4">
-                  <div>
-                    <p class="text-sm font-medium text-gray-500">Amount</p>
-                    <p class="mt-1 text-sm text-gray-900">{$selectedDonation.formattedAmount}</p>
-                  </div>
-                  <div>
-                    <p class="text-sm font-medium text-gray-500">Date</p>
-                    <p class="mt-1 text-sm text-gray-900">{$selectedDonation.formattedDate}</p>
-                  </div>
-                </div>
-                
-                <div>
-                  <p class="text-sm font-medium text-gray-500">Status</p>
-                  <p class="mt-1 text-sm">
-                    <span class="inline-flex rounded-full px-2 text-xs font-semibold leading-5 
-                      {$selectedDonation.status === 'cleared' ? 'bg-green-100 text-green-800' : 
-                       $selectedDonation.status === 'promise' ? 'bg-yellow-100 text-yellow-800' : 
-                       $selectedDonation.status === 'donated' ? 'bg-blue-100 text-blue-800' : 
-                       $selectedDonation.status === 'processing' ? 'bg-purple-100 text-purple-800' : 
-                       'bg-gray-100 text-gray-800'}">
-                      {$selectedDonation.status.charAt(0).toUpperCase() + $selectedDonation.status.slice(1)}
-                    </span>
-                  </p>
-                </div>
-                
-                <div>
-                  <p class="text-sm font-medium text-gray-500">ID</p>
-                  <p class="mt-1 text-sm text-gray-900">{$selectedDonation.id}</p>
-                </div>
-                
-                <!-- Created/Updated timestamps -->
-                <div class="grid grid-cols-2 gap-4">
-                  <div>
-                    <p class="text-sm font-medium text-gray-500">Created</p>
-                    <p class="mt-1 text-sm text-gray-900">{formatDate($selectedDonation.created_at)}</p>
-                  </div>
-                  {#if $selectedDonation.updated_at}
-                    <div>
-                      <p class="text-sm font-medium text-gray-500">Last Updated</p>
-                      <p class="mt-1 text-sm text-gray-900">{formatDate($selectedDonation.updated_at)}</p>
-                    </div>
-                  {/if}
-                </div>
-              </div>
-            </div>
+  <div class="fixed inset-0 z-[70] flex min-h-full items-center justify-center p-4" on:click|stopPropagation={closeModal}>
+    <div 
+      class="relative w-full max-w-lg transform overflow-hidden rounded-lg border border-slate-200 bg-white text-left shadow-lg transition-all"
+      on:click|stopPropagation={() => {}}
+    >
+      <!-- Header -->
+      <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+        <h3 class="text-lg font-semibold text-slate-900 flex items-center gap-2">
+          <DollarSign class="h-5 w-5" />
+          Donation Details
+        </h3>
+        <button 
+          type="button" 
+          class="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+          on:click={closeModal}
+        >
+          <X class="h-5 w-5" />
+        </button>
+      </div>
+      
+      <!-- Content -->
+      <div class="px-6 py-4 space-y-4">
+        <div class="grid gap-4 md:grid-cols-2">
+          <div>
+            <p class="text-sm font-medium text-slate-600">Amount</p>
+            <p class="text-lg font-semibold text-slate-900">{$selectedDonation.formattedAmount}</p>
+          </div>
+          <div>
+            <p class="text-sm font-medium text-slate-600">Date</p>
+            <p class="text-sm text-slate-900">{$selectedDonation.formattedDate}</p>
           </div>
         </div>
-        <div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
-          <button 
-            type="button" 
-            class="inline-flex w-full justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 sm:ml-3 sm:w-auto"
-            on:click={closeModal}
-          >
-            Close
-          </button>
+        
+        <div>
+          <p class="text-sm font-medium text-slate-600 mb-2">Status</p>
+          <span class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium {getStatusBadgeClass($selectedDonation.status)}">
+            {$selectedDonation.status.charAt(0).toUpperCase() + $selectedDonation.status.slice(1)}
+          </span>
         </div>
+        
+        <div>
+          <p class="text-sm font-medium text-slate-600">Donation ID</p>
+          <p class="text-sm text-slate-900 font-mono">{$selectedDonation.id}</p>
+        </div>
+        
+        <!-- Created/Updated timestamps -->
+        <div class="grid gap-4 md:grid-cols-2">
+          <div>
+            <p class="text-sm font-medium text-slate-600">Created</p>
+            <p class="text-sm text-slate-900">{formatDate($selectedDonation.created_at)}</p>
+          </div>
+          {#if $selectedDonation.updated_at}
+            <div>
+              <p class="text-sm font-medium text-slate-600">Last Updated</p>
+              <p class="text-sm text-slate-900">{formatDate($selectedDonation.updated_at)}</p>
+            </div>
+          {/if}
+        </div>
+      </div>
+      
+      <!-- Footer -->
+      <div class="border-t border-slate-200 px-6 py-4">
+        <button 
+          type="button" 
+          class="inline-flex w-full justify-center rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 transition-colors"
+          on:click={closeModal}
+        >
+          Close
+        </button>
       </div>
     </div>
   </div>

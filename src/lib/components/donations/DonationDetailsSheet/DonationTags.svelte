@@ -2,6 +2,7 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
   import { writable } from 'svelte/store';
+  import { Plus, X, Tag, Loader2 } from '@lucide/svelte';
   
   export let tags = [];
   export let isSaving = false;
@@ -118,85 +119,97 @@
   });
 </script>
 
-<div>
-  <h2 class="text-lg font-medium text-gray-900 mb-4">Tags</h2>
+<div class="space-y-6">
+  <div class="border-b border-slate-200 pb-4">
+    <h3 class="text-lg font-semibold leading-6 text-slate-900">Tags</h3>
+    <p class="mt-1 text-sm text-slate-600">Organize and categorize this donation with relevant tags.</p>
+  </div>
   
-  <div class="mb-4">
+  <div class="space-y-4">
+    <!-- Add tag input with suggestions -->
     <div class="relative">
-      <div class="flex items-center">
-        <div class="flex-grow mr-2 relative">
-          <input
-            type="text"
-            placeholder="Add a tag..."
-            bind:value={$tagInput}
-            class="shadow-sm focus:ring-purple-500 focus:border-purple-500 block w-full sm:text-sm border-gray-300 rounded-md"
-            disabled={isSaving}
-            on:keydown={handleKeydown}
-            on:focus={handleInputFocus}
-            on:click|stopPropagation={() => {}}
-          />
-          
-          {#if $isLoadingSuggestions}
-            <div class="absolute right-2 top-2">
-              <svg class="animate-spin h-4 w-4 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-            </div>
-          {/if}
-          
-          {#if $showSuggestions && $suggestedTags.length > 0}
-            <div class="absolute z-10 mt-1 w-full bg-white shadow-lg rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto max-h-60 focus:outline-none sm:text-sm">
-              {#each $suggestedTags as tag}
-                <button
-                  type="button"
-                  class="w-full text-left px-4 py-2 text-sm text-gray-900 hover:bg-purple-100"
-                  on:click|stopPropagation={() => selectTag(tag)}
-                >
-                  {tag}
-                </button>
-              {/each}
-            </div>
-          {/if}
+      <div class="flex items-end gap-3">
+        <div class="flex-1 space-y-2">
+          <label for="tag-input" class="block text-sm font-medium text-slate-700">
+            <Tag class="inline h-4 w-4 mr-1" />
+            Add Tag
+          </label>
+          <div class="relative">
+            <input
+              id="tag-input"
+              type="text"
+              placeholder="Type to search or create a tag..."
+              bind:value={$tagInput}
+              class="flex h-9 w-full rounded-md border border-slate-300 bg-white px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={isSaving}
+              on:keydown={handleKeydown}
+              on:focus={handleInputFocus}
+              on:click|stopPropagation={() => {}}
+            />
+            
+            {#if $isLoadingSuggestions}
+              <div class="absolute right-2 top-2">
+                <Loader2 class="h-4 w-4 text-slate-500 animate-spin" />
+              </div>
+            {/if}
+            
+            {#if $showSuggestions && $suggestedTags.length > 0}
+              <div class="absolute z-10 mt-1 w-full bg-white shadow-lg rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto max-h-60 focus:outline-none sm:text-sm border border-slate-200">
+                {#each $suggestedTags as tag}
+                  <button
+                    type="button"
+                    class="w-full text-left px-4 py-2 text-sm text-slate-900 hover:bg-slate-100 transition-colors"
+                    on:click|stopPropagation={() => selectTag(tag)}
+                  >
+                    <Tag class="inline h-3 w-3 mr-2 text-slate-500" />
+                    {tag}
+                  </button>
+                {/each}
+              </div>
+            {/if}
+          </div>
         </div>
         
         <button
           type="button"
-          class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+          class="inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-slate-900 text-white hover:bg-slate-800 h-9 px-3"
           on:click={addTag}
           disabled={isSaving || !$tagInput.trim()}
         >
+          <Plus class="h-4 w-4" />
           Add
         </button>
       </div>
-      
-      <p class="mt-2 text-sm text-gray-500">
-        Add tags to categorize this donation. Type to see suggestions or create a new tag.
-      </p>
     </div>
-  </div>
-  
-  {#if $tags.length > 0}
-    <div class="flex flex-wrap gap-2 mt-2">
-      {#each $tags as tag}
-        <div class="inline-flex items-center px-2 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
-          {tag}
-          <button
-            type="button"
-            class="ml-1 rounded-full text-purple-600 hover:text-purple-800 focus:outline-none"
-            on:click={() => removeTag(tag)}
-            disabled={isSaving}
-          >
-            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+    
+    <!-- Tags display -->
+    {#if $tags.length > 0}
+      <div class="space-y-3">
+        <h4 class="text-sm font-medium text-slate-900">Current Tags</h4>
+        <div class="flex flex-wrap gap-2">
+          {#each $tags as tag}
+            <div class="inline-flex items-center gap-1 rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-sm font-medium text-purple-700 transition-colors hover:bg-purple-100">
+              <Tag class="h-3 w-3" />
+              {tag}
+              <button
+                type="button"
+                class="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-purple-500 hover:text-red-600 hover:bg-red-50 transition-colors"
+                on:click={() => removeTag(tag)}
+                disabled={isSaving}
+              >
+                <X class="h-3 w-3" />
+                <span class="sr-only">Remove {tag} tag</span>
+              </button>
+            </div>
+          {/each}
         </div>
-      {/each}
-    </div>
-  {:else}
-    <div class="border border-dashed rounded-md p-6 text-center text-gray-500">
-      <p>No tags added yet.</p>
-    </div>
-  {/if}
+      </div>
+    {:else}
+      <div class="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+        <Tag class="h-8 w-8 text-slate-400 mb-3" />
+        <h3 class="text-sm font-medium text-slate-900 mb-1">No tags added</h3>
+        <p class="text-sm text-slate-600">Start organizing by adding your first tag.</p>
+      </div>
+    {/if}
+  </div>
 </div>

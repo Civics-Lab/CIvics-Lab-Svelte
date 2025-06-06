@@ -1,7 +1,8 @@
-<!--  src/lib/components/contacts/ContactDetailsSheet/ContactTags.svelte -->
+<!-- src/lib/components/contacts/ContactDetailsSheet/ContactTags.svelte -->
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { writable } from 'svelte/store';
+  import { Plus, X, Tag } from '@lucide/svelte';
   
   // Props
   export let tags;
@@ -37,17 +38,25 @@
   }
 </script>
 
-<div>
-  <h2 class="text-lg font-medium text-gray-900 mb-4">Tags</h2>
+<div class="space-y-6">
+  <div class="border-b border-slate-200 pb-4">
+    <h3 class="text-lg font-semibold leading-6 text-slate-900">Contact Tags</h3>
+    <p class="mt-1 text-sm text-slate-600">Organize and categorize this contact with relevant tags.</p>
+  </div>
   
-  <div class="mb-4">
-    <div class="flex items-center">
-      <div class="flex-grow mr-2">
+  <div class="space-y-4">
+    <!-- Add tag input -->
+    <div class="flex items-end gap-3">
+      <div class="flex-1 space-y-2">
+        <label for="tag-input" class="block text-sm font-medium text-slate-700">
+          Add Tag
+        </label>
         <input
+          id="tag-input"
           type="text"
-          placeholder="Add a tag..."
+          placeholder="Enter a tag name..."
           bind:value={$tagInput}
-          class="shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+          class="flex h-9 w-full rounded-md border border-slate-300 bg-white px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
           disabled={isSaving}
           on:keydown={handleKeydown}
         />
@@ -55,40 +64,43 @@
       
       <button
         type="button"
-        class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+        class="inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-slate-900 text-white hover:bg-slate-800 h-9 px-3"
         on:click={addTag}
         disabled={isSaving || !$tagInput.trim()}
       >
+        <Plus class="h-4 w-4" />
         Add
       </button>
     </div>
     
-    <p class="mt-2 text-sm text-gray-500">
-      Add tags to categorize this contact. Press Enter or click Add to create a tag.
-    </p>
-  </div>
-  
-  {#if $tags.length > 0}
-    <div class="flex flex-wrap gap-2 mt-2">
-      {#each $tags as tag}
-        <div class="inline-flex items-center px-2 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-          {tag}
-          <button
-            type="button"
-            class="ml-1 rounded-full text-blue-600 hover:text-blue-800 focus:outline-none"
-            on:click={() => removeTag(tag)}
-            disabled={isSaving}
-          >
-            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+    <!-- Tags display -->
+    {#if $tags.length > 0}
+      <div class="space-y-3">
+        <h4 class="text-sm font-medium text-slate-900">Current Tags</h4>
+        <div class="flex flex-wrap gap-2">
+          {#each $tags as tag}
+            <div class="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100">
+              <Tag class="h-3 w-3" />
+              {tag}
+              <button
+                type="button"
+                class="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-blue-500 hover:text-red-600 hover:bg-red-50 transition-colors"
+                on:click={() => removeTag(tag)}
+                disabled={isSaving}
+              >
+                <X class="h-3 w-3" />
+                <span class="sr-only">Remove {tag} tag</span>
+              </button>
+            </div>
+          {/each}
         </div>
-      {/each}
-    </div>
-  {:else}
-    <div class="border border-dashed rounded-md p-6 text-center text-gray-500">
-      <p>No tags added yet.</p>
-    </div>
-  {/if}
+      </div>
+    {:else}
+      <div class="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+        <Tag class="h-8 w-8 text-slate-400 mb-3" />
+        <h3 class="text-sm font-medium text-slate-900 mb-1">No tags added</h3>
+        <p class="text-sm text-slate-600">Start organizing by adding your first tag.</p>
+      </div>
+    {/if}
+  </div>
 </div>
