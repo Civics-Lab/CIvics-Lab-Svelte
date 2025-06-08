@@ -105,7 +105,7 @@
       >
         <div class="flex items-center space-x-2 flex-1 min-w-0">
           <span class="truncate text-slate-900 font-medium">
-            {currentView ? currentView.view_name : 'Select View'}
+            {currentView ? currentView.viewName : 'Select View'}
           </span>
           {#if currentView?.temporary}
             <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
@@ -154,7 +154,7 @@
                   class="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-slate-100 focus:bg-slate-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 {currentView && currentView.id === view.id ? 'bg-purple-50 text-purple-700 font-medium' : 'text-slate-900'}"
                   on:click={() => handleSelectView(view)}
                 >
-                  <span class="truncate">{view.view_name}</span>
+                  <span class="truncate">{view.viewName}</span>
                   {#if currentView && currentView.id === view.id}
                     <svg 
                       xmlns="http://www.w3.org/2000/svg" 
