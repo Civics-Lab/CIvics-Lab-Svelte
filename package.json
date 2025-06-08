@@ -20,6 +20,7 @@
 		"db:setup-invites": "node src/lib/db/setup-invites.mjs",
 		"db:setup-invites-direct": "node scripts/setup-invites.js",
 		"db:migrate:avatar": "tsx src/lib/db/run-migrations.ts",
+		"db:migrate:streams": "tsx src/lib/db/migrate-interaction-streams.ts",
 		"db:add-avatar": "node scripts/migrate-avatar.mjs",
 		"migrate": "tsx src/lib/db/migrate.ts",
 		"add:super-admin": "node scripts/add_super_admin_column.mjs"

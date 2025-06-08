@@ -4,6 +4,7 @@
     import { workspaceStore } from '$lib/stores/workspaceStore';
     import { userStore } from '$lib/stores/userStore';
     import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+    import Timeline from '$lib/components/shared/Timeline.svelte';
     import type { PageData } from './$types';
     
     export let data: PageData;
@@ -108,18 +109,8 @@
       
       <!-- Recent Activity and Quick Actions -->
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Recent Activity -->
-        <div class="bg-white p-6 rounded-lg shadow">
-          <h2 class="text-lg font-semibold mb-4">Recent Activity</h2>
-          <div class="border-t pt-4">
-            <div class="text-center py-8 text-gray-500">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto mb-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <p>No recent activity to display</p>
-            </div>
-          </div>
-        </div>
+        <!-- Recent Activity Timeline -->
+        <Timeline limit={15} />
         
         <!-- Quick Actions -->
         <div class="bg-white p-6 rounded-lg shadow">

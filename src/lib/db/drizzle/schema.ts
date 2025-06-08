@@ -13,6 +13,8 @@ export const socialMediaServiceEnum = pgEnum('social_media_service', ['facebook'
 export const socialMediaStatusEnum = pgEnum('social_media_status', ['active', 'inactive', 'blocked', 'deleted']);
 export const workspaceRoleEnum = pgEnum('workspace_role', ['Super Admin', 'Admin', 'Basic User', 'Volunteer']);
 export const inviteStatusEnum = pgEnum('invite_status', ['Pending', 'Accepted', 'Declined', 'Expired']);
+export const interactionTypeEnum = pgEnum('interaction_type', ['note', 'call', 'email', 'in_person']);
+export const interactionStatusEnum = pgEnum('interaction_status', ['active', 'archived', 'deleted']);
 
 // Users Table - For Hono Auth
 export const users = pgTable('users', {
@@ -347,6 +349,24 @@ export const auditLogs = pgTable('audit_logs', {
   timestamp: timestamp('timestamp').defaultNow().notNull()
 });
 
+// Interaction streams for contacts and businesses
+export const interactionStreams = pgTable('interaction_streams', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  workspaceId: uuid('workspace_id').references(() => workspaces.id),
+  contactId: uuid('contact_id').references(() => contacts.id),
+  businessId: uuid('business_id').references(() => businesses.id),
+  interactionType: interactionTypeEnum('interaction_type').notNull(),
+  title: text('title').notNull(),
+  content: text('content').notNull(),
+  interactionDate: timestamp('interaction_date').defaultNow().notNull(),
+  status: interactionStatusEnum('status').default('active'),
+  metadata: jsonb('metadata'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  createdById: uuid('created_by').references(() => users.id),
+  updatedById: uuid('updated_by').references(() => users.id)
+});
+
 // Define relations
 export const usersRelations = relations(users, ({ many }) => ({
   userWorkspaces: many(userWorkspaces),
@@ -363,7 +383,9 @@ export const usersRelations = relations(users, ({ many }) => ({
   updatedContactSocialMediaAccounts: many(contactSocialMediaAccounts, { relationName: 'userUpdatedContactSocialMediaAccounts' }),
   createdContactViews: many(contactViews, { relationName: 'userCreatedContactViews' }),
   createdDonationViews: many(donationViews, { relationName: 'userCreatedDonationViews' }),
-  sentInvites: many(userInvites, { relationName: 'userSentInvites' })
+  sentInvites: many(userInvites, { relationName: 'userSentInvites' }),
+  createdInteractionStreams: many(interactionStreams, { relationName: 'userCreatedInteractionStreams' }),
+  updatedInteractionStreams: many(interactionStreams, { relationName: 'userUpdatedInteractionStreams' })
 }));
 
 export const workspacesRelations = relations(workspaces, ({ one, many }) => ({
@@ -381,7 +403,8 @@ export const workspacesRelations = relations(workspaces, ({ one, many }) => ({
   donationViews: many(donationViews),
   subscriptions: many(workspaceSubscriptions),
   payments: many(workspacePayments),
-  userInvites: many(userInvites)
+  userInvites: many(userInvites),
+  interactionStreams: many(interactionStreams)
 }));
 
 export const userWorkspacesRelations = relations(userWorkspaces, ({ one }) => ({
@@ -423,7 +446,8 @@ export const contactsRelations = relations(contacts, ({ one, many }) => ({
   addresses: many(contactAddresses),
   socialMediaAccounts: many(contactSocialMediaAccounts),
   tags: many(contactTags),
-  businessEmployments: many(businessEmployees)
+  businessEmployments: many(businessEmployees),
+  interactionStreams: many(interactionStreams)
 }));
 
 // Add the remaining relation definitions for all tables
@@ -437,7 +461,8 @@ export const businessesRelations = relations(businesses, ({ one, many }) => ({
   socialMediaAccounts: many(businessSocialMediaAccounts),
   employees: many(businessEmployees),
   tags: many(businessTags),
-  donations: many(donations)
+  donations: many(donations),
+  interactionStreams: many(interactionStreams)
 }));
 
 export const donationsRelations = relations(donations, ({ one, many }) => ({
@@ -482,5 +507,31 @@ export const userInvitesRelations = relations(userInvites, ({ one }) => ({
     fields: [userInvites.invitedById],
     references: [users.id],
     relationName: 'userSentInvites'
+  })
+}));
+
+// Interaction Streams Relations
+export const interactionStreamsRelations = relations(interactionStreams, ({ one }) => ({
+  workspace: one(workspaces, {
+    fields: [interactionStreams.workspaceId],
+    references: [workspaces.id]
+  }),
+  contact: one(contacts, {
+    fields: [interactionStreams.contactId],
+    references: [contacts.id]
+  }),
+  business: one(businesses, {
+    fields: [interactionStreams.businessId],
+    references: [businesses.id]
+  }),
+  createdBy: one(users, {
+    fields: [interactionStreams.createdById],
+    references: [users.id],
+    relationName: 'userCreatedInteractionStreams'
+  }),
+  updatedBy: one(users, {
+    fields: [interactionStreams.updatedById],
+    references: [users.id],
+    relationName: 'userUpdatedInteractionStreams'
   })
 }));

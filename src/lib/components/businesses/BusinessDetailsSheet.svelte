@@ -21,6 +21,7 @@
     import GenericAddresses from '$lib/components/shared/GenericAddresses.svelte';
     import GenericSocialMedia from '$lib/components/shared/GenericSocialMedia.svelte';
     import GenericTags from '$lib/components/shared/GenericTags.svelte';
+    import InteractionStream from '$lib/components/shared/InteractionStream.svelte';
     
     // Props
     export let isOpen = false;
@@ -445,7 +446,7 @@
       <div class="fixed inset-0 z-50 overflow-hidden" on:click|stopPropagation={() => {}}>
         <!-- Sheet panel - prevent click events from reaching the backdrop -->
         <div 
-          class="absolute inset-y-0 right-0 max-w-2xl w-full flex"
+          class="absolute inset-y-0 right-0 max-w-5xl w-full flex"
           transition:fly={{ duration: 300, x: '100%' }}
           on:click|stopPropagation={() => {}}
         >
@@ -481,7 +482,7 @@
             </div>
             
             <!-- Content -->
-            <div class="flex-1 overflow-y-auto px-6 py-6">
+            <div class="flex-1 overflow-y-auto">
               {#if $isLoading}
                 <div class="flex h-32 items-center justify-center">
                   <LoadingSpinner size="lg" />
@@ -501,66 +502,86 @@
                   </div>
                 </div>
               {:else}
-                <div class="space-y-8" on:click|stopPropagation={() => {}}>
-                  <!-- Basic Information Section -->
-                  <BusinessBasicInfo 
-                    {formData}
-                    isSaving={$isSaving}
-                    on:change={handleFormDataChange}
-                  />
+                <!-- Two Column Layout: Stream on Left, Details on Right -->
+                <div class="flex h-full" on:click|stopPropagation={() => {}}>
+                  <!-- Left Column: Interaction Stream -->
+                  <div class="w-96 border-r border-gray-200 flex-shrink-0 overflow-y-auto">
+                    <div class="p-6">
+                      {#if businessId}
+                        <InteractionStream
+                          entityType="business"
+                          entityId={businessId}
+                          isSaving={$isSaving}
+                          on:change={handleMultiItemChange}
+                        />
+                      {/if}
+                    </div>
+                  </div>
                   
-                  <!-- Phone Numbers Section -->
-                  <GenericPhones 
-                    {phoneNumbers}
-                    isSaving={$isSaving}
-                    entityType="business"
-                    on:change={handleMultiItemChange}
-                  />
-                  
-                  <!-- Addresses Section -->
-                  <GenericAddresses 
-                    {addresses}
-                    {stateOptions}
-                    isSaving={$isSaving}
-                    entityType="business"
-                    on:change={handleMultiItemChange}
-                  />
-                  
-                  <!-- Social Media Section -->
-                  <GenericSocialMedia 
-                    {socialMedia}
-                    isSaving={$isSaving}
-                    entityType="business"
-                    on:change={handleMultiItemChange}
-                  />
-                  
-                  <!-- Employees Section -->
-                  <BusinessEmployees 
-                    {employees}
-                    {contactOptions}
-                    {supabase}
-                    isSaving={$isSaving}
-                    isLoadingContacts={$isLoadingContacts}
-                    on:change={handleMultiItemChange}
-                    on:searchContacts={(e) => searchContacts(e.detail, $originalData?.workspaceId)}
-                  />
-                  
-                  <!-- Tags Section -->
-                  <GenericTags 
-                    {tags}
-                    isSaving={$isSaving}
-                    entityType="business"
-                    on:change={handleMultiItemChange}
-                  />
-                  
-                  <!-- Donations Section -->
-                  {#if businessId}
-                    <BusinessDonations
-                      {businessId}
-                      {supabase}
-                      isSaving={$isSaving}
-                    />
-                  {/if}
+                  <!-- Right Column: Business Details -->
+                  <div class="flex-1 overflow-y-auto">
+                    <div class="p-6 space-y-8">
+                      <!-- Basic Information Section -->
+                      <BusinessBasicInfo 
+                        {formData}
+                        isSaving={$isSaving}
+                        on:change={handleFormDataChange}
+                      />
+                      
+                      <!-- Phone Numbers Section -->
+                      <GenericPhones 
+                        {phoneNumbers}
+                        isSaving={$isSaving}
+                        entityType="business"
+                        on:change={handleMultiItemChange}
+                      />
+                      
+                      <!-- Addresses Section -->
+                      <GenericAddresses 
+                        {addresses}
+                        {stateOptions}
+                        isSaving={$isSaving}
+                        entityType="business"
+                        on:change={handleMultiItemChange}
+                      />
+                      
+                      <!-- Social Media Section -->
+                      <GenericSocialMedia 
+                        {socialMedia}
+                        isSaving={$isSaving}
+                        entityType="business"
+                        on:change={handleMultiItemChange}
+                      />
+                      
+                      <!-- Employees Section -->
+                      <BusinessEmployees 
+                        {employees}
+                        {contactOptions}
+                        {supabase}
+                        isSaving={$isSaving}
+                        isLoadingContacts={$isLoadingContacts}
+                        on:change={handleMultiItemChange}
+                        on:searchContacts={(e) => searchContacts(e.detail, $originalData?.workspaceId)}
+                      />
+                      
+                      <!-- Tags Section -->
+                      <GenericTags 
+                        {tags}
+                        isSaving={$isSaving}
+                        entityType="business"
+                        on:change={handleMultiItemChange}
+                      />
+                      
+                      <!-- Donations Section -->
+                      {#if businessId}
+                        <BusinessDonations
+                          {businessId}
+                          {supabase}
+                          isSaving={$isSaving}
+                        />
+                      {/if}
+                    </div>
+                  </div>
                 </div>
               {/if}
             </div>
