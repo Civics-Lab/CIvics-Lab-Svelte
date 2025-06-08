@@ -11,14 +11,16 @@
     import { fetchStateOptions, fetchContactOptions } from '$lib/services/formOptionsService';
     import { X, AlertTriangle } from '@lucide/svelte';
     
-    // Import subcomponents
+    // Import entity-specific subcomponents
     import BusinessBasicInfo from './BusinessDetailsSheet/BusinessBasicInfo.svelte';
-    import BusinessPhones from './BusinessDetailsSheet/BusinessPhones.svelte';
-    import BusinessAddresses from './BusinessDetailsSheet/BusinessAddresses.svelte';
-    import BusinessSocialMedia from './BusinessDetailsSheet/BusinessSocialMedia.svelte';
-    import BusinessTags from './BusinessDetailsSheet/BusinessTags.svelte';
     import BusinessEmployees from './BusinessDetailsSheet/BusinessEmployees.svelte';
     import BusinessDonations from './BusinessDetailsSheet/BusinessDonations.svelte';
+    
+    // Import generic shared components
+    import GenericPhones from '$lib/components/shared/GenericPhones.svelte';
+    import GenericAddresses from '$lib/components/shared/GenericAddresses.svelte';
+    import GenericSocialMedia from '$lib/components/shared/GenericSocialMedia.svelte';
+    import GenericTags from '$lib/components/shared/GenericTags.svelte';
     
     // Props
     export let isOpen = false;
@@ -508,24 +510,27 @@
                   />
                   
                   <!-- Phone Numbers Section -->
-                  <BusinessPhones 
-                    phoneNumbers={phoneNumbers}
+                  <GenericPhones 
+                    {phoneNumbers}
                     isSaving={$isSaving}
+                    entityType="business"
                     on:change={handleMultiItemChange}
                   />
                   
                   <!-- Addresses Section -->
-                  <BusinessAddresses 
+                  <GenericAddresses 
                     {addresses}
                     {stateOptions}
                     isSaving={$isSaving}
+                    entityType="business"
                     on:change={handleMultiItemChange}
                   />
                   
                   <!-- Social Media Section -->
-                  <BusinessSocialMedia 
-                    socialMedia={socialMedia}
+                  <GenericSocialMedia 
+                    {socialMedia}
                     isSaving={$isSaving}
+                    entityType="business"
                     on:change={handleMultiItemChange}
                   />
                   
@@ -541,9 +546,10 @@
                   />
                   
                   <!-- Tags Section -->
-                  <BusinessTags 
+                  <GenericTags 
                     {tags}
                     isSaving={$isSaving}
+                    entityType="business"
                     on:change={handleMultiItemChange}
                   />
                   

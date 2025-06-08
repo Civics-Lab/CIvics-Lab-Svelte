@@ -11,14 +11,16 @@
   import { fetchFormOptions } from '$lib/services/optionsService';
   import { X, AlertTriangle } from '@lucide/svelte';
   
-  // Import subcomponents
+  // Import entity-specific subcomponents
   import ContactBasicInfo from './ContactDetailsSheet/ContactBasicInfo.svelte';
   import ContactEmails from './ContactDetailsSheet/ContactEmails.svelte';
-  import ContactPhones from './ContactDetailsSheet/ContactPhones.svelte';
-  import ContactAddresses from './ContactDetailsSheet/ContactAddresses.svelte';
-  import ContactSocialMedia from './ContactDetailsSheet/ContactSocialMedia.svelte';
-  import ContactTags from './ContactDetailsSheet/ContactTags.svelte';
   import ContactDonations from './ContactDetailsSheet/ContactDonations.svelte';
+  
+  // Import generic shared components
+  import GenericPhones from '$lib/components/shared/GenericPhones.svelte';
+  import GenericAddresses from '$lib/components/shared/GenericAddresses.svelte';
+  import GenericSocialMedia from '$lib/components/shared/GenericSocialMedia.svelte';
+  import GenericTags from '$lib/components/shared/GenericTags.svelte';
   
   // Props
   export let isOpen = false;
@@ -586,31 +588,35 @@
                 />
                 
                 <!-- Phone Numbers Section -->
-                <ContactPhones 
-                  phoneNumbers={phoneNumbers}
-                  isSaving={false}
+                <GenericPhones 
+                  {phoneNumbers}
+                  isSaving={$isSaving}
+                  entityType="contact"
                   on:change={handleMultiItemChange}
                 />
                 
                 <!-- Addresses Section -->
-                <ContactAddresses 
+                <GenericAddresses 
                   {addresses}
                   {stateOptions}
-                  isSaving={false}
+                  isSaving={$isSaving}
+                  entityType="contact"
                   on:change={handleMultiItemChange}
                 />
                 
                 <!-- Social Media Section -->
-                <ContactSocialMedia 
-                  socialMedia={socialMedia}
-                  isSaving={false}
+                <GenericSocialMedia 
+                  {socialMedia}
+                  isSaving={$isSaving}
+                  entityType="contact"
                   on:change={handleMultiItemChange}
                 />
                 
                 <!-- Tags Section -->
-                <ContactTags 
+                <GenericTags 
                   {tags}
-                  isSaving={false}
+                  isSaving={$isSaving}
+                  entityType="contact"
                   on:change={handleMultiItemChange}
                 />
                 

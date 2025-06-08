@@ -1,22 +1,65 @@
 import { json, error } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { businesses, userWorkspaces, businessPhoneNumbers, businessAddresses, businessSocialMediaAccounts, businessEmployees, businessTags, zipCodes, contacts } from '$lib/db/drizzle/schema';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and, inArray, or, ilike } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { verifyWorkspaceAccess } from '$lib/utils/auth';
 
-// GET /api/businesses - Get all businesses for the current user's workspace
+// GET /api/businesses - Get all businesses for the current user's workspace (with optional search)
 export const GET: RequestHandler = async ({ locals, url }) => {
   try {
     const workspaceId = url.searchParams.get('workspace_id');
+    const searchQuery = url.searchParams.get('search');
+    const limitParam = url.searchParams.get('limit');
+    const limit = limitParam ? parseInt(limitParam, 10) : 100; // Default limit of 100
+    
     // Verify workspace access
     await verifyWorkspaceAccess(locals.user, workspaceId);
     
-    // Get all businesses for the workspace
-    const businessesList = await db
+    // Build the query
+    let query = db
       .select()
       .from(businesses)
       .where(eq(businesses.workspaceId, workspaceId));
+    
+    // Add search functionality if search query is provided
+    if (searchQuery && searchQuery.trim()) {
+      const searchTerm = `%${searchQuery.trim()}%`;
+      query = query.where(
+        and(
+          eq(businesses.workspaceId, workspaceId),
+          ilike(businesses.businessName, searchTerm)
+        )
+      );
+    }
+    
+    // Apply limit
+    query = query.limit(limit);
+    
+    // Execute the query
+    const businessesList = await query;
+    
+    // For search results, return minimal data for performance
+    if (searchQuery && searchQuery.trim()) {
+      // For search, return basic business info plus first address for display
+      const enhancedBusinesses = await Promise.all(
+        businessesList.map(async (business) => {
+          // Get only the first address for search results
+          const addresses = await db
+            .select()
+            .from(businessAddresses)
+            .where(eq(businessAddresses.businessId, business.id))
+            .limit(1);
+          
+          return {
+            ...business,
+            addresses: addresses || []
+          };
+        })
+      );
+      
+      return json({ businesses: enhancedBusinesses });
+    }
     
     // Fetch related data for each business
     const enhancedBusinesses = await Promise.all(

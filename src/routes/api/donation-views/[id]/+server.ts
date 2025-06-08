@@ -54,16 +54,16 @@ export const GET: RequestHandler = async ({ params, locals }) => {
     // Format for frontend
     const formattedView = {
       id: view.id,
-      view_name: view.viewName,
-      workspace_id: view.workspaceId,
+      viewName: view.viewName,
+      workspaceId: view.workspaceId,
       amount: view.amount,
       status: view.status,
-      payment_type: view.paymentType,
+      paymentType: view.paymentType,
       notes: view.notes,
       filters: view.filters || [],
       sorting: view.sorting || [],
-      created_at: view.createdAt,
-      updated_at: view.updatedAt
+      createdAt: view.createdAt,
+      updatedAt: view.updatedAt
     };
     
     return json({
@@ -101,8 +101,8 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
     // Update fields
     const updateFields: any = {};
     
-    if (updateData.view_name !== undefined) {
-      updateFields.viewName = updateData.view_name;
+    if (updateData.viewName !== undefined) {
+      updateFields.viewName = updateData.viewName;
     }
     
     if (updateData.amount !== undefined) {
@@ -113,8 +113,8 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
       updateFields.status = updateData.status;
     }
     
-    if (updateData.payment_type !== undefined) {
-      updateFields.paymentType = updateData.payment_type;
+    if (updateData.paymentType !== undefined) {
+      updateFields.paymentType = updateData.paymentType;
     }
     
     if (updateData.notes !== undefined) {
@@ -147,16 +147,16 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
     // Format for frontend
     const formattedView = {
       id: updatedView.id,
-      view_name: updatedView.viewName,
-      workspace_id: updatedView.workspaceId,
+      viewName: updatedView.viewName,
+      workspaceId: updatedView.workspaceId,
       amount: updatedView.amount,
       status: updatedView.status,
-      payment_type: updatedView.paymentType,
+      paymentType: updatedView.paymentType,
       notes: updatedView.notes,
       filters: updatedView.filters || [],
       sorting: updatedView.sorting || [],
-      created_at: updatedView.createdAt,
-      updated_at: updatedView.updatedAt
+      createdAt: updatedView.createdAt,
+      updatedAt: updatedView.updatedAt
     };
     
     return json({

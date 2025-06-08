@@ -1,8 +1,9 @@
 <!-- src/lib/components/donations/DonationDetailsSheet/DonationBasicInfo.svelte -->
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
-  import { onMount } from 'svelte';
-  import { DollarSign, Calendar, CreditCard, User, Building } from '@lucide/svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
+  import { writable } from 'svelte/store';
+  import { DollarSign, Calendar, CreditCard, User, Building, Edit3 } from '@lucide/svelte';
+  import DonorSelector from '../DonorSelector.svelte';
   
   export let formData;
   export let donor;
@@ -13,6 +14,9 @@
   const dispatch = createEventDispatcher();
   
   let formattedAmount = '';
+  
+  // State for donor editing
+  const isEditingDonor = writable(false);
   
   onMount(() => {
     // Format the initial amount
@@ -40,6 +44,53 @@
   
   function handleChange() {
     dispatch('change');
+  }
+  
+  // Start editing donor
+  function startEditingDonor() {
+    isEditingDonor.set(true);
+  }
+  
+  // Cancel donor editing
+  function cancelDonorEdit() {
+    isEditingDonor.set(false);
+  }
+  
+  // Handle donor selection from DonorSelector
+  function handleDonorSelect(event) {
+    const selectedDonor = event.detail;
+    
+    if (!selectedDonor) {
+      // Clear donor
+      formData.update(fd => ({
+        ...fd,
+        contact_id: null,
+        business_id: null
+      }));
+      donor.set(null);
+    } else if (selectedDonor.type === 'contact') {
+      formData.update(fd => ({
+        ...fd,
+        contact_id: selectedDonor.id,
+        business_id: null
+      }));
+      donor.set(selectedDonor);
+    } else if (selectedDonor.type === 'business') {
+      formData.update(fd => ({
+        ...fd,
+        contact_id: null,
+        business_id: selectedDonor.id
+      }));
+      donor.set(selectedDonor);
+    }
+    
+    dispatch('change');
+  }
+  
+  // Save donor changes
+  function saveDonorChanges() {
+    isEditingDonor.set(false);
+    // The actual save will happen when the parent saves all changes
   }
   
   // Format currency for display
@@ -75,27 +126,73 @@
   </div>
   
   <div class="space-y-6">
-    <!-- Donor Information (read-only) -->
+    <!-- Donor Information -->
     <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
-      <div class="flex items-center gap-2 mb-2">
-        {#if $donor?.type === 'contact'}
-          <User class="h-4 w-4 text-slate-600" />
-        {:else if $donor?.type === 'business'}
-          <Building class="h-4 w-4 text-slate-600" />
-        {:else}
-          <User class="h-4 w-4 text-slate-600" />
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+          {#if $donor?.type === 'contact'}
+            <User class="h-4 w-4 text-slate-600" />
+          {:else if $donor?.type === 'business'}
+            <Building class="h-4 w-4 text-slate-600" />
+          {:else}
+            <User class="h-4 w-4 text-slate-600" />
+          {/if}
+          <label class="text-sm font-medium text-slate-700">Donor Information</label>
+        </div>
+        
+        {#if !$isEditingDonor}
+          <button
+            type="button"
+            class="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-xs font-medium text-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            on:click={startEditingDonor}
+            disabled={isSaving}
+          >
+            <Edit3 class="h-3 w-3" />
+            Edit
+          </button>
         {/if}
-        <label class="text-sm font-medium text-slate-700">Donor Information</label>
       </div>
-      {#if $donor}
-        <div class="flex items-center gap-3">
-          <span class="font-medium text-slate-900">{$donor.name}</span>
-          <span class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium {$donor.type === 'contact' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-green-50 text-green-700 border-green-200'}">
-            {$donor.type === 'contact' ? 'Individual' : 'Business'}
-          </span>
+      
+      {#if $isEditingDonor}
+        <div class="space-y-4">
+          <!-- Use the new DonorSelector component -->
+          <DonorSelector
+            currentDonor={$donor}
+            disabled={isSaving}
+            on:select={handleDonorSelect}
+          />
+          
+          <div class="flex justify-end gap-2">
+            <button
+              type="button"
+              class="inline-flex items-center gap-1 rounded-md bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 hover:bg-slate-50"
+              on:click={cancelDonorEdit}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="inline-flex items-center gap-1 rounded-md bg-purple-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-purple-700"
+              on:click={saveDonorChanges}
+            >
+              Save
+            </button>
+          </div>
         </div>
       {:else}
-        <span class="text-sm text-slate-500">No donor associated with this donation</span>
+        <!-- Display current donor -->
+        {#if $donor}
+          <div class="flex items-center gap-3">
+            <span class="font-medium text-slate-900">{$donor.name}</span>
+            <span class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium {$donor.type === 'contact' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-green-50 text-green-700 border-green-200'}">
+              {$donor.type === 'contact' ? 'Individual' : 'Business'}
+            </span>
+          </div>
+        {:else}
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-slate-500">No donor associated with this donation</span>
+          </div>
+        {/if}
       {/if}
     </div>
     

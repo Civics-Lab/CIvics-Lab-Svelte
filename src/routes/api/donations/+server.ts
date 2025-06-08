@@ -74,10 +74,12 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     
     const donationResults = await donationQuery;
     
-    // For each donation, fetch the associated contact or business
+    // For each donation, fetch the associated contact or business and add donor info
     const donationsWithDetails = await Promise.all(
       donationResults.map(async (donation) => {
         let donorDetails = {};
+        let donorName = 'Unknown';
+        let donorType = 'Unknown';
         
         if (donation.contactId) {
           const contactResult = await db
@@ -91,9 +93,10 @@ export const GET: RequestHandler = async ({ url, locals }) => {
             .limit(1);
           
           if (contactResult.length > 0) {
-            donorDetails = {
-              contact: contactResult[0]
-            };
+            const contact = contactResult[0];
+            donorName = `${contact.firstName} ${contact.lastName}`.trim();
+            donorType = 'Contact';
+            donorDetails = { contact };
           }
         } else if (donation.businessId) {
           const businessResult = await db
@@ -106,14 +109,17 @@ export const GET: RequestHandler = async ({ url, locals }) => {
             .limit(1);
           
           if (businessResult.length > 0) {
-            donorDetails = {
-              business: businessResult[0]
-            };
+            const business = businessResult[0];
+            donorName = business.businessName;
+            donorType = 'Business';
+            donorDetails = { business };
           }
         }
         
         return {
           ...donation,
+          donorName,    // Add computed donor name
+          donorType,    // Add computed donor type
           ...donorDetails
         };
       })

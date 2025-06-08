@@ -44,19 +44,19 @@ export const GET: RequestHandler = async ({ url, locals }) => {
       .where(eq(donationViews.workspaceId, workspaceId))
       .orderBy(donationViews.viewName);
     
-    // Transform field names to follow the frontend's expected format
+    // Transform field names to use consistent camelCase
     const formattedViews = views.map(view => ({
       id: view.id,
-      view_name: view.viewName,
-      workspace_id: view.workspaceId,
+      viewName: view.viewName,
+      workspaceId: view.workspaceId,
       amount: view.amount,
       status: view.status,
-      payment_type: view.paymentType,
+      paymentType: view.paymentType,
       notes: view.notes,
       filters: view.filters || [],
       sorting: view.sorting || [],
-      created_at: view.createdAt,
-      updated_at: view.updatedAt
+      createdAt: view.createdAt,
+      updatedAt: view.updatedAt
     }));
     
     return json({
@@ -81,11 +81,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     // Parse request body
     const requestData = await request.json();
     
-    if (!requestData.view_name) {
+    if (!requestData.viewName) {
       throw error(400, 'View name is required');
     }
     
-    if (!requestData.workspace_id) {
+    if (!requestData.workspaceId) {
       throw error(400, 'Workspace ID is required');
     }
     
@@ -96,7 +96,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       .where(
         and(
           eq(userWorkspaces.userId, user.id),
-          eq(userWorkspaces.workspaceId, requestData.workspace_id)
+          eq(userWorkspaces.workspaceId, requestData.workspaceId)
         )
       )
       .limit(1);
@@ -105,14 +105,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
       throw error(403, 'You do not have access to this workspace');
     }
     
-    // Transform field names to match our database schema
+    // Create new view with consistent field names
     const newView = {
       id: uuidv4(),
-      viewName: requestData.view_name,
-      workspaceId: requestData.workspace_id,
+      viewName: requestData.viewName,
+      workspaceId: requestData.workspaceId,
       amount: requestData.amount !== undefined ? requestData.amount : true,
       status: requestData.status !== undefined ? requestData.status : true,
-      paymentType: requestData.payment_type !== undefined ? requestData.payment_type : true,
+      paymentType: requestData.paymentType !== undefined ? requestData.paymentType : true,
       notes: requestData.notes !== undefined ? requestData.notes : false,
       filters: requestData.filters || [],
       sorting: requestData.sorting || [],
@@ -128,19 +128,19 @@ export const POST: RequestHandler = async ({ request, locals }) => {
         .values(newView)
         .returning();
       
-      // Transform back to frontend format
+      // Return consistent camelCase format
       const formattedView = {
         id: createdView.id,
-        view_name: createdView.viewName,
-        workspace_id: createdView.workspaceId,
+        viewName: createdView.viewName,
+        workspaceId: createdView.workspaceId,
         amount: createdView.amount,
         status: createdView.status,
-        payment_type: createdView.paymentType,
+        paymentType: createdView.paymentType,
         notes: createdView.notes,
         filters: createdView.filters || [],
         sorting: createdView.sorting || [],
-        created_at: createdView.createdAt,
-        updated_at: createdView.updatedAt
+        createdAt: createdView.createdAt,
+        updatedAt: createdView.updatedAt
       };
       
       return json({

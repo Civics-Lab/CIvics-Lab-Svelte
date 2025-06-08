@@ -1,4 +1,4 @@
-<!-- src/lib/components/ContactFormModal.svelte -->
+<!-- src/lib/components/BusinessFormModal.svelte -->
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { writable } from 'svelte/store';
@@ -6,16 +6,18 @@
   import { toastStore } from '$lib/stores/toastStore';
   import { workspaceStore } from '$lib/stores/workspaceStore';
   import LoadingSpinner from './LoadingSpinner.svelte';
-  import { createContact } from '$lib/services/contactService';
+  import { createBusiness } from '$lib/services/businessService';
   import { fetchFormOptions } from '$lib/services/optionsService';
   
-  // Import the same components used in ContactDetailsSheet
-  import ContactBasicInfo from './contacts/ContactDetailsSheet/ContactBasicInfo.svelte';
-  import ContactEmails from './contacts/ContactDetailsSheet/ContactEmails.svelte';
-  import ContactPhones from './contacts/ContactDetailsSheet/ContactPhones.svelte';
-  import ContactAddresses from './contacts/ContactDetailsSheet/ContactAddresses.svelte';
-  import ContactSocialMedia from './contacts/ContactDetailsSheet/ContactSocialMedia.svelte';
-  import ContactTags from './contacts/ContactDetailsSheet/ContactTags.svelte';
+  // Import entity-specific components
+  import BusinessBasicInfo from './businesses/BusinessDetailsSheet/BusinessBasicInfo.svelte';
+  import BusinessEmployees from './businesses/BusinessDetailsSheet/BusinessEmployees.svelte';
+  
+  // Import generic shared components
+  import GenericPhones from './shared/GenericPhones.svelte';
+  import GenericAddresses from './shared/GenericAddresses.svelte';
+  import GenericSocialMedia from './shared/GenericSocialMedia.svelte';
+  import GenericTags from './shared/GenericTags.svelte';
   
   export let isOpen = false;
   
@@ -23,18 +25,11 @@
   
   // Form state for basic info
   const formData = writable({
-    first_name: '',
-    middle_name: '',
-    last_name: '',
-    gender_id: '',
-    race_id: '',
-    pronouns: '',
-    vanid: '',
+    business_name: '',
     status: 'active' // Default to active
   });
   
   // Multi-item sections - using same structure as detail sheet
-  const emails = writable([{ email: '', status: 'active', isNew: true, isModified: false, isDeleted: false }]);
   const phoneNumbers = writable([{ phone_number: '', status: 'active', isNew: true, isModified: false, isDeleted: false }]);
   const addresses = writable([{ 
     street_address: '', 
@@ -56,46 +51,29 @@
     isDeleted: false
   }]);
   const tags = writable([]);
+  const employees = writable([]);
   
   // Loading and errors
   const isSubmitting = writable(false);
   const errors = writable<Record<string, string>>({});
   
   // Options for dropdowns
-  const genderOptions = writable<{id: string, gender: string}[]>([]);
-  const raceOptions = writable<{id: string, race: string}[]>([]);
   const stateOptions = writable<{id: string, name: string, abbreviation: string}[]>([]);
+  const contactOptions = writable<{id: string, name: string}[]>([]);
+  const isLoadingContacts = writable(false);
   
   function validateForm() {
     let valid = true;
     let formErrors: Record<string, string> = {};
     
     // Required fields
-    if (!$formData.first_name.trim()) {
-      formErrors.first_name = 'First name is required';
+    if (!$formData.business_name.trim()) {
+      formErrors.business_name = 'Business name is required';
       valid = false;
     }
-    
-    if (!$formData.last_name.trim()) {
-      formErrors.last_name = 'Last name is required';
-      valid = false;
-    }
-    
-    // Validate emails
-    const validEmails = $emails.filter(item => !item.isDeleted && item.email && item.email.trim());
-    validEmails.forEach((item, index) => {
-      if (!isValidEmail(item.email)) {
-        formErrors[`email_${index}`] = 'Please enter a valid email address';
-        valid = false;
-      }
-    });
     
     errors.set(formErrors);
     return valid;
-  }
-  
-  function isValidEmail(email: string) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   }
   
   async function fetchOptions() {
@@ -111,8 +89,6 @@
       console.log('Form options fetched:', options);
       
       // Set options in stores
-      genderOptions.set(options.genders || []);
-      raceOptions.set(options.races || []);
       stateOptions.set(options.states || []);
     } catch (error) {
       console.error('Error in fetchOptions:', error);
@@ -128,11 +104,11 @@
     
     console.log('Form data being submitted:', {
       formData: $formData,
-      emails: $emails,
       phoneNumbers: $phoneNumbers,
       addresses: $addresses,
       socialMedia: $socialMedia,
-      tags: $tags
+      tags: $tags,
+      employees: $employees
     });
     
     try {
@@ -140,25 +116,13 @@
         throw new Error('No workspace selected');
       }
       
-      // Prepare contact data for the API
-      const contactData = {
+      // Prepare business data for the API
+      const businessData = {
         workspaceId: $workspaceStore.currentWorkspace.id,
-        contact: {
-          firstName: $formData.first_name,
-          lastName: $formData.last_name,
-          middleName: $formData.middle_name,
-          genderId: $formData.gender_id,
-          raceId: $formData.race_id,
-          pronouns: $formData.pronouns,
-          vanid: $formData.vanid,
+        business: {
+          businessName: $formData.business_name,
           status: $formData.status
         },
-        emails: $emails
-          .filter(item => !item.isDeleted && item.email && item.email.trim())
-          .map(item => ({
-            email: item.email.trim(),
-            status: item.status
-          })),
         phoneNumbers: $phoneNumbers
           .filter(item => !item.isDeleted && item.phone_number && item.phone_number.trim())
           .map(item => ({
@@ -189,30 +153,38 @@
             service_type: item.service_type,
             status: item.status
           })),
+        employees: $employees
+          .filter(item => !item.isDeleted && item.contact_id)
+          .map(item => ({
+            contactId: item.contact_id,
+            contact_id: item.contact_id,
+            role: item.role || '',
+            status: item.status || 'active'
+          })),
         tags: $tags
       };
       
-      // Create contact using the API service
-      const contact = await createContact(contactData);
+      // Create business using the API service
+      const business = await createBusiness(businessData);
       
       // Success toast
-      toastStore.success(`Contact ${$formData.first_name} ${$formData.last_name} created successfully!`, 5000);
+      toastStore.success(`Business ${$formData.business_name} created successfully!`, 5000);
       
       resetForm();
       
-      // Emit success event with the new contact
-      dispatch('success', contact);
+      // Emit success event with the new business
+      dispatch('success', business);
       
       // Close modal
       handleClose();
       
     } catch (error) {
-      console.error('Error creating contact:', error);
+      console.error('Error creating business:', error);
       // Show a more specific error message if available
       if (error instanceof Error) {
-        toastStore.error(`Failed to create contact: ${error.message}`);
+        toastStore.error(`Failed to create business: ${error.message}`);
       } else {
-        toastStore.error('Failed to create contact');
+        toastStore.error('Failed to create business');
       }
     } finally {
       isSubmitting.set(false);
@@ -225,17 +197,10 @@
   
   function resetForm() {
     formData.set({
-      first_name: '',
-      middle_name: '',
-      last_name: '',
-      gender_id: '',
-      race_id: '',
-      pronouns: '',
-      vanid: '',
+      business_name: '',
       status: 'active'
     });
     
-    emails.set([{ email: '', status: 'active', isNew: true, isModified: false, isDeleted: false }]);
     phoneNumbers.set([{ phone_number: '', status: 'active', isNew: true, isModified: false, isDeleted: false }]);
     addresses.set([{ 
       street_address: '', 
@@ -257,6 +222,7 @@
       isDeleted: false
     }]);
     tags.set([]);
+    employees.set([]);
     errors.set({});
   }
   
@@ -269,6 +235,13 @@
     // Multi-item change handling if needed
   }
   
+  // Function to search contacts based on search term
+  async function searchContacts(searchTerm) {
+    // This would be called by the BusinessEmployees component
+    // Implementation would depend on your contact search service
+    console.log('Searching contacts for:', searchTerm);
+  }
+  
   // Fetch options when the component mounts and modal opens
   $: if (isOpen) {
     fetchOptions();
@@ -278,53 +251,58 @@
 
 <Modal 
   isOpen={isOpen} 
-  title="Add New Contact" 
+  title="Add New Business" 
   on:close={handleClose}
   maxWidth="max-w-4xl"
 >
   <form on:submit|preventDefault={handleSubmit} class="space-y-8">
     <!-- Basic Information Section -->
-    <ContactBasicInfo 
+    <BusinessBasicInfo 
       {formData}
-      {genderOptions}
-      {raceOptions}
       isSaving={$isSubmitting}
       on:change={handleFormDataChange}
     />
     
-    <!-- Email Addresses Section -->
-    <ContactEmails 
-      {emails}
-      isSaving={$isSubmitting}
-      on:change={handleMultiItemChange}
-    />
-    
     <!-- Phone Numbers Section -->
-    <ContactPhones 
-      phoneNumbers={phoneNumbers}
+    <GenericPhones 
+      {phoneNumbers}
       isSaving={$isSubmitting}
+      entityType="business"
       on:change={handleMultiItemChange}
     />
     
     <!-- Addresses Section -->
-    <ContactAddresses 
+    <GenericAddresses 
       {addresses}
       {stateOptions}
       isSaving={$isSubmitting}
+      entityType="business"
       on:change={handleMultiItemChange}
     />
     
     <!-- Social Media Section -->
-    <ContactSocialMedia 
-      socialMedia={socialMedia}
+    <GenericSocialMedia 
+      {socialMedia}
       isSaving={$isSubmitting}
+      entityType="business"
       on:change={handleMultiItemChange}
     />
     
+    <!-- Employees Section -->
+    <BusinessEmployees 
+      {employees}
+      {contactOptions}
+      isSaving={$isSubmitting}
+      isLoadingContacts={$isLoadingContacts}
+      on:change={handleMultiItemChange}
+      on:searchContacts={(e) => searchContacts(e.detail)}
+    />
+    
     <!-- Tags Section -->
-    <ContactTags 
+    <GenericTags 
       {tags}
       isSaving={$isSubmitting}
+      entityType="business"
       on:change={handleMultiItemChange}
     />
   </form>
@@ -332,7 +310,7 @@
   <svelte:fragment slot="footer">
     <button
       type="button"
-      class="px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+      class="px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
       on:click={handleClose}
       disabled={$isSubmitting}
     >
@@ -340,7 +318,7 @@
     </button>
     <button
       type="button"
-      class="ml-3 px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+      class="ml-3 px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
       on:click={handleSubmit}
       disabled={$isSubmitting}
     >
@@ -350,7 +328,7 @@
           <span class="ml-2">Saving...</span>
         </div>
       {:else}
-        Save Contact
+        Save Business
       {/if}
     </button>
   </svelte:fragment>

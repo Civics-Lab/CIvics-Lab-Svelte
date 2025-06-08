@@ -4,6 +4,75 @@ import { donations, contacts, businesses, userWorkspaces, donationTags } from '$
 import { eq, and } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 
+// Helper function to verify access to new donor (contact or business)
+async function verifyNewDonorAccess(userId: string, contactId?: string, businessId?: string) {
+  if (contactId && businessId) {
+    throw error(400, 'Cannot specify both contactId and businessId');
+  }
+  
+  if (contactId) {
+    const contact = await db
+      .select()
+      .from(contacts)
+      .where(eq(contacts.id, contactId))
+      .limit(1);
+    
+    if (!contact || contact.length === 0) {
+      throw error(404, 'Contact not found');
+    }
+    
+    // Check user access to workspace
+    const userWorkspace = await db
+      .select()
+      .from(userWorkspaces)
+      .where(
+        and(
+          eq(userWorkspaces.userId, userId),
+          eq(userWorkspaces.workspaceId, contact[0].workspaceId)
+        )
+      )
+      .limit(1);
+    
+    if (!userWorkspace || userWorkspace.length === 0) {
+      throw error(403, 'You do not have access to this contact');
+    }
+    
+    return { contact: contact[0] };
+  }
+  
+  if (businessId) {
+    const business = await db
+      .select()
+      .from(businesses)
+      .where(eq(businesses.id, businessId))
+      .limit(1);
+    
+    if (!business || business.length === 0) {
+      throw error(404, 'Business not found');
+    }
+    
+    // Check user access to workspace
+    const userWorkspace = await db
+      .select()
+      .from(userWorkspaces)
+      .where(
+        and(
+          eq(userWorkspaces.userId, userId),
+          eq(userWorkspaces.workspaceId, business[0].workspaceId)
+        )
+      )
+      .limit(1);
+    
+    if (!userWorkspace || userWorkspace.length === 0) {
+      throw error(403, 'You do not have access to this business');
+    }
+    
+    return { business: business[0] };
+  }
+  
+  return null;
+}
+
 // Helper function to check access to the donation
 async function checkDonationAccess(userId: string, donationId: string) {
   // Get donation
@@ -194,9 +263,35 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
       updateFields.notes = donationData.notes;
     }
     
-    // Handle potential changes to contact or business
-    // Note: We don't allow changing from contact to business or vice versa
-    // That would require deleting and creating a new donation
+    // ENHANCED: Handle donor changes (contact/business transfer)
+    const newContactId = donationData.contactId;
+    const newBusinessId = donationData.businessId;
+    
+    // Check if donor is changing
+    const isDonorChanging = (
+      (newContactId !== undefined && newContactId !== donation.contactId) ||
+      (newBusinessId !== undefined && newBusinessId !== donation.businessId)
+    );
+    
+    if (isDonorChanging) {
+      // Verify access to new donor if specified
+      if (newContactId || newBusinessId) {
+        await verifyNewDonorAccess(user.id, newContactId, newBusinessId);
+      }
+      
+      // Update donor fields
+      if (newContactId !== undefined) {
+        updateFields.contactId = newContactId;
+        updateFields.businessId = null; // Clear business if setting contact
+      } else if (newBusinessId !== undefined) {
+        updateFields.businessId = newBusinessId;
+        updateFields.contactId = null; // Clear contact if setting business
+      } else {
+        // Both are null - remove donor association
+        updateFields.contactId = null;
+        updateFields.businessId = null;
+      }
+    }
     
     // Only update if there's data to update
     if (Object.keys(updateFields).length === 0 && !tags) {

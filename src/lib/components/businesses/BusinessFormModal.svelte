@@ -8,49 +8,53 @@
     import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
     import type { TypedSupabaseClient } from '$lib/types/supabase';
     import { createBusiness } from '$lib/services/businessService';
-    import { fetchStateOptions, fetchContactOptions } from '$lib/services/formOptionsService';
+    import { fetchFormOptions } from '$lib/services/optionsService';
+    import { fetchContactOptions } from '$lib/services/formOptionsService';
     
-    // Import modular form components
-    import BusinessBasicInfo from './form/BusinessBasicInfo.svelte';
-    import BusinessPhones from './form/BusinessPhones.svelte';
-    import BusinessAddresses from './form/BusinessAddresses.svelte';
-    import BusinessSocialMedia from './form/BusinessSocialMedia.svelte';
-    import BusinessEmployees from './form/BusinessEmployees.svelte';
-    import BusinessTags from './form/BusinessTags.svelte';
+    // Import entity-specific components
+    import BusinessBasicInfo from './BusinessDetailsSheet/BusinessBasicInfo.svelte';
+    import BusinessEmployees from './BusinessDetailsSheet/BusinessEmployees.svelte';
+    
+    // Import generic shared components
+    import GenericPhones from '$lib/components/shared/GenericPhones.svelte';
+    import GenericAddresses from '$lib/components/shared/GenericAddresses.svelte';
+    import GenericSocialMedia from '$lib/components/shared/GenericSocialMedia.svelte';
+    import GenericTags from '$lib/components/shared/GenericTags.svelte';
     
     export let isOpen = false;
     export let supabase: TypedSupabaseClient;
     
     const dispatch = createEventDispatcher();
     
-    // Form state
+    // Form state for basic info
     const formData = writable({
         business_name: '',
-        status: 'active',
-        phones: [{ phone_number: '', status: 'active' }],
-        addresses: [{
-          street_address: '',
-          secondary_street_address: '',
-          city: '',
-          state_id: '',
-          zip_code: '',
-          status: 'active'
-        }],
-        socialMedia: [{ 
-          social_media_account: '', 
-          service_type: 'facebook', 
-          status: 'active' 
-        }]
+        status: 'active'
     });
     
-    // Employees state
-    const employees = writable([]);
-    
-    // Tags state
+    // Multi-item sections - using same structure as detail sheet
+    const phoneNumbers = writable([{ phone_number: '', status: 'active', isNew: true, isModified: false, isDeleted: false }]);
+    const addresses = writable([{ 
+        street_address: '', 
+        secondary_street_address: '', 
+        city: '', 
+        state_id: '', 
+        zip_code: '', 
+        status: 'active',
+        isNew: true,
+        isModified: false,
+        isDeleted: false
+    }]);
+    const socialMedia = writable([{ 
+        social_media_account: '', 
+        service_type: 'facebook', 
+        status: 'active',
+        isNew: true,
+        isModified: false,
+        isDeleted: false
+    }]);
     const tags = writable([]);
-    const tagInput = writable('');
-    const existingTags = writable<string[]>([]);
-    const filteredTags = writable<string[]>([]);
+    const employees = writable([]);
     
     // Loading and errors
     const isSubmitting = writable(false);
@@ -59,6 +63,7 @@
     // Options for dropdowns
     const stateOptions = writable<{id: string, name: string, abbreviation: string}[]>([]);
     const contactOptions = writable<{id: string, name: string}[]>([]);
+    const isLoadingContacts = writable(false);
     
     function validateForm() {
         let valid = true;
@@ -68,58 +73,6 @@
         if (!$formData.business_name.trim()) {
             formErrors.business_name = 'Business name is required';
             valid = false;
-        }
-        
-        // Validate addresses that have any data
-        $formData.addresses.forEach((address, index) => {
-            const hasAnyAddressField = address.street_address || address.city || address.state_id || address.zip_code;
-            
-            if (hasAnyAddressField) {
-              if (!address.street_address.trim()) {
-                formErrors[`address_${index}_street`] = 'Street address is required';
-                valid = false;
-              }
-            
-              if (!address.city.trim()) {
-                formErrors[`address_${index}_city`] = 'City is required';
-                valid = false;
-              }
-            
-              if (!address.state_id) {
-                formErrors[`address_${index}_state`] = 'State is required';
-                valid = false;
-              }
-            
-              if (!address.zip_code.trim()) {
-                  formErrors[`address_${index}_zip`] = 'ZIP code is required';
-                  valid = false;
-              }
-              
-              // Ensure zip codes are in a valid format
-              if (address.zip_code.trim() && !/^\d{5}(-\d{4})?$/.test(address.zip_code.trim())) {
-                  formErrors[`address_${index}_zip_format`] = 'ZIP code should be in 5-digit or 5+4 format';
-                  valid = false;
-              }
-            }
-        });
-      
-        // Ensure at least one phone has content if any phone field is filled
-        const hasAnyPhoneData = $formData.phones.some(p => p.phone_number.trim());
-        if (hasAnyPhoneData) {
-            // Check if any phones are incomplete
-            const allPhonesValid = $formData.phones.every(p => p.phone_number.trim() || p.phone_number === '');
-            if (!allPhonesValid) {
-              formErrors.phone_general = 'Please complete or remove partial phone entries';
-              valid = false;
-            }
-            
-            // Check phone number formats
-            $formData.phones.forEach((phone, index) => {
-              if (phone.phone_number.trim() && !/^\+?[1-9]\d{1,14}$/.test(phone.phone_number.trim())) {
-                formErrors[`phone_${index}_format`] = 'Phone should be in international format (e.g., +12345678901)';
-                valid = false;
-              }
-            });
         }
         
         // Ensure we have workspace_id
@@ -133,45 +86,49 @@
     }
     
     async function fetchOptions() {
-      try {
-        console.log("Fetching options for business form");
-        
-        // Use the form options service to fetch states
-        const states = await fetchStateOptions();
-        stateOptions.set(states);
-        console.log("Fetched states:", states.length);
-        
-        // Sample tags (we can implement a tag API endpoint later)
-        const hardcodedTags = ["retail", "tech", "healthcare", "education", "nonprofit", "local", "national"];
-        existingTags.set(hardcodedTags);
-        
-        // For contacts, we'll fetch them when the user starts typing in the employee field
-        // Instead of prefetching all contacts
-        
-      } catch (error) {
-        console.error('Error fetching form options:', error);
-        toastStore.error('Failed to load form options');
-      }
+        try {
+            if (!$workspaceStore.currentWorkspace) {
+                throw new Error('No workspace selected');
+            }
+            
+            // Fetch all form options at once
+            console.log('Fetching all form options...');
+            const options = await fetchFormOptions($workspaceStore.currentWorkspace.id);
+            
+            console.log('Form options fetched:', options);
+            
+            // Set options in stores
+            stateOptions.set(options.states || []);
+        } catch (error) {
+            console.error('Error in fetchOptions:', error);
+            toastStore.error('Failed to load form options. Some dropdowns may not be populated.');
+        }
     }
     
     // Function to fetch contacts based on search term
     async function searchContacts(searchTerm: string) {
-      if (!$workspaceStore.currentWorkspace?.id) {
-        console.error('No workspace selected');
-        return;
-      }
-      
-      try {
-        if (searchTerm.trim().length > 1) {
-          const contacts = await fetchContactOptions($workspaceStore.currentWorkspace.id, searchTerm);
-          contactOptions.set(contacts);
-          console.log("Fetched contacts for search:", searchTerm, contacts.length);
-        } else {
-          contactOptions.set([]);
+        if (!$workspaceStore.currentWorkspace?.id) {
+            console.error('No workspace selected');
+            isLoadingContacts.set(false);
+            return;
         }
-      } catch (error) {
-        console.error('Error searching contacts:', error);
-      }
+        
+        try {
+            if (searchTerm.trim().length > 1) {
+                isLoadingContacts.set(true);
+                const contacts = await fetchContactOptions($workspaceStore.currentWorkspace.id, searchTerm);
+                contactOptions.set(contacts);
+                console.log("Fetched contacts for search:", searchTerm, contacts.length);
+                isLoadingContacts.set(false);
+            } else {
+                contactOptions.set([]);
+                isLoadingContacts.set(false);
+            }
+        } catch (error) {
+            console.error('Error searching contacts:', error);
+            toastStore.error('Failed to search contacts');
+            isLoadingContacts.set(false);
+        }
     }
     
     async function handleSubmit() {
@@ -180,42 +137,56 @@
         isSubmitting.set(true);
         errors.set({});
         
+        console.log('Form data being submitted:', {
+            formData: $formData,
+            phoneNumbers: $phoneNumbers,
+            addresses: $addresses,
+            socialMedia: $socialMedia,
+            tags: $tags,
+            employees: $employees
+        });
+        
         try {
-            // Prepare the business data for the API
+            if (!$workspaceStore.currentWorkspace?.id) {
+                throw new Error('No workspace selected');
+            }
+            
+            // Prepare business data for the API
             const businessData = {
-                workspaceId: $workspaceStore.currentWorkspace?.id,
+                workspaceId: $workspaceStore.currentWorkspace.id,
                 business: {
                     business_name: $formData.business_name,
                     status: $formData.status
                 },
-                phoneNumbers: $formData.phones
-                    .filter(p => p.phone_number.trim())
-                    .map(phone => ({
-                        phone_number: phone.phone_number,
-                        status: phone.status || 'active'
+                phoneNumbers: $phoneNumbers
+                    .filter(item => !item.isDeleted && item.phone_number && item.phone_number.trim())
+                    .map(item => ({
+                        phone_number: item.phone_number.trim(),
+                        status: item.status || 'active'
                     })),
-                addresses: $formData.addresses
-                    .filter(addr => addr.street_address && addr.city && addr.state_id && addr.zip_code)
-                    .map(address => ({
-                        street_address: address.street_address,
-                        secondary_street_address: address.secondary_street_address || '',
-                        city: address.city,
-                        state_id: address.state_id,
-                        zip_code: address.zip_code,
-                        status: address.status || 'active'
+                addresses: $addresses
+                    .filter(addr => !addr.isDeleted && addr.street_address && addr.street_address.trim() && addr.city && addr.city.trim())
+                    .map(addr => ({
+                        street_address: addr.street_address.trim(),
+                        secondary_street_address: addr.secondary_street_address?.trim() || '',
+                        city: addr.city.trim(),
+                        state_id: addr.state_id,
+                        zip_code: addr.zip_code?.trim() || '',
+                        status: addr.status || 'active'
                     })),
-                socialMedia: $formData.socialMedia
-                    .filter(s => s.social_media_account.trim())
-                    .map(social => ({
-                        social_media_account: social.social_media_account,
-                        service_type: social.service_type,
-                        status: social.status || 'active'
+                socialMedia: $socialMedia
+                    .filter(item => !item.isDeleted && item.social_media_account && item.social_media_account.trim())
+                    .map(item => ({
+                        social_media_account: item.social_media_account.trim(),
+                        service_type: item.service_type,
+                        status: item.status || 'active'
                     })),
                 employees: $employees
-                    .filter(e => e.contact_id)
-                    .map(employee => ({
-                        contact_id: employee.contact_id,
-                        status: employee.status || 'active'
+                    .filter(item => !item.isDeleted && item.contact_id)
+                    .map(item => ({
+                        contact_id: item.contact_id,
+                        status: item.status || 'active',
+                        role: item.role || ''
                     })),
                 tags: $tags
             };
@@ -244,142 +215,151 @@
     }
     
     function handleClose() {
-      dispatch('close');
+        dispatch('close');
     }
     
     function resetForm() {
         formData.set({
             business_name: '',
-            status: 'active',
-            phones: [{ phone_number: '', status: 'active' }],
-            addresses: [{
-              street_address: '',
-              secondary_street_address: '',
-              city: '',
-              state_id: '',
-              zip_code: '',
-              status: 'active'
-            }],
-            socialMedia: [{ 
-              social_media_account: '', 
-              service_type: 'facebook', 
-              status: 'active' 
-            }]
+            status: 'active'
         });
-        employees.set([]);
+        
+        phoneNumbers.set([{ phone_number: '', status: 'active', isNew: true, isModified: false, isDeleted: false }]);
+        addresses.set([{ 
+            street_address: '', 
+            secondary_street_address: '', 
+            city: '', 
+            state_id: '', 
+            zip_code: '', 
+            status: 'active',
+            isNew: true,
+            isModified: false,
+            isDeleted: false
+        }]);
+        socialMedia.set([{ 
+            social_media_account: '', 
+            service_type: 'facebook', 
+            status: 'active',
+            isNew: true,
+            isModified: false,
+            isDeleted: false
+        }]);
         tags.set([]);
-        tagInput.set('');
-        filteredTags.set([]);
+        employees.set([]);
         errors.set({});
     }
     
-    // Tag input change handler to filter existing tags
-    function handleTagInputChange() {
-      if ($tagInput.trim()) {
-        filteredTags.set(
-          $existingTags.filter(tag => 
-            tag.toLowerCase().includes($tagInput.toLowerCase()) && 
-            !$tags.includes(tag)
-          ).slice(0, 5)
-        );
-      } else {
-        filteredTags.set([]);
-      }
+    // Event handlers for child components
+    function handleFormDataChange() {
+        // Form data change handling if needed
+    }
+    
+    function handleMultiItemChange() {
+        // Multi-item change handling if needed
     }
     
     // Fetch options when the component mounts and modal opens
     $: if (isOpen) {
-      fetchOptions();
-      resetForm();
-    }
-    
-    // Watch for tag input changes
-    $: if ($tagInput !== undefined) {
-      handleTagInputChange();
+        fetchOptions();
+        resetForm();
     }
     
     // Make sure we fetch options on mount too
     onMount(() => {
-      if (isOpen) {
-        fetchOptions();
-      }
+        if (isOpen) {
+            fetchOptions();
+        }
     });
 </script>
 
-<Modal {isOpen} title="Add New Business" on:close={handleClose}>
-  <form>
-    <BusinessBasicInfo
-      {formData}
-      {errors}
-      {isSubmitting}
-    />
+<Modal 
+    {isOpen} 
+    title="Add New Business" 
+    on:close={handleClose}
+    maxWidth="max-w-4xl"
+>
+    <form on:submit|preventDefault={handleSubmit} class="space-y-8">
+        <!-- Basic Information Section -->
+        <BusinessBasicInfo 
+            {formData}
+            isSaving={$isSubmitting}
+            on:change={handleFormDataChange}
+        />
+        
+        {#if $errors.workspace}
+            <div class="rounded-md border border-red-200 bg-red-50 p-4">
+                <p class="text-sm text-red-700">{$errors.workspace}</p>
+            </div>
+        {/if}
+        
+        <!-- Phone Numbers Section -->
+        <GenericPhones 
+            {phoneNumbers}
+            isSaving={$isSubmitting}
+            entityType="business"
+            on:change={handleMultiItemChange}
+        />
+        
+        <!-- Addresses Section -->
+        <GenericAddresses 
+            {addresses}
+            {stateOptions}
+            isSaving={$isSubmitting}
+            entityType="business"
+            on:change={handleMultiItemChange}
+        />
+        
+        <!-- Social Media Section -->
+        <GenericSocialMedia 
+            {socialMedia}
+            isSaving={$isSubmitting}
+            entityType="business"
+            on:change={handleMultiItemChange}
+        />
+        
+        <!-- Employees Section -->
+        <BusinessEmployees 
+            {employees}
+            {contactOptions}
+            {supabase}
+            isSaving={$isSubmitting}
+            isLoadingContacts={$isLoadingContacts}
+            on:change={handleMultiItemChange}
+            on:searchContacts={(e) => searchContacts(e.detail)}
+        />
+        
+        <!-- Tags Section -->
+        <GenericTags 
+            {tags}
+            isSaving={$isSubmitting}
+            entityType="business"
+            on:change={handleMultiItemChange}
+        />
+    </form>
     
-    {#if $errors.workspace}
-      <div class="mt-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-md">
-        <p>{$errors.workspace}</p>
-      </div>
-    {/if}
-    
-    <BusinessPhones
-      {formData}
-      {errors}
-      {isSubmitting}
-    />
-    
-    <BusinessAddresses
-      {formData}
-      {errors}
-      {isSubmitting}
-      {stateOptions}
-    />
-    
-    <BusinessSocialMedia
-      {formData}
-      {errors}
-      {isSubmitting}
-    />
-    
-    <BusinessEmployees
-      {employees}
-      {errors}
-      {isSubmitting}
-      {contactOptions}
-      on:searchContacts={(e) => searchContacts(e.detail)}
-    />
-    
-    <BusinessTags
-      {tags}
-      {tagInput}
-      {existingTags}
-      {filteredTags}
-      {errors}
-      {isSubmitting}
-    />
-  </form>
-  
-  <svelte:fragment slot="footer">
-    <button
-      type="button"
-      class="px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-      on:click={handleClose}
-      disabled={$isSubmitting}
-    >
-      Cancel
-    </button>
-    <button
-      type="button"
-      class="px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
-      on:click={handleSubmit}
-      disabled={$isSubmitting}
-    >
-      {#if $isSubmitting}
-        <div class="flex items-center">
-          <LoadingSpinner size="sm" color="white" />
-          <span class="ml-2">Saving...</span>
-        </div>
-      {:else}
-        Save Business
-      {/if}
-    </button>
-  </svelte:fragment>
+    <svelte:fragment slot="footer">
+        <button
+            type="button"
+            class="px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+            on:click={handleClose}
+            disabled={$isSubmitting}
+        >
+            Cancel
+        </button>
+        <button
+            type="button"
+            class="px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
+            on:click={handleSubmit}
+            disabled={$isSubmitting}
+        >
+            {#if $isSubmitting}
+                <div class="flex items-center">
+                    <LoadingSpinner size="sm" color="white" />
+                    <span class="ml-2">Saving...</span>
+                </div>
+            {:else}
+                Save Business
+            {/if}
+        </button>
+    </svelte:fragment>
 </Modal>

@@ -172,11 +172,14 @@
       if (JSON.stringify($formData) !== JSON.stringify($originalData)) {
         // Prepare the update data in the format the API expects
         const donationData = {
-          amount: Number($formData.amount) || 0,
-          status: $formData.status || 'promise',
-          paymentType: $formData.payment_type || '',
-          notes: $formData.notes || ''
-        };
+        amount: Number($formData.amount) || 0,
+        status: $formData.status || 'promise',
+        paymentType: $formData.payment_type || '',
+        notes: $formData.notes || '',
+          // ENHANCED: Include donor changes
+        contactId: $formData.contact_id,
+        businessId: $formData.business_id
+      };
         
         // Call the API to update the donation
         const response = await fetch(`/api/donations/${donationId}`, {
@@ -184,80 +187,36 @@
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ donationData })
+          body: JSON.stringify({ 
+            donationData,
+            tags: $tags
+          })
         });
         
         if (!response.ok) {
           const errorData = await response.json();
           throw new Error(errorData.message || 'Failed to update donation');
         }
-      }
-      
-      // Handle tags updates using API endpoints
-      try {
-        // First get existing tags
-        const tagsResponse = await fetch(`/api/donation-tags?donation_id=${donationId}`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
         
-        let existingTags = [];
-        if (!tagsResponse.ok) {
-          console.warn('Failed to fetch existing tags, will continue with tag updates anyway');
+        const responseData = await response.json();
+        const updatedDonation = responseData.donation;
+        
+        // Update the donor info based on the response
+        if (updatedDonation.contactId && updatedDonation.contact) {
+          donor.set({
+            type: 'contact',
+            id: updatedDonation.contactId,
+            name: `${updatedDonation.contact.firstName} ${updatedDonation.contact.lastName || ''}`.trim()
+          });
+        } else if (updatedDonation.businessId && updatedDonation.business) {
+          donor.set({
+            type: 'business',
+            id: updatedDonation.businessId,
+            name: updatedDonation.business.businessName
+          });
         } else {
-          const tagsData = await tagsResponse.json();
-          existingTags = tagsData.tags || [];
-          
-          // Delete tags that are no longer in the current tags list
-          for (const existingTag of existingTags) {
-            if (!$tags.includes(existingTag.tag)) {
-              try {
-                const deleteResponse = await fetch(`/api/donation-tags/${existingTag.id}`, {
-                  method: 'DELETE',
-                  headers: {
-                    'Content-Type': 'application/json'
-                  }
-                });
-                
-                if (!deleteResponse.ok) {
-                  console.warn('Failed to delete tag:', existingTag.tag);
-                }
-              } catch (deleteErr) {
-                console.warn('Error deleting tag:', existingTag.tag, deleteErr);
-              }
-            }
-          }
+          donor.set(null);
         }
-        
-        // Add new tags
-        const existingTagValues = existingTags.map(t => t.tag);
-        const newTags = $tags.filter(tag => !existingTagValues.includes(tag));
-        
-        for (const newTag of newTags) {
-          try {
-            const createResponse = await fetch('/api/donation-tags', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                donationId: donationId,
-                tag: newTag
-              })
-            });
-            
-            if (!createResponse.ok) {
-              console.warn('Failed to create tag:', newTag);
-            }
-          } catch (createErr) {
-            console.warn('Error creating tag:', newTag, createErr);
-          }
-        }
-      } catch (tagsErr) {
-        console.warn('Error handling tags:', tagsErr);
-        // Continue with the save operation even if tag updates fail
       }
       
       // Success notification

@@ -1,24 +1,70 @@
 import { json, error } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { contacts, userWorkspaces, contactEmails, contactPhoneNumbers, contactAddresses, contactSocialMediaAccounts, contactTags, zipCodes } from '$lib/db/drizzle/schema';
-import { eq, and, inArray } from 'drizzle-orm';
+import { eq, and, inArray, or, ilike } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { verifyWorkspaceAccess } from '$lib/utils/auth';
 
-// GET /api/contacts - Get all contacts for the current user's workspace
+// GET /api/contacts - Get all contacts for the current user's workspace (with optional search)
 export const GET: RequestHandler = async ({ locals, url }) => {
   try {
     // Get workspace ID from query parameter
     const workspaceId = url.searchParams.get('workspace_id');
+    const searchQuery = url.searchParams.get('search');
+    const limitParam = url.searchParams.get('limit');
+    const limit = limitParam ? parseInt(limitParam, 10) : 100; // Default limit of 100
     
     // Verify workspace access
     await verifyWorkspaceAccess(locals.user, workspaceId);
     
-    // Get all contacts for the workspace
-    const contactsList = await db
+    // Build the query
+    let query = db
       .select()
       .from(contacts)
       .where(eq(contacts.workspaceId, workspaceId));
+    
+    // Add search functionality if search query is provided
+    if (searchQuery && searchQuery.trim()) {
+      const searchTerm = `%${searchQuery.trim()}%`;
+      query = query.where(
+        and(
+          eq(contacts.workspaceId, workspaceId),
+          or(
+            ilike(contacts.firstName, searchTerm),
+            ilike(contacts.lastName, searchTerm),
+            ilike(contacts.middleName, searchTerm)
+          )
+        )
+      );
+    }
+    
+    // Apply limit
+    query = query.limit(limit);
+    
+    // Execute the query
+    const contactsList = await query;
+    
+    // For search results, return minimal data for performance
+    if (searchQuery && searchQuery.trim()) {
+      // For search, return basic contact info plus emails for display
+      const enhancedContacts = await Promise.all(
+        contactsList.map(async (contact) => {
+          // Get only the first email for search results
+          const emails = await db
+            .select()
+            .from(contactEmails)
+            .where(eq(contactEmails.contactId, contact.id))
+            .limit(1);
+          
+          return {
+            ...contact,
+            emails: emails || []
+          };
+        })
+      );
+      
+      return json({ contacts: enhancedContacts });
+    }
     
     // Fetch related data for each contact
     const enhancedContacts = await Promise.all(

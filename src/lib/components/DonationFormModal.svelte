@@ -5,7 +5,7 @@
     import type { TypedSupabaseClient } from '$lib/types/supabase';
     import type { Business, Contact } from '$lib/types/supabase';
     import LoadingSpinner from './LoadingSpinner.svelte';
-    import BusinessFormModal from './BusinessFormModal.svelte';
+    import BusinessFormModal from './businesses/BusinessFormModal.svelte';
     import ContactFormModal from './ContactFormModal.svelte';
     import { onMount } from 'svelte';
     import { createEventDispatcher } from 'svelte';

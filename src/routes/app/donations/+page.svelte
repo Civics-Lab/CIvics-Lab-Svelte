@@ -65,9 +65,8 @@
     { id: 'amount', label: 'Amount' },
     { id: 'status', label: 'Status' },
     { id: 'paymentType', label: 'Payment Type' },
-    { id: 'notes', label: 'Notes' },
-    { id: 'donorName', label: 'Donor Name' },
-    { id: 'donorType', label: 'Donor Type' }
+    { id: 'notes', label: 'Notes' }
+    // Note: donorName and donorType are computed fields from the API, not database fields
   ]);
   
   // Filters state
@@ -272,8 +271,6 @@
         status: true,
         paymentType: true,
         notes: false,
-        donorName: true,
-        donorType: false,
         filters: [],
         sorting: []
       };
@@ -320,8 +317,6 @@
         status: true,
         paymentType: true,
         notes: true,
-        donorName: true,
-        donorType: true,
         filters: [],
         sorting: []
       };
