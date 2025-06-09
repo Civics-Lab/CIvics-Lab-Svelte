@@ -8,6 +8,7 @@ interface WorkspaceState {
   workspaces: Workspace[];
   isLoading: boolean;
   error: string | null;
+  isGlobalSuperAdmin: boolean;
 }
 
 // Initialize the workspace store with default values
@@ -15,7 +16,8 @@ const initialState: WorkspaceState = {
   currentWorkspace: null,
   workspaces: [],
   isLoading: false,
-  error: null
+  error: null,
+  isGlobalSuperAdmin: false
 };
 
 function createWorkspaceStore() {
@@ -207,6 +209,7 @@ function createWorkspaceStore() {
         }
         
         const fetchedWorkspaces = response.workspaces || [];
+        const isGlobalSuperAdmin = response.isGlobalSuperAdmin || false;
         
         // Get previously selected workspace ID from localStorage
         const savedWorkspaceId = typeof window !== 'undefined' 
@@ -281,7 +284,8 @@ function createWorkspaceStore() {
             ...state,
             workspaces: fetchedWorkspaces,
             currentWorkspace,
-            isLoading: false
+            isLoading: false,
+            isGlobalSuperAdmin: isGlobalSuperAdmin
           };
         });
       } catch (error) {

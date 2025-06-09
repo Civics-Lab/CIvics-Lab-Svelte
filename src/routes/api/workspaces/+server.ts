@@ -2,6 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { workspaces, userWorkspaces, users } from '$lib/db/drizzle/schema';
 import { eq, inArray } from 'drizzle-orm';
+import { isGlobalSuperAdmin } from '$lib/server/auth';
 import type { RequestHandler } from './$types';
 
 // Handle creating a default workspace for a user with no workspaces
@@ -65,8 +66,35 @@ export const GET: RequestHandler = async ({ locals }) => {
   console.log('API: Getting workspaces for user:', user.id);
   
   try {
-    // First, get all workspace IDs the user has access to
-    console.log('Querying user_workspaces for user:', user.id);
+    // First, check if the user is a global Super Admin
+    const isSuperAdmin = await isGlobalSuperAdmin(user.id);
+    console.log(`User ${user.id} is global super admin:`, isSuperAdmin);
+    
+    if (isSuperAdmin) {
+      // Global Super Admins see ALL workspaces
+      console.log('Fetching all workspaces for global super admin');
+      const allWorkspaces = await db
+        .select()
+        .from(workspaces);
+      
+      console.log('Found workspaces for global super admin:', allWorkspaces.map(ws => ({ id: ws.id, name: ws.name })));
+      
+      // Add userRole as 'Super Admin' for all workspaces for global super admins
+      const enrichedWorkspaces = allWorkspaces.map(workspace => ({
+        ...workspace,
+        userRole: 'Super Admin' as const
+      }));
+      
+      console.log('Returning all workspaces with Super Admin role for global super admin');
+      
+      return json({ 
+        workspaces: enrichedWorkspaces,
+        isGlobalSuperAdmin: true
+      });
+    }
+    
+    // Regular users - get workspaces they are explicitly members of
+    console.log('Querying user_workspaces for regular user:', user.id);
     const userWorkspaceData = await db
       .select({ workspaceId: userWorkspaces.workspaceId, role: userWorkspaces.role })
       .from(userWorkspaces)
@@ -78,7 +106,10 @@ export const GET: RequestHandler = async ({ locals }) => {
     if (!userWorkspaceData.length) {
       console.log('No workspaces found for user:', user.id);
       // Just return an empty array, let the client handle the empty state
-      return json({ workspaces: [] });
+      return json({ 
+        workspaces: [],
+        isGlobalSuperAdmin: false
+      });
     }
     
     // Extract workspace IDs
@@ -107,11 +138,15 @@ export const GET: RequestHandler = async ({ locals }) => {
           workspaces: [{
             ...defaultWorkspace,
             userRole: 'Super Admin'
-          }]
+          }],
+          isGlobalSuperAdmin: false
         });
       } catch (createErr) {
         console.error('Failed to create default workspace:', createErr);
-        return json({ workspaces: [] });
+        return json({ 
+          workspaces: [],
+          isGlobalSuperAdmin: false
+        });
       }
     }
     
@@ -124,10 +159,13 @@ export const GET: RequestHandler = async ({ locals }) => {
       };
     });
     
-    console.log('Returning enriched workspaces:', 
+    console.log('Returning enriched workspaces for regular user:', 
       enrichedWorkspaces.map(ws => ({ id: ws.id, name: ws.name, role: ws.userRole })));
     
-    return json({ workspaces: enrichedWorkspaces });
+    return json({ 
+      workspaces: enrichedWorkspaces,
+      isGlobalSuperAdmin: false
+    });
   } catch (err) {
     console.error('Error fetching workspaces:', err);
     if (err instanceof Error) {
@@ -212,6 +250,9 @@ export const OPTIONS: RequestHandler = async ({ locals }) => {
   try {
     console.log(`DEBUG: Getting workspaces for user ${user.id}`);
     
+    // Check if user is global super admin
+    const isSuperAdmin = await isGlobalSuperAdmin(user.id);
+    
     // Get all workspaces the user has access to
     const userWorkspacesData = await db
       .select({
@@ -233,7 +274,10 @@ export const OPTIONS: RequestHandler = async ({ locals }) => {
     
     console.log('User workspaces:', debugData);
     
-    return json({ debug: debugData });
+    return json({ 
+      debug: debugData,
+      isGlobalSuperAdmin: isSuperAdmin 
+    });
   } catch (err) {
     console.error('Error in debug endpoint:', err);
     

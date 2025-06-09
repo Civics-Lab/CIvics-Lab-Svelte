@@ -19,15 +19,9 @@
     }
   });
   
-  // Function to check if the user has super admin role in any workspace
-  function isSuperAdmin(): boolean {
-    if (!$workspaceStore.workspaces || $workspaceStore.workspaces.length === 0) {
-      return false;
-    }
-    
-    return $workspaceStore.workspaces.some(workspace => 
-      workspace.userRole === 'Super Admin'
-    );
+  // Function to check if the user is a Global Super Admin
+  function isGlobalSuperAdmin(): boolean {
+    return $workspaceStore.isGlobalSuperAdmin || false;
   }
   
   function togglePopover() {
@@ -152,8 +146,8 @@
         {/each}
       {/if}
       
-      <!-- Create workspace button - only show for Super Admin role -->
-      {#if isSuperAdmin()}
+      <!-- Create workspace button - only show for Global Super Admins -->
+      {#if isGlobalSuperAdmin()}
         <div class="border-t border-slate-200 mt-1 pt-1">
           <button
             class="relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-slate-100 focus:bg-slate-100 text-slate-700"

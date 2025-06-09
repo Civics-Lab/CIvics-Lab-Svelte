@@ -84,6 +84,11 @@
     return name.trim().charAt(0).toUpperCase();
   }
   
+  // Function to check if the user is a Global Super Admin
+  function isGlobalSuperAdmin(): boolean {
+    return $workspaceStore.isGlobalSuperAdmin || false;
+  }
+  
   // Close popover when clicking outside
   function handleClickOutside() {
     isOpen.set(false);
@@ -190,18 +195,20 @@
       {/if}
     </div>
     
-    <!-- Create workspace button (sticky to bottom) -->
-    <div class="border-t border-gray-200 bg-white sticky bottom-0">
-      <button
-        class="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-slate-100 flex items-center font-medium"
-        on:click={openCreateWorkspaceModal}
-        role="menuitem"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-        </svg>
-        Create Workspace
-      </button>
-    </div>
+    <!-- Create workspace button - only show for Global Super Admins -->
+    {#if isGlobalSuperAdmin()}
+      <div class="border-t border-gray-200 bg-white sticky bottom-0">
+        <button
+          class="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-slate-100 flex items-center font-medium"
+          on:click={openCreateWorkspaceModal}
+          role="menuitem"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          </svg>
+          Create Workspace
+        </button>
+      </div>
+    {/if}
   </div>
 {/if}

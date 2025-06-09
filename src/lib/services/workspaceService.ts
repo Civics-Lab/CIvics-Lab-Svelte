@@ -176,7 +176,7 @@ export async function createOrUpdateWorkspace(updates: { id?: string, name: stri
 /**
  * Fetch all workspaces for the current user
  */
-export async function fetchUserWorkspaces(): Promise<{ workspaces: Workspace[], error?: string }> {
+export async function fetchUserWorkspaces(): Promise<{ workspaces: Workspace[], isGlobalSuperAdmin?: boolean, error?: string }> {
   try {
     const response = await fetch('/api/workspaces');
     
@@ -187,7 +187,7 @@ export async function fetchUserWorkspaces(): Promise<{ workspaces: Workspace[], 
     }
     
     const data = await response.json();
-    return data; // Should contain workspaces array and possibly error
+    return data; // Should contain workspaces array, isGlobalSuperAdmin flag, and possibly error
   } catch (error) {
     console.error('Error in fetchUserWorkspaces:', error);
     throw error;

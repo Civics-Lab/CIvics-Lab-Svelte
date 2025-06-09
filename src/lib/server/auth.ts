@@ -9,7 +9,9 @@ import type { WorkspaceRole } from '$lib/types/supabase';
 export async function isGlobalSuperAdmin(userId: string): Promise<boolean> {
   try {
     const userResult = await db
-      .select({ isGlobalSuperAdmin: users.isGlobalSuperAdmin })
+      .select({ 
+        isGlobalSuperAdmin: users.isGlobalSuperAdmin
+      })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
