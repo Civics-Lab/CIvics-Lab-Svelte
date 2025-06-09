@@ -27,6 +27,7 @@
   import BusinessesFilterSortBar from '$lib/components/businesses/BusinessesFilterSortBar.svelte';
   import BusinessesDataGrid from '$lib/components/businesses/BusinessesDataGrid.svelte';
   import BusinessesViewModals from '$lib/components/businesses/BusinessesViewModals.svelte';
+  import ImportModal from '$lib/components/import/ImportModal.svelte';
   
   export let data: PageData;
   
@@ -35,6 +36,7 @@
   const isCreateViewModalOpen = writable(false);
   const isEditViewModalOpen = writable(false);
   const isDeleteViewModalOpen = writable(false);
+  const isImportModalOpen = writable(false);
   
   // State for view settings popover
   const isViewSettingsOpen = writable(false);
@@ -129,6 +131,10 @@
     isBusinessModalOpen.set(true);
   }
   
+  function handleOpenImportModal() {
+    isImportModalOpen.set(true);
+  }
+  
   function handleCloseBusinessModal() {
     isBusinessModalOpen.set(false);
   }
@@ -138,6 +144,11 @@
   }
   
   function handleBusinessUpdated() {
+    fetchBusinessesData();
+  }
+  
+  function handleImportComplete() {
+    isImportModalOpen.set(false);
     fetchBusinessesData();
   }
   
@@ -707,6 +718,7 @@
       on:openEditViewModal={handleOpenEditViewModal}
       on:openDeleteViewModal={handleOpenDeleteViewModal}
       on:openBusinessModal={handleOpenBusinessModal}
+      on:openImportModal={handleOpenImportModal}
     />
     
     <!-- Filter, sort, and search bar -->
@@ -760,6 +772,15 @@
       on:closeCreateViewModal={() => isCreateViewModalOpen.set(false)}
       on:closeEditViewModal={() => isEditViewModalOpen.set(false)}
       on:closeDeleteViewModal={() => isDeleteViewModalOpen.set(false)}
+    />
+    
+    <!-- Import Modal -->
+    <ImportModal 
+      bind:isOpen={$isImportModalOpen}
+      importType="businesses"
+      workspaceId={$workspaceStore.currentWorkspace?.id}
+      on:close={() => isImportModalOpen.set(false)}
+      on:importComplete={handleImportComplete}
     />
   {/if}
 </div>

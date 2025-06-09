@@ -105,6 +105,10 @@
       dispatch('openBusinessModal');
     }
     
+    function openImportModal() {
+      dispatch('openImportModal');
+    }
+    
     function closeViewSelect() {
       isViewSelectOpen = false;
     }
@@ -280,6 +284,17 @@
       >
         <Building2 size={16} class="-ml-1 mr-2" />
         Add Business
+      </button>
+      
+      <!-- Import Businesses Button -->
+      <button 
+        class="inline-flex h-10 items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white ring-offset-white transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+        on:click={openImportModal}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 -ml-1 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+        </svg>
+        Import
       </button>
     </div>
   </div>

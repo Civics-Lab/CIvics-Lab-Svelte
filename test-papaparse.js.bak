@@ -1,0 +1,29 @@
+// Simple test to verify papaparse import works
+async function testPapaparse() {
+  try {
+    console.log('Testing papaparse import...');
+    
+    // Test the import
+    const Papa = await import('papaparse');
+    console.log('Import successful!');
+    console.log('Papa object:', Papa);
+    console.log('Papa.default:', Papa.default);
+    console.log('Papa.parse:', Papa.parse);
+    
+    // Test parsing a simple CSV string
+    const csvData = 'name,age\nJohn,25\nJane,30';
+    
+    const parser = Papa.default || Papa;
+    const result = parser.parse(csvData, {
+      header: true,
+      dynamicTyping: true
+    });
+    
+    console.log('Parse result:', result);
+    
+  } catch (error) {
+    console.error('Error:', error);
+  }
+}
+
+testPapaparse();

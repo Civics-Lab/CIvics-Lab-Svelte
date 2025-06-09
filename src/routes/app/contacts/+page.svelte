@@ -14,6 +14,7 @@
   import ContactsFilterSortBar from '$lib/components/contacts/ContactsFilterSortBar.svelte';
   import ContactsDataGrid from '$lib/components/contacts/ContactsDataGrid.svelte';
   import ContactsViewModals from '$lib/components/contacts/ContactsViewModals.svelte';
+  import ImportModal from '$lib/components/import/ImportModal.svelte';
   
   export let data: PageData;
   // Mark data as used for build
@@ -24,6 +25,7 @@
   const isCreateViewModalOpen = writable(false);
   const isEditViewModalOpen = writable(false);
   const isDeleteViewModalOpen = writable(false);
+  const isImportModalOpen = writable(false);
   
   // State for view settings popover
   const isViewSettingsOpen = writable(false);
@@ -123,6 +125,10 @@
     isContactModalOpen.set(true);
   }
   
+  function handleOpenImportModal() {
+    isImportModalOpen.set(true);
+  }
+  
   function handleCloseContactModal() {
     isContactModalOpen.set(false);
   }
@@ -132,6 +138,11 @@
   }
   
   function handleContactUpdated() {
+    fetchContactsData();
+  }
+  
+  function handleImportComplete() {
+    isImportModalOpen.set(false);
     fetchContactsData();
   }
   
@@ -694,6 +705,7 @@
       on:openEditViewModal={handleOpenEditViewModal}
       on:openDeleteViewModal={handleOpenDeleteViewModal}
       on:openContactModal={handleOpenContactModal}
+      on:openImportModal={handleOpenImportModal}
     />
     
     <!-- Filter, sort, and search bar -->
@@ -745,6 +757,15 @@
       on:closeCreateViewModal={() => isCreateViewModalOpen.set(false)}
       on:closeEditViewModal={() => isEditViewModalOpen.set(false)}
       on:closeDeleteViewModal={() => isDeleteViewModalOpen.set(false)}
+    />
+    
+    <!-- Import Modal -->
+    <ImportModal 
+      bind:isOpen={$isImportModalOpen}
+      importType="contacts"
+      workspaceId={$workspaceStore.currentWorkspace?.id}
+      on:close={() => isImportModalOpen.set(false)}
+      on:importComplete={handleImportComplete}
     />
   {/if}
 </div>

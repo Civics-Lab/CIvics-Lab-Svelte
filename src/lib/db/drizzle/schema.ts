@@ -535,3 +535,59 @@ export const interactionStreamsRelations = relations(interactionStreams, ({ one 
     relationName: 'userUpdatedInteractionStreams'
   })
 }));
+
+// Import sessions and errors tables
+export const importStatusEnum = pgEnum('import_status', ['pending', 'processing', 'completed', 'failed']);
+export const importModeEnum = pgEnum('import_mode', ['create_only', 'update_or_create']);
+export const importTypeEnum = pgEnum('import_type', ['contacts', 'businesses', 'donations']);
+export const importErrorTypeEnum = pgEnum('import_error_type', ['validation', 'duplicate', 'processing']);
+
+export const importSessions = pgTable('import_sessions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  workspaceId: uuid('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+  importType: importTypeEnum('import_type').notNull(),
+  filename: text('filename').notNull(),
+  totalRecords: integer('total_records').notNull(),
+  processedRecords: integer('processed_records').default(0),
+  successfulRecords: integer('successful_records').default(0),
+  failedRecords: integer('failed_records').default(0),
+  status: importStatusEnum('status').default('pending'),
+  importMode: importModeEnum('import_mode').notNull(),
+  duplicateField: text('duplicate_field'),
+  fieldMapping: jsonb('field_mapping').notNull(),
+  errorLog: jsonb('error_log'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  createdById: uuid('created_by').references(() => users.id)
+});
+
+export const importErrors = pgTable('import_errors', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  importSessionId: uuid('import_session_id').references(() => importSessions.id, { onDelete: 'cascade' }),
+  rowNumber: integer('row_number').notNull(),
+  fieldName: text('field_name'),
+  errorType: importErrorTypeEnum('error_type'),
+  errorMessage: text('error_message').notNull(),
+  rawData: jsonb('raw_data'),
+  createdAt: timestamp('created_at').defaultNow()
+});
+
+// Import relations
+export const importSessionsRelations = relations(importSessions, ({ one, many }) => ({
+  workspace: one(workspaces, {
+    fields: [importSessions.workspaceId],
+    references: [workspaces.id]
+  }),
+  createdBy: one(users, {
+    fields: [importSessions.createdById],
+    references: [users.id]
+  }),
+  errors: many(importErrors)
+}));
+
+export const importErrorsRelations = relations(importErrors, ({ one }) => ({
+  importSession: one(importSessions, {
+    fields: [importErrors.importSessionId],
+    references: [importSessions.id]
+  })
+}));
