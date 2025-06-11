@@ -4,8 +4,28 @@
 
 import type { Contact } from '$lib/types/contact';
 
+export interface PaginatedContactsResponse {
+  contacts: Contact[];
+  pagination: {
+    currentPage: number;
+    pageSize: number;
+    totalRecords: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
+}
+
+export interface ContactFetchOptions {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  filters?: any[];
+  sorting?: any[];
+}
+
 /**
- * Fetch all contacts for a workspace
+ * Fetch all contacts for a workspace (legacy function - returns all contacts)
  */
 export async function fetchContacts(workspaceId: string): Promise<Contact[]> {
   try {
@@ -20,6 +40,41 @@ export async function fetchContacts(workspaceId: string): Promise<Contact[]> {
     return data.contacts;
   } catch (error) {
     console.error('Error in fetchContacts:', error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch paginated contacts for a workspace
+ */
+export async function fetchPaginatedContacts(
+  workspaceId: string, 
+  options: ContactFetchOptions = {}
+): Promise<PaginatedContactsResponse> {
+  try {
+    const params = new URLSearchParams({
+      workspace_id: workspaceId,
+      ...(options.page && { page: options.page.toString() }),
+      ...(options.pageSize && { page_size: options.pageSize.toString() }),
+      ...(options.search && { search: options.search }),
+      ...(options.filters && { filters: JSON.stringify(options.filters) }),
+      ...(options.sorting && { sorting: JSON.stringify(options.sorting) })
+    });
+
+    const response = await fetch(`/api/contacts/paginated?${params}`);
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to fetch contacts');
+    }
+    
+    const data = await response.json();
+    return {
+      contacts: data.contacts,
+      pagination: data.pagination
+    };
+  } catch (error) {
+    console.error('Error in fetchPaginatedContacts:', error);
     throw error;
   }
 }

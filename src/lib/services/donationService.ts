@@ -4,8 +4,28 @@
 
 import type { Donation } from '$lib/types/donation';
 
+export interface PaginatedDonationsResponse {
+  donations: Donation[];
+  pagination: {
+    currentPage: number;
+    pageSize: number;
+    totalRecords: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
+}
+
+export interface DonationFetchOptions {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  filters?: any[];
+  sorting?: any[];
+}
+
 /**
- * Fetch all donations for a workspace
+ * Fetch all donations for a workspace (legacy function - returns all donations)
  */
 export async function fetchDonations(workspaceId: string): Promise<Donation[]> {
   try {
@@ -32,6 +52,41 @@ export async function fetchDonations(workspaceId: string): Promise<Donation[]> {
     return data.donations || [];
   } catch (error) {
     console.error('Error in fetchDonations:', error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch paginated donations for a workspace
+ */
+export async function fetchPaginatedDonations(
+  workspaceId: string,
+  options: DonationFetchOptions = {}
+): Promise<PaginatedDonationsResponse> {
+  try {
+    const params = new URLSearchParams({
+      workspace_id: workspaceId,
+      ...(options.page && { page: options.page.toString() }),
+      ...(options.pageSize && { page_size: options.pageSize.toString() }),
+      ...(options.search && { search: options.search }),
+      ...(options.filters && { filters: JSON.stringify(options.filters) }),
+      ...(options.sorting && { sorting: JSON.stringify(options.sorting) })
+    });
+
+    const response = await fetch(`/api/donations/paginated?${params}`);
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to fetch donations');
+    }
+    
+    const data = await response.json();
+    return {
+      donations: data.donations,
+      pagination: data.pagination
+    };
+  } catch (error) {
+    console.error('Error in fetchPaginatedDonations:', error);
     throw error;
   }
 }

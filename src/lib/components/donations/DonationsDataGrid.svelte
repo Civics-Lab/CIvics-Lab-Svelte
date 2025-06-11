@@ -4,6 +4,7 @@
   import { writable } from 'svelte/store';
   import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
   import DonationDetailsSheet from './DonationDetailsSheet.svelte';
+  import Pagination from '$lib/components/shared/pagination/Pagination.svelte';
   
   export let donations: any[] = [];
   export let isLoading: boolean = false;
@@ -11,12 +12,33 @@
   export let visibleColumns: string[] = []; 
   export let availableFields: any[] = []; 
   export let supabase: any;
+  
+  // Pagination props
+  export let currentPage: number = 1;
+  export let totalPages: number = 1;
+  export let totalRecords: number = 0;
+  export let pageSize: number = 500;
+  export let pageSizeOptions: number[] = [50, 100, 250, 500, 1000];
 
   // State for donation details sheet
   const isDetailsSheetOpen = writable(false);
   const selectedDonationId = writable<string | null>(null);
 
-  const dispatch = createEventDispatcher();
+  const dispatch = createEventDispatcher<{
+    addDonation: void;
+    donationUpdated: void;
+    pageChanged: { page: number };
+    pageSizeChanged: { pageSize: number };
+  }>();
+  
+  // Computed paginated donations
+  $: paginatedDonations = (() => {
+    if (totalRecords === 0) return donations;
+    
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    return donations.slice(startIndex, endIndex);
+  })();
   
   // Date formatter
   function formatDate(dateString: string): string {
@@ -64,6 +86,14 @@
   function handleViewDonation(id: string) {
     selectedDonationId.set(id);
     isDetailsSheetOpen.set(true);
+  }
+  
+  function handlePageChanged(event: CustomEvent<{ page: number }>) {
+    dispatch('pageChanged', { page: event.detail.page });
+  }
+
+  function handlePageSizeChanged(event: CustomEvent<{ pageSize: number }>) {
+    dispatch('pageSizeChanged', { pageSize: event.detail.pageSize });
   }
 </script>
 
@@ -148,7 +178,7 @@
             </tr>
           </thead>
           <tbody class="bg-white divide-y divide-gray-200">
-            {#each donations as donation (donation.id)}
+            {#each paginatedDonations as donation (donation.id)}
               <tr 
                 class="hover:bg-gray-50 cursor-pointer transition duration-150 ease-in-out"
                 on:click={() => handleViewDonation(donation.id)}
@@ -212,4 +242,18 @@
       </div>
     {/if}
   </div>
+  
+  <!-- Pagination -->
+  {#if totalRecords > 0}
+    <Pagination
+      {currentPage}
+      {totalPages}
+      {totalRecords}
+      {pageSize}
+      {pageSizeOptions}
+      {isLoading}
+      on:pageChanged={handlePageChanged}
+      on:pageSizeChanged={handlePageSizeChanged}
+    />
+  {/if}
 </div>

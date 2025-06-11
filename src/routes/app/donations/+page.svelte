@@ -9,10 +9,12 @@
   // Import services
   import { 
     fetchDonations, 
+    fetchPaginatedDonations,
     createDonation, 
     updateDonation, 
     deleteDonation 
   } from '$lib/services/donationService';
+  import { donationsPagination } from '$lib/stores/paginationStore';
   
   // Import components
   import DonationsViewNavbar from '$lib/components/donations/DonationsViewNavbar.svelte';
@@ -84,6 +86,9 @@
   const isLoadingDonations = writable(false);
   const donationsError = writable<string | null>(null);
   
+  // For backward compatibility - track if we're using client-side filtering
+  let useClientSideFiltering = false;
+  
   // Donation stats
   const donationStats = writable({
     totalAmount: 0,
@@ -135,6 +140,14 @@
   
   function handleDonationUpdated() {
     fetchDonationsData();
+  }
+  
+  function handlePageChanged(event) {
+    donationsPagination.setPage(event.detail.page);
+  }
+  
+  function handlePageSizeChanged(event) {
+    donationsPagination.setPageSize(event.detail.pageSize);
   }
   
   function handleAddFilter() {
@@ -591,7 +604,7 @@
     applyFiltersAndSorting();
   }
   
-  // Function to fetch donations using the donation service
+  // Function to fetch donations with pagination
   async function fetchDonationsData() {
     if (!$workspaceStore.currentWorkspace) return;
     
@@ -599,19 +612,24 @@
     donationsError.set(null);
     
     try {
-      // Use the donation service
+      // Always use client-side for now since API endpoints aren't implemented
+      useClientSideFiltering = true;
       const donationData = await fetchDonations($workspaceStore.currentWorkspace.id);
       donations.set(donationData || []);
       applyFiltersAndSorting();
       
+      // Update pagination based on filtered results
+      donationsPagination.setTotalRecords($filteredDonations.length);
+      
       // Calculate donation stats
-      if (donationData && donationData.length > 0) {
-        const totalAmount = donationData.reduce((sum, donation) => sum + (donation.amount || 0), 0);
-        const averageAmount = totalAmount / donationData.length;
+      const currentDonations = $filteredDonations;
+      if (currentDonations && currentDonations.length > 0) {
+        const totalAmount = currentDonations.reduce((sum, donation) => sum + (donation.amount || 0), 0);
+        const averageAmount = totalAmount / currentDonations.length;
         
         // Count unique donors
         const uniqueDonors = new Set();
-        donationData.forEach(donation => {
+        currentDonations.forEach(donation => {
           if (donation.contactId) {
             uniqueDonors.add(`contact_${donation.contactId}`);
           } else if (donation.businessId) {
@@ -639,8 +657,10 @@
     }
   }
   
-  // Apply filters and sorting to donations
+  // Apply filters and sorting to donations (client-side)
   function applyFiltersAndSorting() {
+    if (!useClientSideFiltering) return;
+    
     let result = [...$donations];
     
     // Apply filters
@@ -732,31 +752,27 @@
     filteredDonations.set(result);
   }
   
-  // Watch for changes that should trigger filtering/sorting
-  $: if ($searchQuery !== undefined) {
-    applyFiltersAndSorting();
-  }
-  
-  $: if ($filters !== undefined) {
-    applyFiltersAndSorting();
-  }
-  
-  $: if ($sorting !== undefined) {
-    applyFiltersAndSorting();
-  }
-  
-  // Initialize data on component mount
-  onMount(() => {
-    if ($workspaceStore.currentWorkspace) {
-      fetchViews();
-      fetchDonationsData();
-    }
-  });
-  
-  // Fetch data when workspace changes
+  // Only fetch when workspace changes
   $: if ($workspaceStore.currentWorkspace) {
     fetchViews();
     fetchDonationsData();
+  }
+  
+  // Debounced data refresh for other changes
+  let refreshTimeout;
+  function scheduleRefresh() {
+    clearTimeout(refreshTimeout);
+    refreshTimeout = setTimeout(() => {
+      if (useClientSideFiltering) {
+        applyFiltersAndSorting();
+        donationsPagination.setTotalRecords($filteredDonations.length);
+      }
+    }, 100);
+  }
+  
+  // Watch for changes that should trigger filtering/sorting
+  $: if ($searchQuery !== undefined || $filters !== undefined || $sorting !== undefined) {
+    scheduleRefresh();
   }
 </script>
 
@@ -824,8 +840,14 @@
         .filter(([key, value]) => value === true && key !== 'id' && key !== 'viewName' && key !== 'workspaceId' && key !== 'filters' && key !== 'sorting' && key !== 'createdById' && key !== 'createdAt' && key !== 'updatedAt')
         .map(([key]) => key) : []}
       availableFields={$availableFields}
+      currentPage={$donationsPagination.currentPage}
+      totalPages={$donationsPagination.totalPages}
+      totalRecords={$donationsPagination.totalRecords}
+      pageSize={$donationsPagination.pageSize}
       on:addDonation={handleAddDonation}
       on:donationUpdated={handleDonationUpdated}
+      on:pageChanged={handlePageChanged}
+      on:pageSizeChanged={handlePageSizeChanged}
     />
     
     <!-- Modals for donation and view management -->

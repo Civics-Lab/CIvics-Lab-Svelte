@@ -1,7 +1,8 @@
 <!-- src/routes/engage/contacts/+page.svelte -->
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { fetchContacts, createContact, updateContact, deleteContact } from '$lib/services/contactService';
+  import { fetchContacts, fetchPaginatedContacts, createContact, updateContact, deleteContact } from '$lib/services/contactService';
+  import { contactsPagination } from '$lib/stores/paginationStore';
   import { fetchContactViews, createContactView, updateContactView, deleteContactView, createDefaultContactView } from '$lib/services/contactViewService';
   import { writable } from 'svelte/store';
   import { workspaceStore } from '$lib/stores/workspaceStore';
@@ -91,6 +92,9 @@
   const isLoadingContacts = writable(false);
   const contactsError = writable<string | null>(null);
   
+  // For backward compatibility - track if we're using client-side filtering
+  let useClientSideFiltering = true;
+  
   // View event handlers
   function handleSelectView(event) {
     const view = event.detail;
@@ -139,6 +143,14 @@
   
   function handleContactUpdated() {
     fetchContactsData();
+  }
+  
+  function handlePageChanged(event) {
+    contactsPagination.setPage(event.detail.page);
+  }
+  
+  function handlePageSizeChanged(event) {
+    contactsPagination.setPageSize(event.detail.pageSize);
   }
   
   function handleImportComplete() {
@@ -517,7 +529,7 @@
     applyFiltersAndSorting();
   }
   
-  // Function to fetch contacts
+  // Function to fetch contacts with pagination
   async function fetchContactsData() {
     if (!$workspaceStore.currentWorkspace) return;
     
@@ -525,12 +537,15 @@
     contactsError.set(null);
     
     try {
-      // Fetch contacts using the API service
+      // Always use client-side for now since API endpoints aren't implemented
+      useClientSideFiltering = true;
       const contactsData = await fetchContacts($workspaceStore.currentWorkspace.id);
-      
-      // Set contacts in the store
       contacts.set(contactsData || []);
       applyFiltersAndSorting();
+      
+      // Update pagination based on filtered results
+      contactsPagination.setTotalRecords($filteredContacts.length);
+      
     } catch (error) {
       console.error('Error fetching contacts:', error);
       contactsError.set('Failed to load contacts');
@@ -539,8 +554,10 @@
     }
   }
   
-  // Apply filters and sorting to contacts
+  // Apply filters and sorting to contacts (client-side)
   function applyFiltersAndSorting() {
+    if (!useClientSideFiltering) return;
+    
     let result = [...$contacts];
     
     // Apply filters
@@ -645,31 +662,27 @@
     filteredContacts.set(result);
   }
   
-  // Watch for changes that should trigger filtering/sorting
-  $: if ($searchQuery !== undefined) {
-    applyFiltersAndSorting();
-  }
-  
-  $: if ($filters !== undefined) {
-    applyFiltersAndSorting();
-  }
-  
-  $: if ($sorting !== undefined) {
-    applyFiltersAndSorting();
-  }
-  
-  // Initialize data on component mount
-  onMount(() => {
-    if ($workspaceStore.currentWorkspace) {
-      fetchViews();
-      fetchContactsData();
-    }
-  });
-  
-  // Fetch data when workspace changes
+  // Only fetch when workspace changes
   $: if ($workspaceStore.currentWorkspace) {
     fetchViews();
     fetchContactsData();
+  }
+  
+  // Debounced data refresh for other changes
+  let refreshTimeout;
+  function scheduleRefresh() {
+    clearTimeout(refreshTimeout);
+    refreshTimeout = setTimeout(() => {
+      if (useClientSideFiltering) {
+        applyFiltersAndSorting();
+        contactsPagination.setTotalRecords($filteredContacts.length);
+      }
+    }, 100);
+  }
+  
+  // Watch for changes that should trigger filtering/sorting
+  $: if ($searchQuery !== undefined || $filters !== undefined || $sorting !== undefined) {
+    scheduleRefresh();
   }
 </script>
 
@@ -737,8 +750,14 @@
         .filter(([key, value]) => value === true && key !== 'id' && key !== 'viewName' && key !== 'workspaceId' && key !== 'filters' && key !== 'sorting' && key !== 'createdById' && key !== 'createdAt' && key !== 'updatedAt')
         .map(([key]) => key) : []}
       availableFields={$availableFields}
+      currentPage={$contactsPagination.currentPage}
+      totalPages={$contactsPagination.totalPages}
+      totalRecords={$contactsPagination.totalRecords}
+      pageSize={$contactsPagination.pageSize}
       on:addContact={handleAddContact}
       on:contactUpdated={handleContactUpdated}
+      on:pageChanged={handlePageChanged}
+      on:pageSizeChanged={handlePageSizeChanged}
     />
     
     <!-- Modals for contact and view management -->

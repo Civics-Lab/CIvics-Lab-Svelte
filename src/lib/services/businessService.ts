@@ -2,8 +2,28 @@
  * Service for business-related API calls
  */
 
+export interface PaginatedBusinessesResponse {
+  businesses: any[];
+  pagination: {
+    currentPage: number;
+    pageSize: number;
+    totalRecords: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
+}
+
+export interface BusinessFetchOptions {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  filters?: any[];
+  sorting?: any[];
+}
+
 /**
- * Fetch all businesses for a workspace
+ * Fetch all businesses for a workspace (legacy function - returns all businesses)
  */
 export async function fetchBusinesses(workspaceId: string): Promise<any[]> {
   try {
@@ -18,6 +38,41 @@ export async function fetchBusinesses(workspaceId: string): Promise<any[]> {
     return data.businesses;
   } catch (error) {
     console.error('Error in fetchBusinesses:', error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch paginated businesses for a workspace
+ */
+export async function fetchPaginatedBusinesses(
+  workspaceId: string,
+  options: BusinessFetchOptions = {}
+): Promise<PaginatedBusinessesResponse> {
+  try {
+    const params = new URLSearchParams({
+      workspace_id: workspaceId,
+      ...(options.page && { page: options.page.toString() }),
+      ...(options.pageSize && { page_size: options.pageSize.toString() }),
+      ...(options.search && { search: options.search }),
+      ...(options.filters && { filters: JSON.stringify(options.filters) }),
+      ...(options.sorting && { sorting: JSON.stringify(options.sorting) })
+    });
+
+    const response = await fetch(`/api/businesses/paginated?${params}`);
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to fetch businesses');
+    }
+    
+    const data = await response.json();
+    return {
+      businesses: data.businesses,
+      pagination: data.pagination
+    };
+  } catch (error) {
+    console.error('Error in fetchPaginatedBusinesses:', error);
     throw error;
   }
 }

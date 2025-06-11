@@ -10,10 +10,12 @@
   // Import services
   import { 
     fetchBusinesses, 
+    fetchPaginatedBusinesses,
     createBusiness, 
     updateBusiness, 
     deleteBusiness 
   } from '$lib/services/businessService';
+  import { businessesPagination } from '$lib/stores/paginationStore';
   
   import {
     fetchBusinessViews,
@@ -97,6 +99,9 @@
   const isLoadingBusinesses = writable(false);
   const businessesError = writable<string | null>(null);
   
+  // For backward compatibility - track if we're using client-side filtering
+  let useClientSideFiltering = false;
+  
   // View event handlers
   function handleSelectView(event) {
     const view = event.detail;
@@ -145,6 +150,14 @@
   
   function handleBusinessUpdated() {
     fetchBusinessesData();
+  }
+  
+  function handlePageChanged(event) {
+    businessesPagination.setPage(event.detail.page);
+  }
+  
+  function handlePageSizeChanged(event) {
+    businessesPagination.setPageSize(event.detail.pageSize);
   }
   
   function handleImportComplete() {
@@ -504,7 +517,7 @@
     applyFiltersAndSorting();
   }
   
-  // Function to fetch businesses using the new API
+  // Function to fetch businesses with pagination
   async function fetchBusinessesData() {
     if (!$workspaceStore.currentWorkspace) return;
     
@@ -512,10 +525,15 @@
     businessesError.set(null);
     
     try {
-      // Use the business service
+      // Always use client-side for now since API endpoints aren't implemented
+      useClientSideFiltering = true;
       const businessData = await fetchBusinesses($workspaceStore.currentWorkspace.id);
       businesses.set(businessData || []);
       applyFiltersAndSorting();
+      
+      // Update pagination based on filtered results
+      businessesPagination.setTotalRecords($filteredBusinesses.length);
+      
     } catch (error) {
       console.error('Error fetching businesses:', error);
       businessesError.set('Failed to load businesses');
@@ -524,8 +542,10 @@
     }
   }
   
-  // Apply filters and sorting to businesses
+  // Apply filters and sorting to businesses (client-side)
   function applyFiltersAndSorting() {
+    if (!useClientSideFiltering) return;
+    
     let result = [...$businesses];
     
     // Apply filters
@@ -658,31 +678,27 @@
     filteredBusinesses.set(result);
   }
   
-  // Watch for changes that should trigger filtering/sorting
-  $: if ($searchQuery !== undefined) {
-    applyFiltersAndSorting();
-  }
-  
-  $: if ($filters !== undefined) {
-    applyFiltersAndSorting();
-  }
-  
-  $: if ($sorting !== undefined) {
-    applyFiltersAndSorting();
-  }
-  
-  // Initialize data on component mount
-  onMount(() => {
-    if ($workspaceStore.currentWorkspace) {
-      fetchViewsData();
-      fetchBusinessesData();
-    }
-  });
-  
-  // Fetch data when workspace changes
+  // Only fetch when workspace changes
   $: if ($workspaceStore.currentWorkspace) {
     fetchViewsData();
     fetchBusinessesData();
+  }
+  
+  // Debounced data refresh for other changes
+  let refreshTimeout;
+  function scheduleRefresh() {
+    clearTimeout(refreshTimeout);
+    refreshTimeout = setTimeout(() => {
+      if (useClientSideFiltering) {
+        applyFiltersAndSorting();
+        businessesPagination.setTotalRecords($filteredBusinesses.length);
+      }
+    }, 100);
+  }
+  
+  // Watch for changes that should trigger filtering/sorting
+  $: if ($searchQuery !== undefined || $filters !== undefined || $sorting !== undefined) {
+    scheduleRefresh();
   }
 </script>
 
@@ -751,8 +767,14 @@
         .map(([key]) => key) : []}
       availableFields={$availableFields}
       supabase={data.supabase}
+      currentPage={$businessesPagination.currentPage}
+      totalPages={$businessesPagination.totalPages}
+      totalRecords={$businessesPagination.totalRecords}
+      pageSize={$businessesPagination.pageSize}
       on:addBusiness={handleAddBusiness}
       on:businessUpdated={handleBusinessUpdated}
+      on:pageChanged={handlePageChanged}
+      on:pageSizeChanged={handlePageSizeChanged}
     />
     
     <!-- Modals for business and view management -->

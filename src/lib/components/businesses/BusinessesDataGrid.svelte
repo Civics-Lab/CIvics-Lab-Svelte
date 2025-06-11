@@ -4,6 +4,7 @@
     import { writable } from 'svelte/store';
     import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
     import BusinessDetailsSheet from '$lib/components/businesses/BusinessDetailsSheet.svelte';
+    import Pagination from '$lib/components/shared/pagination/Pagination.svelte';
     import type { TypedSupabaseClient } from '$lib/types/supabase';
     
     // Props
@@ -13,6 +14,13 @@
     export let visibleColumns = [];
     export let availableFields = [];
     export let supabase: TypedSupabaseClient;
+    
+    // Pagination props
+    export let currentPage = 1;
+    export let totalPages = 1;
+    export let totalRecords = 0;
+    export let pageSize = 100;
+    export let pageSizeOptions = [50, 100, 250, 500, 1000];
     
     // State
     let columnRefs = {};
@@ -24,7 +32,12 @@
     const isBusinessDetailsOpen = writable(false);
     const selectedBusinessId = writable<string | null>(null);
     
-    const dispatch = createEventDispatcher();
+    const dispatch = createEventDispatcher<{
+      addBusiness: void;
+      businessUpdated: void;
+      pageChanged: { page: number };
+      pageSizeChanged: { pageSize: number };
+    }>();
     
     // Methods
     function startResize(e, columnId) {
@@ -62,6 +75,15 @@
       return field ? field.label : columnId;
     }
     
+    // Computed paginated businesses
+    $: paginatedBusinesses = (() => {
+      if (totalRecords === 0) return businesses;
+      
+      const startIndex = (currentPage - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+      return businesses.slice(startIndex, endIndex);
+    })();
+    
     function viewBusiness(business, e) {
       // Prevent the event from bubbling up to the tr click handler
       if (e) e.stopPropagation();
@@ -76,6 +98,14 @@
     
     function handleBusinessUpdated() {
       dispatch('businessUpdated');
+    }
+    
+    function handlePageChanged(event) {
+      dispatch('pageChanged', { page: event.detail.page });
+    }
+  
+    function handlePageSizeChanged(event) {
+      dispatch('pageSizeChanged', { pageSize: event.detail.pageSize });
     }
     
     function closeBusinessDetails() {
@@ -219,7 +249,7 @@
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
-              {#each businesses as business (business.id)}
+              {#each paginatedBusinesses as business (business.id)}
                 <tr 
                   class="hover:bg-gray-50 cursor-pointer transition duration-150 ease-in-out"
                   on:click={() => viewBusiness(business)}
@@ -247,6 +277,20 @@
         </div>
       {/if}
     </div>
+    
+    <!-- Pagination -->
+    {#if totalRecords > 0}
+      <Pagination
+        {currentPage}
+        {totalPages}
+        {totalRecords}
+        {pageSize}
+        {pageSizeOptions}
+        {isLoading}
+        on:pageChanged={handlePageChanged}
+        on:pageSizeChanged={handlePageSizeChanged}
+      />
+    {/if}
   </div>
   
   <!-- Business Details Sheet -->
