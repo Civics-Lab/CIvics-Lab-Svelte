@@ -73,9 +73,13 @@
   
   // Filters state
   const filters = writable<any[]>([]);
+  const pendingFilters = writable<any[]>([]);
+  const hasFilterChanges = writable(false);
   
   // Sort state
   const sorting = writable<any[]>([]);
+  const pendingSorting = writable<any[]>([]);
+  const hasSortChanges = writable(false);
   
   // Search state
   const searchQuery = writable('');
@@ -102,6 +106,13 @@
     currentView.set(view);
     filters.set(view.filters || []);
     sorting.set(view.sorting || []);
+    
+    // Initialize pending state with current view settings
+    pendingFilters.set([...(view.filters || [])]);
+    pendingSorting.set([...(view.sorting || [])]);
+    hasFilterChanges.set(false);
+    hasSortChanges.set(false);
+    
     // Re-apply filters and sorting when view changes
     applyFiltersAndSorting();
   }
@@ -177,13 +188,13 @@
   }
   
   function handleFilterChanged() {
-    updateView();
-    applyFiltersAndSorting();
+    // Don't auto-update, just mark as having changes
+    hasFilterChanges.set(true);
   }
   
   function handleSortChanged() {
-    updateView();
-    applyFiltersAndSorting();
+    // Don't auto-update, just mark as having changes
+    hasSortChanges.set(true);
   }
   
   function handleSearchChanged(event) {
@@ -232,6 +243,8 @@
             currentView.set(viewToSelect);
             filters.set(viewToSelect.filters || []);
             sorting.set(viewToSelect.sorting || []);
+            pendingFilters.set([...(viewToSelect.filters || [])]);
+            pendingSorting.set([...(viewToSelect.sorting || [])]);
             return;
           }
         }
@@ -248,17 +261,23 @@
             currentView.set(savedView);
             filters.set(savedView.filters || []);
             sorting.set(savedView.sorting || []);
+            pendingFilters.set([...(savedView.filters || [])]);
+            pendingSorting.set([...(savedView.sorting || [])]);
           } else {
             // If stored view is not found, use the first one
             currentView.set(fetchedViews[0]);
             filters.set(fetchedViews[0].filters || []);
             sorting.set(fetchedViews[0].sorting || []);
+            pendingFilters.set([...(fetchedViews[0].filters || [])]);
+            pendingSorting.set([...(fetchedViews[0].sorting || [])]);
           }
         } else {
           // If no stored view, use the first one
           currentView.set(fetchedViews[0]);
           filters.set(fetchedViews[0].filters || []);
           sorting.set(fetchedViews[0].sorting || []);
+          pendingFilters.set([...(fetchedViews[0].filters || [])]);
+          pendingSorting.set([...(fetchedViews[0].sorting || [])]);
         }
       } else {
         // Create a default view if none exists
@@ -309,6 +328,10 @@
       currentView.set(newView);
       filters.set([]);
       sorting.set([]);
+      pendingFilters.set([]);
+      pendingSorting.set([]);
+      hasFilterChanges.set(false);
+      hasSortChanges.set(false);
       
     } catch (error) {
       console.error('Error creating default view:', error);
@@ -365,6 +388,10 @@
         currentView.set(refreshedView);
         filters.set(refreshedView.filters || []);
         sorting.set(refreshedView.sorting || []);
+        pendingFilters.set([...(refreshedView.filters || [])]);
+        pendingSorting.set([...(refreshedView.sorting || [])]);
+        hasFilterChanges.set(false);
+        hasSortChanges.set(false);
       }
       
       toastStore.success('View created successfully');
@@ -486,12 +513,16 @@
       
       // Set the first remaining view as current, or create a default if none left
       if ($views.length > 0) {
-        currentView.set($views[0]);
-        filters.set($views[0].filters || []);
-        sorting.set($views[0].sorting || []);
-      } else {
-        await createDefaultView();
-      }
+      currentView.set($views[0]);
+      filters.set($views[0].filters || []);
+      sorting.set($views[0].sorting || []);
+        pendingFilters.set([...($views[0].filters || [])]);
+      pendingSorting.set([...($views[0].sorting || [])]);
+        hasFilterChanges.set(false);
+          hasSortChanges.set(false);
+        } else {
+          await createDefaultView();
+        }
       
       isDeleteViewModalOpen.set(false);
       toastStore.success('View deleted successfully');
@@ -546,37 +577,37 @@
   
   // Add a new filter
   function addFilter() {
-    filters.update(f => [
+    pendingFilters.update(f => [
       ...f, 
       { field: Object.keys($currentView).find(key => $currentView[key] === true) || 'amount', operator: '=', value: '' }
     ]);
+    hasFilterChanges.set(true);
   }
   
   // Remove a filter
   function removeFilter(index) {
-    filters.update(f => f.filter((_, i) => i !== index));
-    updateView();
-    applyFiltersAndSorting();
+    pendingFilters.update(f => f.filter((_, i) => i !== index));
+    hasFilterChanges.set(true);
   }
   
   // Add a new sort
   function addSort() {
-    sorting.update(s => [
+    pendingSorting.update(s => [
       ...s, 
       { field: Object.keys($currentView).find(key => $currentView[key] === true) || 'amount', direction: 'asc' }
     ]);
+    hasSortChanges.set(true);
   }
   
   // Remove a sort
   function removeSort(index) {
-    sorting.update(s => s.filter((_, i) => i !== index));
-    updateView();
-    applyFiltersAndSorting();
+    pendingSorting.update(s => s.filter((_, i) => i !== index));
+    hasSortChanges.set(true);
   }
   
   // Move filter up or down
   function moveFilter(index, direction) {
-    filters.update(f => {
+    pendingFilters.update(f => {
       const newFilters = [...f];
       if (direction === 'up' && index > 0) {
         [newFilters[index], newFilters[index - 1]] = [newFilters[index - 1], newFilters[index]];
@@ -585,13 +616,12 @@
       }
       return newFilters;
     });
-    updateView();
-    applyFiltersAndSorting();
+    hasFilterChanges.set(true);
   }
   
   // Move sort up or down
   function moveSort(index, direction) {
-    sorting.update(s => {
+    pendingSorting.update(s => {
       const newSorting = [...s];
       if (direction === 'up' && index > 0) {
         [newSorting[index], newSorting[index - 1]] = [newSorting[index - 1], newSorting[index]];
@@ -600,8 +630,48 @@
       }
       return newSorting;
     });
-    updateView();
-    applyFiltersAndSorting();
+    hasSortChanges.set(true);
+  }
+  
+  // Save filter/sort changes
+  async function saveFilterSortChanges() {
+    try {
+      isLoadingDonations.set(true);
+      
+      // Apply pending changes to actual state
+      if ($hasFilterChanges) {
+        filters.set([...$pendingFilters]);
+        hasFilterChanges.set(false);
+      }
+      
+      if ($hasSortChanges) {
+        sorting.set([...$pendingSorting]);
+        hasSortChanges.set(false);
+      }
+      
+      // Update the view in the database
+      await updateView();
+      
+      // Apply filters and sorting
+      applyFiltersAndSorting();
+      
+      toastStore.success('Filter and sort changes applied');
+      
+    } catch (error) {
+      console.error('Error saving filter/sort changes:', error);
+      toastStore.error('Failed to save changes');
+    } finally {
+      isLoadingDonations.set(false);
+    }
+  }
+  
+  // Cancel filter/sort changes
+  function cancelFilterSortChanges() {
+    // Reset pending changes to current saved state
+    pendingFilters.set([...$filters]);
+    pendingSorting.set([...$sorting]);
+    hasFilterChanges.set(false);
+    hasSortChanges.set(false);
   }
   
   // Function to fetch donations with pagination
@@ -814,11 +884,13 @@
     <DonationsFilterSortBar 
       isFilterPopoverOpen={$isFilterPopoverOpen}
       isSortPopoverOpen={$isSortPopoverOpen}
-      filters={$filters}
-      sorting={$sorting}
+      filters={$pendingFilters}
+      sorting={$pendingSorting}
       searchQuery={$searchQuery}
       availableFields={$availableFields}
       currentView={$currentView}
+      hasFilterChanges={$hasFilterChanges}
+      hasSortChanges={$hasSortChanges}
       donationStats={$donationStats}
       on:addFilter={handleAddFilter}
       on:removeFilter={handleRemoveFilter}
@@ -829,6 +901,8 @@
       on:filterChanged={handleFilterChanged}
       on:sortChanged={handleSortChanged}
       on:searchChanged={handleSearchChanged}
+      on:saveChanges={saveFilterSortChanges}
+      on:cancelChanges={cancelFilterSortChanges}
     />
     
     <!-- Donations data grid with details sheet integrated -->

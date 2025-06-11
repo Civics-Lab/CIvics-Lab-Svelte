@@ -29,7 +29,9 @@ export interface ContactFetchOptions {
  */
 export async function fetchContacts(workspaceId: string): Promise<Contact[]> {
   try {
-    const response = await fetch(`/api/contacts?workspace_id=${workspaceId}`);
+    // Use a high limit to get all contacts for client-side filtering
+    // Set limit to 10000 to accommodate large workspaces
+    const response = await fetch(`/api/contacts?workspace_id=${workspaceId}&limit=10000`);
     
     if (!response.ok) {
       const error = await response.json();

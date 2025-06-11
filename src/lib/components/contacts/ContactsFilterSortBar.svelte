@@ -30,6 +30,8 @@
     export let searchQuery = '';
     export let availableFields: Field[] = [];
     export let currentView: FieldView | null = null;
+    export let hasFilterChanges = false;
+    export let hasSortChanges = false;
     
     const dispatch = createEventDispatcher<{
         searchChanged: string;
@@ -41,6 +43,8 @@
         removeSort: number;
         moveSort: { index: number; direction: 'up' | 'down' };
         sortChanged: void;
+        saveChanges: void;
+        cancelChanges: void;
     }>();
     
     // Get field label from id
@@ -204,7 +208,27 @@
     </div>
   </div>
   
-  <div class="flex space-x-3">
+  <div class="flex items-center space-x-3">
+    <!-- Save/Cancel buttons for filter/sort changes -->
+    {#if hasFilterChanges || hasSortChanges}
+      <div class="flex items-center space-x-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-md">
+        <span class="text-sm text-blue-700">Unsaved changes</span>
+        <button
+          type="button"
+          class="text-xs px-2 py-1 text-gray-600 hover:text-gray-800 border border-gray-300 rounded"
+          on:click={() => dispatch('cancelChanges')}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="text-xs px-2 py-1 text-white bg-blue-600 hover:bg-blue-700 rounded"
+          on:click={() => dispatch('saveChanges')}
+        >
+          Save Changes
+        </button>
+      </div>
+    {/if}
     <!-- Filter Button -->
     <div class="relative">
       <button 

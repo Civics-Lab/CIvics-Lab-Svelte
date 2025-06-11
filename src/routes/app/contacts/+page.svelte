@@ -9,6 +9,7 @@
   import { toastStore } from '$lib/stores/toastStore';
   import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
   import type { PageData } from './$types';
+  import { PAGINATION_CONFIG } from '$lib/config/pagination';
   
   // Import components
   import ContactsViewNavbar from '$lib/components/contacts/ContactsViewNavbar.svelte';
@@ -79,9 +80,13 @@
   
   // Filters state
   const filters = writable<any[]>([]);
+  const pendingFilters = writable<any[]>([]);
+  const hasFilterChanges = writable(false);
   
   // Sort state
   const sorting = writable<any[]>([]);
+  const pendingSorting = writable<any[]>([]);
+  const hasSortChanges = writable(false);
   
   // Search state
   const searchQuery = writable('');
@@ -93,7 +98,7 @@
   const contactsError = writable<string | null>(null);
   
   // For backward compatibility - track if we're using client-side filtering
-  let useClientSideFiltering = true;
+  let useClientSideFiltering = PAGINATION_CONFIG.useClientSideFiltering;
   
   // View event handlers
   function handleSelectView(event) {
@@ -101,8 +106,24 @@
     currentView.set(view);
     filters.set(view.filters || []);
     sorting.set(view.sorting || []);
+    
+    // Initialize pending state with current view settings
+    pendingFilters.set([...(view.filters || [])]);
+    pendingSorting.set([...(view.sorting || [])]);
+    hasFilterChanges.set(false);
+    hasSortChanges.set(false);
+    
     // Re-apply filters and sorting when view changes
-    applyFiltersAndSorting();
+    if (useClientSideFiltering) {
+      applyFiltersAndSorting();
+    } else {
+      // Reset to page 1 and fetch server-side data with new view settings
+      contactsPagination.setPage(1);
+      isLoadingContacts.set(true);
+      fetchPaginatedContactsData().finally(() => {
+        isLoadingContacts.set(false);
+      });
+    }
   }
   
   function handleToggleField(event) {
@@ -147,10 +168,24 @@
   
   function handlePageChanged(event) {
     contactsPagination.setPage(event.detail.page);
+    // Trigger server-side data fetch when using server-side pagination
+    if (!useClientSideFiltering) {
+      isLoadingContacts.set(true);
+      fetchPaginatedContactsData().finally(() => {
+        isLoadingContacts.set(false);
+      });
+    }
   }
   
   function handlePageSizeChanged(event) {
     contactsPagination.setPageSize(event.detail.pageSize);
+    // Trigger server-side data fetch when using server-side pagination
+    if (!useClientSideFiltering) {
+      isLoadingContacts.set(true);
+      fetchPaginatedContactsData().finally(() => {
+        isLoadingContacts.set(false);
+      });
+    }
   }
   
   function handleImportComplete() {
@@ -185,13 +220,13 @@
   }
   
   function handleFilterChanged() {
-    updateView();
-    applyFiltersAndSorting();
+    // Don't auto-update, just mark as having changes
+    hasFilterChanges.set(true);
   }
   
   function handleSortChanged() {
-    updateView();
-    applyFiltersAndSorting();
+    // Don't auto-update, just mark as having changes
+    hasSortChanges.set(true);
   }
   
   function handleSearchChanged(event) {
@@ -199,7 +234,15 @@
     if (event && event.detail !== undefined) {
       searchQuery.set(event.detail);
     }
-    applyFiltersAndSorting();
+    
+    if (useClientSideFiltering) {
+      applyFiltersAndSorting();
+    } else {
+      // Reset to page 1 when search changes, then fetch data
+      contactsPagination.setPage(1);
+      // Use debounced search for server-side
+      scheduleServerRefresh();
+    }
   }
   
   function handleAddContact() {
@@ -471,37 +514,37 @@
   
   // Add a new filter
   function addFilter() {
-    filters.update(f => [
+    pendingFilters.update(f => [
       ...f, 
-      { field: Object.keys($currentView).find(key => $currentView[key] === true) || 'first_name', operator: '=', value: '' }
+      { field: Object.keys($currentView).find(key => $currentView[key] === true) || 'firstName', operator: '=', value: '' }
     ]);
+    hasFilterChanges.set(true);
   }
   
   // Remove a filter
   function removeFilter(index) {
-    filters.update(f => f.filter((_, i) => i !== index));
-    updateView();
-    applyFiltersAndSorting();
+    pendingFilters.update(f => f.filter((_, i) => i !== index));
+    hasFilterChanges.set(true);
   }
   
   // Add a new sort
   function addSort() {
-    sorting.update(s => [
+    pendingSorting.update(s => [
       ...s, 
-      { field: Object.keys($currentView).find(key => $currentView[key] === true) || 'first_name', direction: 'asc' }
+      { field: Object.keys($currentView).find(key => $currentView[key] === true) || 'firstName', direction: 'asc' }
     ]);
+    hasSortChanges.set(true);
   }
   
   // Remove a sort
   function removeSort(index) {
-    sorting.update(s => s.filter((_, i) => i !== index));
-    updateView();
-    applyFiltersAndSorting();
+    pendingSorting.update(s => s.filter((_, i) => i !== index));
+    hasSortChanges.set(true);
   }
   
   // Move filter up or down
   function moveFilter(index, direction) {
-    filters.update(f => {
+    pendingFilters.update(f => {
       const newFilters = [...f];
       if (direction === 'up' && index > 0) {
         [newFilters[index], newFilters[index - 1]] = [newFilters[index - 1], newFilters[index]];
@@ -510,23 +553,54 @@
       }
       return newFilters;
     });
-    updateView();
-    applyFiltersAndSorting();
+    hasFilterChanges.set(true);
   }
   
-  // Move sort up or down
-  function moveSort(index, direction) {
-    sorting.update(s => {
-      const newSorting = [...s];
-      if (direction === 'up' && index > 0) {
-        [newSorting[index], newSorting[index - 1]] = [newSorting[index - 1], newSorting[index]];
-      } else if (direction === 'down' && index < newSorting.length - 1) {
-        [newSorting[index], newSorting[index + 1]] = [newSorting[index + 1], newSorting[index]];
+  // Save filter/sort changes
+  async function saveFilterSortChanges() {
+    try {
+      isLoadingContacts.set(true);
+      
+      // Apply pending changes to actual state
+      if ($hasFilterChanges) {
+        filters.set([...$pendingFilters]);
+        hasFilterChanges.set(false);
       }
-      return newSorting;
-    });
-    updateView();
-    applyFiltersAndSorting();
+      
+      if ($hasSortChanges) {
+        sorting.set([...$pendingSorting]);
+        hasSortChanges.set(false);
+      }
+      
+      // Update the view in the database
+      await updateView();
+      
+      // Reset pagination to page 1 and fetch new data
+      contactsPagination.setPage(1);
+      
+      if (useClientSideFiltering) {
+        applyFiltersAndSorting();
+      } else {
+        await fetchPaginatedContactsData();
+      }
+      
+      toastStore.success('Filter and sort changes applied');
+      
+    } catch (error) {
+      console.error('Error saving filter/sort changes:', error);
+      toastStore.error('Failed to save changes');
+    } finally {
+      isLoadingContacts.set(false);
+    }
+  }
+  
+  // Cancel filter/sort changes
+  function cancelFilterSortChanges() {
+    // Reset pending changes to current saved state
+    pendingFilters.set([...$filters]);
+    pendingSorting.set([...$sorting]);
+    hasFilterChanges.set(false);
+    hasSortChanges.set(false);
   }
   
   // Function to fetch contacts with pagination
@@ -537,20 +611,63 @@
     contactsError.set(null);
     
     try {
-      // Always use client-side for now since API endpoints aren't implemented
-      useClientSideFiltering = true;
-      const contactsData = await fetchContacts($workspaceStore.currentWorkspace.id);
-      contacts.set(contactsData || []);
-      applyFiltersAndSorting();
-      
-      // Update pagination based on filtered results
-      contactsPagination.setTotalRecords($filteredContacts.length);
+      if (useClientSideFiltering) {
+        // Client-side approach (for backward compatibility)
+        const contactsData = await fetchContacts($workspaceStore.currentWorkspace.id);
+        contacts.set(contactsData || []);
+        
+        // Check if dataset is too large for client-side filtering
+        if (contactsData && contactsData.length > PAGINATION_CONFIG.maxClientSideRecords) {
+          console.warn(
+            `Dataset too large for client-side filtering (${contactsData.length} > ${PAGINATION_CONFIG.maxClientSideRecords}). ` +
+            'Consider switching to server-side pagination by setting PAGINATION_CONFIG.useClientSideFiltering = false'
+          );
+        }
+        
+        applyFiltersAndSorting();
+      } else {
+        // Server-side approach (recommended for large datasets)
+        await fetchPaginatedContactsData();
+      }
       
     } catch (error) {
       console.error('Error fetching contacts:', error);
       contactsError.set('Failed to load contacts');
     } finally {
       isLoadingContacts.set(false);
+    }
+  }
+  
+  // Function to fetch paginated contacts from server
+  async function fetchPaginatedContactsData() {
+    if (!$workspaceStore.currentWorkspace) return;
+    
+    try {
+      const response = await fetchPaginatedContacts(
+        $workspaceStore.currentWorkspace.id,
+        {
+          page: $contactsPagination.currentPage,
+          pageSize: $contactsPagination.pageSize,
+          search: $searchQuery,
+          filters: $filters,
+          sorting: $sorting
+        }
+      );
+      
+      // Update contacts with server response
+      filteredContacts.set(response.contacts);
+      
+      // Update pagination state
+      contactsPagination.setTotalRecords(response.pagination.totalRecords);
+      
+      // Update current page if it changed on server
+      if (response.pagination.currentPage !== $contactsPagination.currentPage) {
+        contactsPagination.setPage(response.pagination.currentPage);
+      }
+      
+    } catch (error) {
+      console.error('Error fetching paginated contacts:', error);
+      throw error;
     }
   }
   
@@ -660,6 +777,22 @@
     }
     
     filteredContacts.set(result);
+    
+    // Update pagination total records whenever filtering changes
+    // If we're on a page that no longer exists due to filtering changes, reset to page 1
+    const currentTotalRecords = $contactsPagination.totalRecords;
+    const newTotalRecords = result.length;
+    
+    // Update total records first
+    contactsPagination.setTotalRecords(newTotalRecords);
+    
+    // If the current page would be beyond the new total pages, reset to page 1
+    if (newTotalRecords !== currentTotalRecords) {
+      const newTotalPages = Math.ceil(newTotalRecords / $contactsPagination.pageSize);
+      if ($contactsPagination.currentPage > newTotalPages && newTotalPages > 0) {
+        contactsPagination.setPage(1);
+      }
+    }
   }
   
   // Only fetch when workspace changes
@@ -675,9 +808,22 @@
     refreshTimeout = setTimeout(() => {
       if (useClientSideFiltering) {
         applyFiltersAndSorting();
-        contactsPagination.setTotalRecords($filteredContacts.length);
       }
-    }, 100);
+    }, PAGINATION_CONFIG.clientDebounceMs);
+  }
+  
+  // Debounced server refresh for search
+  let serverRefreshTimeout;
+  function scheduleServerRefresh() {
+    clearTimeout(serverRefreshTimeout);
+    serverRefreshTimeout = setTimeout(() => {
+      if (!useClientSideFiltering) {
+        isLoadingContacts.set(true);
+        fetchPaginatedContactsData().finally(() => {
+          isLoadingContacts.set(false);
+        });
+      }
+    }, PAGINATION_CONFIG.searchDebounceMs);
   }
   
   // Watch for changes that should trigger filtering/sorting
@@ -725,11 +871,13 @@
     <ContactsFilterSortBar 
       isFilterPopoverOpen={$isFilterPopoverOpen}
       isSortPopoverOpen={$isSortPopoverOpen}
-      filters={$filters}
-      sorting={$sorting}
+      filters={$pendingFilters}
+      sorting={$pendingSorting}
       searchQuery={$searchQuery}
       availableFields={$availableFields}
       currentView={$currentView}
+      hasFilterChanges={$hasFilterChanges}
+      hasSortChanges={$hasSortChanges}
       on:addFilter={handleAddFilter}
       on:removeFilter={handleRemoveFilter}
       on:moveFilter={handleMoveFilter}
@@ -739,6 +887,8 @@
       on:filterChanged={handleFilterChanged}
       on:sortChanged={handleSortChanged}
       on:searchChanged={handleSearchChanged}
+      on:saveChanges={saveFilterSortChanges}
+      on:cancelChanges={cancelFilterSortChanges}
     />
     
     <!-- Contacts data grid with details sheet integrated -->

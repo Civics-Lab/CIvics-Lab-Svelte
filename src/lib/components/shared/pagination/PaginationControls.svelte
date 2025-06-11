@@ -19,11 +19,6 @@
     jumpBy: { delta: number };
   }>();
 
-  let jumpToPageValue = currentPage;
-
-  // Update jump input when current page changes
-  $: jumpToPageValue = currentPage;
-
   // Calculate visible page numbers for pagination
   $: visiblePages = getVisiblePages(currentPage, totalPages);
 
@@ -59,21 +54,8 @@
     return pages;
   }
 
-  function handleJumpToPage() {
-    const page = Math.max(1, Math.min(totalPages, jumpToPageValue));
-    if (page !== currentPage) {
-      dispatch('pageChanged', { page });
-    }
-  }
-
   function handleJumpByDelta(delta: number) {
     dispatch('jumpBy', { delta });
-  }
-
-  function handleKeydown(event: KeyboardEvent) {
-    if (event.key === 'Enter') {
-      handleJumpToPage();
-    }
   }
 </script>
 
@@ -194,31 +176,6 @@
         title="Jump forward 10 pages"
       >
         +10
-      </button>
-    </div>
-  {/if}
-
-  <!-- Jump to page input -->
-  {#if showJumpToPage && totalPages > 10}
-    <div class="hidden sm:flex items-center gap-2 ml-4 pl-4 border-l border-gray-200">
-      <label for="jump-to-page" class="text-sm text-gray-700">Go to:</label>
-      <input
-        id="jump-to-page"
-        type="number"
-        bind:value={jumpToPageValue}
-        on:keydown={handleKeydown}
-        min="1"
-        max={totalPages}
-        disabled={isLoading}
-        class="w-16 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-      />
-      <button
-        type="button"
-        on:click={handleJumpToPage}
-        disabled={isLoading}
-        class="px-2 py-1 text-sm font-medium text-blue-600 hover:text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        Go
       </button>
     </div>
   {/if}

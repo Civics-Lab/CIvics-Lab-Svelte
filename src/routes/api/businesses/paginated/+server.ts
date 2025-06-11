@@ -1,1 +1,203 @@
-// src/routes/api/businesses/paginated/+server.ts\nimport { json } from '@sveltejs/kit';\nimport type { RequestHandler } from './$types';\n\n// This is an example implementation for paginated businesses API\n// You'll need to implement the actual database queries based on your database setup\n\nexport const GET: RequestHandler = async ({ url, locals }) => {\n  try {\n    // Extract pagination parameters\n    const page = parseInt(url.searchParams.get('page') || '1');\n    const pageSize = parseInt(url.searchParams.get('page_size') || '100');\n    const workspaceId = url.searchParams.get('workspace_id');\n    const search = url.searchParams.get('search') || '';\n    const filters = url.searchParams.get('filters') ? JSON.parse(url.searchParams.get('filters')!) : [];\n    const sorting = url.searchParams.get('sorting') ? JSON.parse(url.searchParams.get('sorting')!) : [];\n\n    if (!workspaceId) {\n      return json({ error: 'Workspace ID is required' }, { status: 400 });\n    }\n\n    // Validate pagination parameters\n    if (page < 1 || pageSize < 1 || pageSize > 1000) {\n      return json({ error: 'Invalid pagination parameters' }, { status: 400 });\n    }\n\n    const offset = (page - 1) * pageSize;\n\n    // TODO: Replace this with your actual database implementation\n    // Example using Supabase (adjust based on your database)\n    /*\n    let query = locals.supabase\n      .from('businesses')\n      .select(`\n        *,\n        phoneNumbers:business_phone_numbers(*),\n        addresses:business_addresses(*),\n        socialMediaAccounts:business_social_media_accounts(*),\n        employees:business_employees(*),\n        tags:business_tags(*)\n      `, { count: 'exact' })\n      .eq('workspace_id', workspaceId);\n\n    // Apply search\n    if (search) {\n      query = query.ilike('business_name', `%${search}%`);\n    }\n\n    // Apply filters\n    filters.forEach(filter => {\n      if (filter.field && filter.operator && filter.value) {\n        const dbField = filter.field === 'businessName' ? 'business_name' : filter.field;\n        \n        switch (filter.operator) {\n          case '=':\n            query = query.eq(dbField, filter.value);\n            break;\n          case '!=':\n            query = query.neq(dbField, filter.value);\n            break;\n          case 'contains':\n            query = query.ilike(dbField, `%${filter.value}%`);\n            break;\n          case 'startsWith':\n            query = query.ilike(dbField, `${filter.value}%`);\n            break;\n          case 'endsWith':\n            query = query.ilike(dbField, `%${filter.value}`);\n            break;\n        }\n      }\n    });\n\n    // Apply sorting\n    if (sorting.length > 0) {\n      sorting.forEach(sort => {\n        if (sort.field && sort.direction) {\n          const dbField = sort.field === 'businessName' ? 'business_name' : sort.field;\n          query = query.order(dbField, { ascending: sort.direction === 'asc' });\n        }\n      });\n    } else {\n      // Default sorting\n      query = query.order('business_name', { ascending: true });\n    }\n\n    // Apply pagination\n    query = query.range(offset, offset + pageSize - 1);\n\n    const { data: businesses, error, count } = await query;\n\n    if (error) {\n      console.error('Database error:', error);\n      return json({ error: 'Failed to fetch businesses' }, { status: 500 });\n    }\n\n    const totalRecords = count || 0;\n    const totalPages = Math.ceil(totalRecords / pageSize);\n\n    return json({\n      businesses: businesses || [],\n      pagination: {\n        currentPage: page,\n        pageSize,\n        totalRecords,\n        totalPages,\n        hasNextPage: page < totalPages,\n        hasPreviousPage: page > 1\n      }\n    });\n    */\n\n    // Placeholder implementation - replace with actual database query\n    console.log('Paginated businesses request:', { page, pageSize, workspaceId, search, filters, sorting });\n    \n    // For now, return mock data structure\n    return json({\n      businesses: [],\n      pagination: {\n        currentPage: page,\n        pageSize,\n        totalRecords: 0,\n        totalPages: 0,\n        hasNextPage: false,\n        hasPreviousPage: false\n      }\n    });\n\n  } catch (error) {\n    console.error('Error in paginated businesses API:', error);\n    return json({ error: 'Internal server error' }, { status: 500 });\n  }\n};\n
+// src/routes/api/businesses/paginated/+server.ts
+import { json, error } from '@sveltejs/kit';
+import { db } from '$lib/server/db';
+import { businesses, businessPhoneNumbers, businessAddresses, businessSocialMediaAccounts, businessEmployees, businessTags, contacts } from '$lib/db/drizzle/schema';
+import { eq, and, or, ilike, asc, desc, count, not } from 'drizzle-orm';
+import type { RequestHandler } from './$types';
+import { verifyWorkspaceAccess } from '$lib/utils/auth';
+
+export const GET: RequestHandler = async ({ url, locals }) => {
+  try {
+    // Extract pagination parameters
+    const page = parseInt(url.searchParams.get('page') || '1');
+    const pageSize = parseInt(url.searchParams.get('page_size') || '100');
+    const workspaceId = url.searchParams.get('workspace_id');
+    const search = url.searchParams.get('search') || '';
+    const filters = url.searchParams.get('filters') ? JSON.parse(url.searchParams.get('filters')!) : [];
+    const sorting = url.searchParams.get('sorting') ? JSON.parse(url.searchParams.get('sorting')!) : [];
+
+    if (!workspaceId) {
+      throw error(400, 'Workspace ID is required');
+    }
+
+    // Verify workspace access
+    await verifyWorkspaceAccess(locals.user, workspaceId);
+
+    // Validate pagination parameters
+    if (page < 1 || pageSize < 1 || pageSize > 1000) {
+      throw error(400, 'Invalid pagination parameters');
+    }
+
+    const offset = (page - 1) * pageSize;
+
+    // Build base where conditions
+    let whereConditions = [eq(businesses.workspaceId, workspaceId)];
+
+    // Apply search
+    if (search.trim()) {
+      const searchTerm = `%${search.trim()}%`;
+      whereConditions.push(
+        ilike(businesses.businessName, searchTerm)
+      );
+    }
+
+    // Apply filters
+    filters.forEach((filter: any) => {
+      if (filter.field && filter.operator && filter.value) {
+        const filterValue = filter.value;
+        
+        switch (filter.field) {
+          case 'businessName':
+            switch (filter.operator) {
+              case '=':
+                whereConditions.push(eq(businesses.businessName, filterValue));
+                break;
+              case '!=':
+                whereConditions.push(not(eq(businesses.businessName, filterValue)));
+                break;
+              case 'contains':
+                whereConditions.push(ilike(businesses.businessName, `%${filterValue}%`));
+                break;
+              case 'startsWith':
+                whereConditions.push(ilike(businesses.businessName, `${filterValue}%`));
+                break;
+              case 'endsWith':
+                whereConditions.push(ilike(businesses.businessName, `%${filterValue}`));
+                break;
+            }
+            break;
+          // Add more fields as needed
+        }
+      }
+    });
+
+    // Get total count for pagination
+    const [totalResult] = await db
+      .select({ count: count() })
+      .from(businesses)
+      .where(and(...whereConditions));
+    
+    const totalRecords = totalResult.count;
+    const totalPages = Math.ceil(totalRecords / pageSize);
+
+    // Build the main query with sorting
+    let query = db
+      .select()
+      .from(businesses)
+      .where(and(...whereConditions));
+
+    // Apply sorting
+    if (sorting.length > 0) {
+      const orderBy: any[] = [];
+      sorting.forEach((sort: any) => {
+        if (sort.field && sort.direction) {
+          switch (sort.field) {
+            case 'businessName':
+              orderBy.push(sort.direction === 'asc' ? asc(businesses.businessName) : desc(businesses.businessName));
+              break;
+            // Add more sortable fields as needed
+          }
+        }
+      });
+      if (orderBy.length > 0) {
+        query = query.orderBy(...orderBy);
+      }
+    } else {
+      // Default sorting
+      query = query.orderBy(asc(businesses.businessName));
+    }
+
+    // Apply pagination
+    query = query.limit(pageSize).offset(offset);
+
+    // Execute the main query
+    const businessesList = await query;
+
+    // Fetch related data for each business
+    const enhancedBusinesses = await Promise.all(
+      businessesList.map(async (business) => {
+        // Get phone numbers
+        const phoneNumbers = await db
+          .select()
+          .from(businessPhoneNumbers)
+          .where(eq(businessPhoneNumbers.businessId, business.id));
+        
+        // Get addresses
+        const addresses = await db
+          .select()
+          .from(businessAddresses)
+          .where(eq(businessAddresses.businessId, business.id));
+        
+        // Get social media accounts
+        const socialMedia = await db
+          .select()
+          .from(businessSocialMediaAccounts)
+          .where(eq(businessSocialMediaAccounts.businessId, business.id));
+        
+        // Get employees with contact details
+        const employees = await db
+          .select({
+            id: businessEmployees.id,
+            businessId: businessEmployees.businessId,
+            contactId: businessEmployees.contactId,
+            status: businessEmployees.status,
+            createdAt: businessEmployees.createdAt,
+            updatedAt: businessEmployees.updatedAt,
+            contactFirstName: contacts.firstName,
+            contactLastName: contacts.lastName
+          })
+          .from(businessEmployees)
+          .leftJoin(contacts, eq(businessEmployees.contactId, contacts.id))
+          .where(eq(businessEmployees.businessId, business.id));
+        
+        // Transform the employees data
+        const employeesWithContactNames = employees.map(employee => ({
+          id: employee.id,
+          businessId: employee.businessId,
+          contactId: employee.contactId,
+          status: employee.status,
+          createdAt: employee.createdAt,
+          updatedAt: employee.updatedAt,
+          contactName: employee.contactFirstName && employee.contactLastName ? 
+            `${employee.contactFirstName} ${employee.contactLastName}` : 'Unknown Contact'
+        }));
+        
+        // Get tags
+        const tags = await db
+          .select()
+          .from(businessTags)
+          .where(eq(businessTags.businessId, business.id));
+        
+        return {
+          ...business,
+          phoneNumbers: phoneNumbers || [],
+          addresses: addresses || [],
+          socialMediaAccounts: socialMedia || [],
+          employees: employeesWithContactNames || [],
+          tags: tags || []
+        };
+      })
+    );
+
+    return json({
+      businesses: enhancedBusinesses,
+      pagination: {
+        currentPage: page,
+        pageSize,
+        totalRecords,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1
+      }
+    });
+
+  } catch (err) {
+    console.error('Error in paginated businesses API:', err);
+    
+    if (err instanceof Response) {
+      throw err;
+    }
+    
+    throw error(500, 'Internal server error');
+  }
+};

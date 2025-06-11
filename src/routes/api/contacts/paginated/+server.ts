@@ -1,2 +1,255 @@
 // src/routes/api/contacts/paginated/+server.ts
-import { json } from '@sveltejs/kit';\nimport type { RequestHandler } from './$types';\n\n// This is an example implementation for paginated contacts API\n// You'll need to implement the actual database queries based on your database setup\n\nexport const GET: RequestHandler = async ({ url, locals }) => {\n  try {\n    // Extract pagination parameters\n    const page = parseInt(url.searchParams.get('page') || '1');\n    const pageSize = parseInt(url.searchParams.get('page_size') || '100');\n    const workspaceId = url.searchParams.get('workspace_id');\n    const search = url.searchParams.get('search') || '';\n    const filters = url.searchParams.get('filters') ? JSON.parse(url.searchParams.get('filters')!) : [];\n    const sorting = url.searchParams.get('sorting') ? JSON.parse(url.searchParams.get('sorting')!) : [];\n\n    if (!workspaceId) {\n      return json({ error: 'Workspace ID is required' }, { status: 400 });\n    }\n\n    // Validate pagination parameters\n    if (page < 1 || pageSize < 1 || pageSize > 1000) {\n      return json({ error: 'Invalid pagination parameters' }, { status: 400 });\n    }\n\n    const offset = (page - 1) * pageSize;\n\n    // TODO: Replace this with your actual database implementation\n    // Example using Supabase (adjust based on your database)\n    /*\n    let query = locals.supabase\n      .from('contacts')\n      .select(`\n        *,\n        emails:contact_emails(*),\n        phoneNumbers:contact_phone_numbers(*),\n        addresses:contact_addresses(*),\n        socialMediaAccounts:contact_social_media_accounts(*),\n        tags:contact_tags(*)\n      `, { count: 'exact' })\n      .eq('workspace_id', workspaceId);\n\n    // Apply search\n    if (search) {\n      query = query.or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,emails.email.ilike.%${search}%`);\n    }\n\n    // Apply filters\n    filters.forEach(filter => {\n      if (filter.field && filter.operator && filter.value) {\n        switch (filter.operator) {\n          case '=':\n            query = query.eq(filter.field, filter.value);\n            break;\n          case '!=':\n            query = query.neq(filter.field, filter.value);\n            break;\n          case 'contains':\n            query = query.ilike(filter.field, `%${filter.value}%`);\n            break;\n          case 'startsWith':\n            query = query.ilike(filter.field, `${filter.value}%`);\n            break;\n          case 'endsWith':\n            query = query.ilike(filter.field, `%${filter.value}`);\n            break;\n          case '>':\n            query = query.gt(filter.field, filter.value);\n            break;\n          case '<':\n            query = query.lt(filter.field, filter.value);\n            break;\n          case '>=':\n            query = query.gte(filter.field, filter.value);\n            break;\n          case '<=':\n            query = query.lte(filter.field, filter.value);\n            break;\n        }\n      }\n    });\n\n    // Apply sorting\n    if (sorting.length > 0) {\n      sorting.forEach(sort => {\n        if (sort.field && sort.direction) {\n          query = query.order(sort.field, { ascending: sort.direction === 'asc' });\n        }\n      });\n    } else {\n      // Default sorting\n      query = query.order('created_at', { ascending: false });\n    }\n\n    // Apply pagination\n    query = query.range(offset, offset + pageSize - 1);\n\n    const { data: contacts, error, count } = await query;\n\n    if (error) {\n      console.error('Database error:', error);\n      return json({ error: 'Failed to fetch contacts' }, { status: 500 });\n    }\n\n    const totalRecords = count || 0;\n    const totalPages = Math.ceil(totalRecords / pageSize);\n\n    return json({\n      contacts: contacts || [],\n      pagination: {\n        currentPage: page,\n        pageSize,\n        totalRecords,\n        totalPages,\n        hasNextPage: page < totalPages,\n        hasPreviousPage: page > 1\n      }\n    });\n    */\n\n    // Placeholder implementation - replace with actual database query\n    console.log('Paginated contacts request:', { page, pageSize, workspaceId, search, filters, sorting });\n    \n    // For now, return mock data structure\n    return json({\n      contacts: [],\n      pagination: {\n        currentPage: page,\n        pageSize,\n        totalRecords: 0,\n        totalPages: 0,\n        hasNextPage: false,\n        hasPreviousPage: false\n      }\n    });\n\n  } catch (error) {\n    console.error('Error in paginated contacts API:', error);\n    return json({ error: 'Internal server error' }, { status: 500 });\n  }\n};\n
+import { json, error } from '@sveltejs/kit';
+import { db } from '$lib/server/db';
+import { contacts, contactEmails, contactPhoneNumbers, contactAddresses, contactSocialMediaAccounts, contactTags } from '$lib/db/drizzle/schema';
+import { eq, and, inArray, or, ilike, gt, lt, gte, lte, ne, desc, asc, count } from 'drizzle-orm';
+import type { RequestHandler } from './$types';
+import { verifyWorkspaceAccess } from '$lib/utils/auth';
+
+export const GET: RequestHandler = async ({ url, locals }) => {
+  try {
+    // Extract pagination parameters
+    const page = parseInt(url.searchParams.get('page') || '1');
+    const pageSize = parseInt(url.searchParams.get('page_size') || '100');
+    const workspaceId = url.searchParams.get('workspace_id');
+    const search = url.searchParams.get('search') || '';
+    const filters = url.searchParams.get('filters') ? JSON.parse(url.searchParams.get('filters')!) : [];
+    const sorting = url.searchParams.get('sorting') ? JSON.parse(url.searchParams.get('sorting')!) : [];
+
+    if (!workspaceId) {
+      throw error(400, 'Workspace ID is required');
+    }
+
+    // Validate pagination parameters
+    if (page < 1 || pageSize < 1 || pageSize > 1000) {
+      throw error(400, 'Invalid pagination parameters');
+    }
+
+    // Verify workspace access
+    await verifyWorkspaceAccess(locals.user, workspaceId);
+
+    // Build the base where conditions
+    const whereConditions = [eq(contacts.workspaceId, workspaceId)];
+
+    // Apply search to main contact fields
+    if (search && search.trim()) {
+      const searchTerm = `%${search.trim()}%`;
+      whereConditions.push(
+        or(
+          ilike(contacts.firstName, searchTerm),
+          ilike(contacts.lastName, searchTerm),
+          ilike(contacts.middleName, searchTerm),
+          ilike(contacts.vanid, searchTerm)
+        )
+      );
+    }
+
+    // Apply filters
+    filters.forEach((filter: any) => {
+      if (filter.field && filter.operator && filter.value !== undefined && filter.value !== '') {
+        const fieldValue = filter.value;
+        
+        // Map field names to actual database columns
+        let dbField;
+        switch (filter.field) {
+          case 'firstName':
+            dbField = contacts.firstName;
+            break;
+          case 'lastName':
+            dbField = contacts.lastName;
+            break;
+          case 'middleName':
+            dbField = contacts.middleName;
+            break;
+          case 'gender':
+            dbField = contacts.genderId;
+            break;
+          case 'race':
+            dbField = contacts.raceId;
+            break;
+          case 'pronouns':
+            dbField = contacts.pronouns;
+            break;
+          case 'vanid':
+            dbField = contacts.vanid;
+            break;
+          default:
+            console.warn(`Unknown filter field: ${filter.field}`);
+            return; // Skip this filter
+        }
+        
+        switch (filter.operator) {
+          case '=':
+            whereConditions.push(eq(dbField, fieldValue));
+            break;
+          case '!=':
+            whereConditions.push(ne(dbField, fieldValue));
+            break;
+          case 'contains':
+            whereConditions.push(ilike(dbField, `%${fieldValue}%`));
+            break;
+          case 'startsWith':
+            whereConditions.push(ilike(dbField, `${fieldValue}%`));
+            break;
+          case 'endsWith':
+            whereConditions.push(ilike(dbField, `%${fieldValue}`));
+            break;
+          case '>':
+            whereConditions.push(gt(dbField, fieldValue));
+            break;
+          case '<':
+            whereConditions.push(lt(dbField, fieldValue));
+            break;
+          case '>=':
+            whereConditions.push(gte(dbField, fieldValue));
+            break;
+          case '<=':
+            whereConditions.push(lte(dbField, fieldValue));
+            break;
+        }
+      }
+    });
+
+    // Get total count for pagination
+    const totalCountResult = await db
+      .select({ count: count() })
+      .from(contacts)
+      .where(and(...whereConditions));
+    
+    const totalRecords = totalCountResult[0]?.count || 0;
+    const totalPages = Math.ceil(totalRecords / pageSize);
+    const offset = (page - 1) * pageSize;
+
+    // Build the main query
+    let query = db
+      .select()
+      .from(contacts)
+      .where(and(...whereConditions));
+
+    // Apply sorting
+    if (sorting.length > 0) {
+      const orderByClauses = sorting.map((sort: any) => {
+        if (sort.field && sort.direction) {
+          // Map field names to actual database columns
+          let dbField;
+          switch (sort.field) {
+            case 'firstName':
+              dbField = contacts.firstName;
+              break;
+            case 'lastName':
+              dbField = contacts.lastName;
+              break;
+            case 'middleName':
+              dbField = contacts.middleName;
+              break;
+            case 'gender':
+              dbField = contacts.genderId;
+              break;
+            case 'race':
+              dbField = contacts.raceId;
+              break;
+            case 'pronouns':
+              dbField = contacts.pronouns;
+              break;
+            case 'vanid':
+              dbField = contacts.vanid;
+              break;
+            default:
+              console.warn(`Unknown sort field: ${sort.field}`);
+              return null;
+          }
+          
+          return sort.direction === 'asc' 
+            ? asc(dbField)
+            : desc(dbField);
+        }
+        return null;
+      }).filter(Boolean);
+      
+      if (orderByClauses.length > 0) {
+        query = query.orderBy(...orderByClauses);
+      }
+    } else {
+      // Default sorting by last name, then first name
+      query = query.orderBy(asc(contacts.lastName), asc(contacts.firstName));
+    }
+
+    // Apply pagination
+    query = query.limit(pageSize).offset(offset);
+
+    // Execute the main query
+    const contactsList = await query;
+
+    // Fetch related data for each contact
+    const enhancedContacts = await Promise.all(
+      contactsList.map(async (contact) => {
+        // Get emails
+        const emails = await db
+          .select()
+          .from(contactEmails)
+          .where(eq(contactEmails.contactId, contact.id));
+        
+        // Get phone numbers
+        const phoneNumbers = await db
+          .select()
+          .from(contactPhoneNumbers)
+          .where(eq(contactPhoneNumbers.contactId, contact.id));
+        
+        // Get addresses
+        const addresses = await db
+          .select()
+          .from(contactAddresses)
+          .where(eq(contactAddresses.contactId, contact.id));
+        
+        // Get social media accounts
+        const socialMedia = await db
+          .select()
+          .from(contactSocialMediaAccounts)
+          .where(eq(contactSocialMediaAccounts.contactId, contact.id));
+        
+        // Get tags
+        const tags = await db
+          .select()
+          .from(contactTags)
+          .where(
+            and(
+              eq(contactTags.contactId, contact.id),
+              eq(contactTags.workspaceId, workspaceId)
+            )
+          );
+        
+        return {
+          ...contact,
+          emails: emails || [],
+          phoneNumbers: phoneNumbers || [],
+          addresses: addresses || [],
+          socialMediaAccounts: socialMedia || [],
+          tags: tags || [],
+        };
+      })
+    );
+
+    const responseData = {
+      contacts: enhancedContacts,
+      pagination: {
+        currentPage: page,
+        pageSize,
+        totalRecords,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1
+      }
+    };
+
+    return json(responseData);
+
+  } catch (err) {
+    console.error('Error in paginated contacts API:', err);
+    
+    if (err instanceof Response) {
+      throw err;
+    }
+    
+    throw error(500, 'Failed to fetch paginated contacts');
+  }
+};

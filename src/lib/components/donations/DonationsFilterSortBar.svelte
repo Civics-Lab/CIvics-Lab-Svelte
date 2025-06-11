@@ -10,6 +10,8 @@
   export let searchQuery: string = '';
   export let availableFields: any[] = []; 
   export let currentView: any = null;
+  export let hasFilterChanges: boolean = false;
+  export let hasSortChanges: boolean = false;
   export let donationStats = {
     totalAmount: 0,
     averageAmount: 0,
@@ -141,8 +143,29 @@
     </div>
   </div>
   
-  <!-- Filter and Sort buttons on the right side -->
-  <div class="flex space-x-3">
+  <!-- Save/Cancel buttons for filter/sort changes -->
+  <div class="flex items-center space-x-3">
+    {#if hasFilterChanges || hasSortChanges}
+      <div class="flex items-center space-x-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-md">
+        <span class="text-sm text-blue-700">Unsaved changes</span>
+        <button
+          type="button"
+          class="text-xs px-2 py-1 text-gray-600 hover:text-gray-800 border border-gray-300 rounded"
+          on:click={() => dispatch('cancelChanges')}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="text-xs px-2 py-1 text-white bg-blue-600 hover:bg-blue-700 rounded"
+          on:click={() => dispatch('saveChanges')}
+        >
+          Save Changes
+        </button>
+      </div>
+    {/if}
+    
+    <!-- Filter and Sort buttons -->
     <!-- Filter button -->
     <div class="relative">
       <button
