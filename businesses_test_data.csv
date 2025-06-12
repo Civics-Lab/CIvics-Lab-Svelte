@@ -1,0 +1,6 @@
+business_name,business_type,address,city,state,zip_code,phone,email,website,owner_name,employees,annual_revenue,established_year,industry_sector
+"Elite Restaurant Solutions","Restaurant","1542 Main St","Austin","TX","78701","(512) 555-0001","info@eliterestaurant.com","www.eliterestaurant.com","John Smith",15,450000,2015,"Food & Beverage"
+"Garcia Auto Repair","Auto Repair","2365 Oak Ave","Denver","CO","80201","(303) 555-0002","service@garciaauto.com","www.garciaauto.com","Maria Garcia",8,320000,2012,"Automotive"
+"Modern Hair Salon LLC","Hair Salon","3789 Pine Dr","Seattle","WA","98101","(206) 555-0003","booking@modernhair.com","www.modernhair.com","Lisa Johnson",6,180000,2018,"Personal Services"
+"Professional Dental Practice","Dental Practice","4123 Cedar Ln","Miami","FL","33101","(305) 555-0004","appointments@professionaldental.com","www.professionaldental.com","Dr. Robert Brown",12,850000,2008,"Healthcare"
+"Creative Marketing Agency","Marketing Agency","5456 Elm Rd","Chicago","IL","60601","(312) 555-0005","contact@creativemarketing.com","www.creativemarketing.com","Sarah Williams",22,1200000,2016,"Professional Services"

@@ -1,0 +1,11 @@
+business_name,business_type,address,city,state,zip_code,phone,email,website,owner_name,employees,annual_revenue,established_year,industry_sector
+Elite Restaurant Solutions,Restaurant,1542 Main St,Austin,TX,78701,(512) 555-0001,info@eliterestaurant.com,www.eliterestaurant.com,John Smith,15,450000,2015,Food & Beverage
+Quality Auto Repair,Auto Repair,2365 Oak Ave,Denver,CO,80201,(303) 555-0002,service@qualityauto.com,www.qualityauto.com,Maria Garcia,8,320000,2012,Automotive
+Modern Hair Salon,Hair Salon,3789 Pine Dr,Seattle,WA,98101,(206) 555-0003,booking@modernhair.com,www.modernhair.com,Lisa Johnson,6,180000,2018,Personal Services
+Professional Dental Practice,Dental Practice,4123 Cedar Ln,Miami,FL,33101,(305) 555-0004,appointments@professionaldental.com,www.professionaldental.com,Dr. Robert Brown,12,850000,2008,Healthcare
+Creative Marketing Agency,Marketing Agency,5456 Elm Rd,Chicago,IL,60601,(312) 555-0005,contact@creativemarketing.com,www.creativemarketing.com,Sarah Williams,22,1200000,2016,Professional Services
+Fresh Bakery Co,Bakery,6789 Maple Blvd,Portland,OR,97201,(503) 555-0006,orders@freshbakery.com,www.freshbakery.com,Michael Davis,10,380000,2014,Food & Beverage
+Advanced IT Consulting,IT Consulting,7012 Highland Way,San Francisco,CA,94101,(415) 555-0007,tech@advancedit.com,www.advancedit.com,Jennifer Martinez,18,920000,2019,Technology
+Artisan Coffee Shop,Coffee Shop,8345 Church Ct,Boston,MA,02101,(617) 555-0008,coffee@artisancoffee.com,www.artisancoffee.com,Carlos Rodriguez,7,285000,2017,Food & Beverage
+Premier Law Firm,Law Firm,9678 Center Pl,Phoenix,AZ,85001,(602) 555-0009,legal@premierlaw.com,www.premierlaw.com,Attorney Lisa Thompson,25,1850000,2005,Legal Services
+Quality Plumbing Services,Plumbing,1901 Market Cir,Dallas,TX,75201,(214) 555-0010,service@qualityplumbing.com,www.qualityplumbing.com,David Wilson,14,620000,2011,Professional Services
