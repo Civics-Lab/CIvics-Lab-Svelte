@@ -442,8 +442,8 @@
   </script>
   
   {#if isOpen}
-    <DetailsSheetOverlay {isOpen} on:close={handleClose} zIndex={50}>
-      <div class="fixed inset-0 z-50 overflow-hidden" on:click|stopPropagation={() => {}}>
+    <DetailsSheetOverlay {isOpen} on:close={handleClose} zIndex={9998}>
+      <div class="fixed inset-0 z-[9999] overflow-hidden" on:click|stopPropagation={() => {}}>
         <!-- Sheet panel - prevent click events from reaching the backdrop -->
         <div 
           class="absolute inset-y-0 right-0 max-w-5xl w-full flex"
@@ -629,7 +629,7 @@
   
       <!-- Unsaved changes confirmation dialog -->
       {#if $showUnsavedChangesDialog}
-        <div class="fixed inset-0 z-[60] flex min-h-full items-center justify-center p-4">
+        <div class="fixed inset-0 z-[10000] flex min-h-full items-center justify-center p-4 bg-black/50">
           <div 
             class="relative w-full max-w-lg transform overflow-hidden rounded-lg border border-slate-200 bg-white text-left shadow-lg transition-all"
             transition:fly={{ duration: 200, y: 10 }}

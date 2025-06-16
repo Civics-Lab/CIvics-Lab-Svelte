@@ -64,3 +64,28 @@ nav,
   contain: none !important;
   isolation: auto !important;
 }
+
+/* Fix for unsaved changes modal to appear above details sheet */
+.fixed.inset-0.z-\[10000\] {
+  z-index: 2147483648 !important; /* Higher than details sheet */
+}
+
+/* Alternative selector for unsaved changes modal */
+.unsaved-changes-modal {
+  z-index: 2147483648 !important;
+}
+
+/* Ensure critical modals (like unsaved changes) are always on top */
+.z-critical-modal {
+  z-index: 2147483648 !important;
+  position: fixed !important;
+}
+
+/* When modal is open, adjust details sheet z-index if needed */
+.modal-open .z-modal {
+  z-index: 2147483647 !important;
+}
+
+.modal-open .unsaved-changes-modal {
+  z-index: 2147483648 !important;
+}

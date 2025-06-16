@@ -511,8 +511,8 @@
 </script>
 
 {#if isOpen}
-  <DetailsSheetOverlay {isOpen} on:close={handleClose} zIndex={50}>
-    <div class="fixed inset-0 z-50 overflow-hidden" on:click|stopPropagation={() => {}}>
+  <DetailsSheetOverlay {isOpen} on:close={handleClose} zIndex={9998}>
+    <div class="fixed inset-0 z-[9999] overflow-hidden" on:click|stopPropagation={() => {}}>
       <!-- Sheet panel - prevent click events from reaching the backdrop -->
       <div 
         class="absolute inset-y-0 right-0 max-w-5xl w-full flex"
@@ -692,55 +692,55 @@
         </div>
       </div>
     </div>
-    
-    <!-- Unsaved changes confirmation dialog -->
-    {#if $showUnsavedChangesDialog}
-      <div class="fixed inset-0 z-[60] flex min-h-full items-center justify-center p-4">
-        <div 
-          class="relative w-full max-w-lg transform overflow-hidden rounded-lg border border-slate-200 bg-white text-left shadow-lg transition-all"
-          transition:fly={{ duration: 200, y: 10 }}
-          on:click|stopPropagation={() => {}}
-        >
-          <div class="px-6 pb-4 pt-6">
-            <div class="flex items-start gap-4">
-              <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100">
-                <AlertTriangle class="h-5 w-5 text-amber-600" />
-              </div>
-              <div class="min-w-0 flex-1">
-                <h3 class="text-base font-semibold text-slate-900">Unsaved Changes</h3>
-                <div class="mt-2">
-                  <p class="text-sm text-slate-500">
-                    You have unsaved changes. Are you sure you want to close without saving? Your changes will be lost.
-                  </p>
-                </div>
-              </div>
-            </div>
+  </DetailsSheetOverlay>
+{/if}
+
+<!-- Unsaved changes confirmation dialog - rendered separately at the root level -->
+{#if $showUnsavedChangesDialog}
+  <div class="fixed inset-0 z-[10000] flex min-h-full items-center justify-center p-4 bg-black/50">
+    <div 
+      class="relative w-full max-w-lg transform overflow-hidden rounded-lg border border-slate-200 bg-white text-left shadow-lg transition-all"
+      transition:fly={{ duration: 200, y: 10 }}
+      on:click|stopPropagation={() => {}}
+    >
+      <div class="px-6 pb-4 pt-6">
+        <div class="flex items-start gap-4">
+          <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100">
+            <AlertTriangle class="h-5 w-5 text-amber-600" />
           </div>
-          <div class="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
-            <button 
-              type="button" 
-              class="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-950"
-              on:click|stopPropagation={() => showUnsavedChangesDialog.set(false)}
-            >
-              Cancel
-            </button>
-            <button 
-              type="button" 
-              class="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-950"
-              on:click|stopPropagation={discardChangesAndClose}
-            >
-              Discard
-            </button>
-            <button 
-              type="button" 
-              class="inline-flex h-9 items-center justify-center rounded-md bg-blue-600 px-3 text-sm font-medium text-white shadow transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-600"
-              on:click|stopPropagation={saveChangesAndClose}
-            >
-              Save Changes
-            </button>
+          <div class="min-w-0 flex-1">
+            <h3 class="text-base font-semibold text-slate-900">Unsaved Changes</h3>
+            <div class="mt-2">
+              <p class="text-sm text-slate-500">
+                You have unsaved changes. Are you sure you want to close without saving? Your changes will be lost.
+              </p>
+            </div>
           </div>
         </div>
       </div>
-    {/if}
-  </DetailsSheetOverlay>
+      <div class="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
+        <button 
+          type="button" 
+          class="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-950"
+          on:click|stopPropagation={() => showUnsavedChangesDialog.set(false)}
+        >
+          Cancel
+        </button>
+        <button 
+          type="button" 
+          class="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-950"
+          on:click|stopPropagation={discardChangesAndClose}
+        >
+          Discard
+        </button>
+        <button 
+          type="button" 
+          class="inline-flex h-9 items-center justify-center rounded-md bg-blue-600 px-3 text-sm font-medium text-white shadow transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-600"
+          on:click|stopPropagation={saveChangesAndClose}
+        >
+          Save Changes
+        </button>
+      </div>
+    </div>
+  </div>
 {/if}
