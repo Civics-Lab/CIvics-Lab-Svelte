@@ -15,7 +15,7 @@
   import ContactPhones from './contacts/ContactDetailsSheet/ContactPhones.svelte';
   import ContactAddresses from './contacts/ContactDetailsSheet/ContactAddresses.svelte';
   import ContactSocialMedia from './contacts/ContactDetailsSheet/ContactSocialMedia.svelte';
-  import ContactTags from './contacts/ContactDetailsSheet/ContactTags.svelte';
+  import AutocompleteTags from './shared/AutocompleteTags.svelte';
   
   export let isOpen = false;
   
@@ -322,9 +322,10 @@
     />
     
     <!-- Tags Section -->
-    <ContactTags 
+    <AutocompleteTags 
       {tags}
       isSaving={$isSubmitting}
+      entityType="contact"
       on:change={handleMultiItemChange}
     />
   </form>

@@ -19,7 +19,7 @@
     import GenericPhones from '$lib/components/shared/GenericPhones.svelte';
     import GenericAddresses from '$lib/components/shared/GenericAddresses.svelte';
     import GenericSocialMedia from '$lib/components/shared/GenericSocialMedia.svelte';
-    import GenericTags from '$lib/components/shared/GenericTags.svelte';
+    import AutocompleteTags from '$lib/components/shared/AutocompleteTags.svelte';
     
     export let isOpen = false;
     export let supabase: TypedSupabaseClient;
@@ -329,7 +329,7 @@
         />
         
         <!-- Tags Section -->
-        <GenericTags 
+        <AutocompleteTags 
             {tags}
             isSaving={$isSubmitting}
             entityType="business"
