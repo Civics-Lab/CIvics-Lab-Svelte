@@ -11,7 +11,7 @@
   export let contactOptions;
   export let supabase: TypedSupabaseClient;
   export let isSaving = false;
-  export let isLoadingContacts = false;
+  export let isLoadingContacts = false; // This is a regular boolean, not a store
   
   const dispatch = createEventDispatcher();
   
@@ -60,13 +60,23 @@
   }
   
   async function confirmAddEmployee() {
-    if (!$selectedContactId || !$selectedRole) return;
+    if (!$selectedContactId) return;
     
     isAddingEmployee.set(true);
     
     try {
       // Find the selected contact
       const contact = $contactOptions.find(c => c.id === $selectedContactId);
+      
+      // Check if employee already exists
+      const existingEmployee = $employees.find(emp => emp.contact_id === $selectedContactId && !emp.isDeleted);
+      if (existingEmployee) {
+        showContactSelect.set(false);
+        isAddingEmployee.set(false);
+        selectedContactId.set('');
+        selectedRole.set('');
+        return;
+      }
       
       // Add to employees list
       employees.update(items => [
@@ -76,7 +86,7 @@
           business_id: null, // This will be set when saving
           contact_id: $selectedContactId,
           status: 'active',
-          role: $selectedRole, // Store role information for display
+          role: $selectedRole || 'Employee', // Store role information for display
           isNew: true,
           contact_name: contact ? contact.name : 'Unknown Contact'
         }
@@ -85,9 +95,6 @@
       // Close the selection UI
       showContactSelect.set(false);
       isAddingEmployee.set(false);
-      
-      // Log for debugging
-      console.log('Added new employee with role:', $selectedRole);
       
       // Reset role and contact selection
       selectedRole.set('');
@@ -218,17 +225,17 @@
         </div>
         
         <!-- Contact Selection -->
-        <div class="grid gap-4 md:grid-cols-2">
+        <div class="space-y-4">
           <div class="space-y-2">
             <label for="contact" class="block text-sm font-medium text-slate-700">Select Contact</label>
             <select 
               id="contact"
               bind:value={$selectedContactId}
               class="flex h-9 w-full items-center justify-between rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={$isLoadingContacts || $isAddingEmployee}
+              disabled={isLoadingContacts || $isAddingEmployee}
             >
               <option value="">Select a contact</option>
-              {#if $isLoadingContacts}
+              {#if isLoadingContacts}
                 <option value="" disabled>Loading contacts...</option>
               {:else if $contactOptions.length === 0 && $searchQuery.trim().length > 1}
                 <option value="" disabled>No contacts found</option>
@@ -245,14 +252,14 @@
           <div class="space-y-2">
             <label for="role" class="block text-sm font-medium text-slate-700">
               <Briefcase class="inline h-4 w-4 mr-1" />
-              Role
+              Role (Optional)
             </label>
             <input 
               type="text" 
               id="role" 
               bind:value={$selectedRole}
               class="flex h-9 w-full rounded-md border border-slate-300 bg-white px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
-              placeholder="Job title or role"
+              placeholder="Job title or role (optional)"
               disabled={$isAddingEmployee}
             />
           </div>
@@ -272,7 +279,7 @@
             type="button"
             class="inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-slate-900 text-white hover:bg-slate-800 h-9 px-3"
             on:click={confirmAddEmployee}
-            disabled={$isAddingEmployee || !$selectedContactId || !$selectedRole}
+            disabled={$isAddingEmployee || !$selectedContactId}
           >
             {#if $isAddingEmployee}
               <LoadingSpinner size="sm" color="white" />

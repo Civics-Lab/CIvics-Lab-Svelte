@@ -13,7 +13,7 @@
     
     // Import entity-specific components
     import BusinessBasicInfo from './BusinessDetailsSheet/BusinessBasicInfo.svelte';
-    import BusinessEmployees from './BusinessDetailsSheet/BusinessEmployees.svelte';
+    import BusinessEmployees from './form/BusinessEmployees.svelte';
     
     // Import generic shared components
     import GenericPhones from '$lib/components/shared/GenericPhones.svelte';
@@ -321,9 +321,9 @@
         <BusinessEmployees 
             {employees}
             {contactOptions}
-            {supabase}
-            isSaving={$isSubmitting}
-            isLoadingContacts={$isLoadingContacts}
+            errors={errors}
+            isSubmitting={isSubmitting}
+            {isLoadingContacts}
             on:change={handleMultiItemChange}
             on:searchContacts={(e) => searchContacts(e.detail)}
         />

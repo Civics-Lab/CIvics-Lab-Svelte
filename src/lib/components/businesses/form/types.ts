@@ -21,9 +21,14 @@ export interface SocialMedia {
 }
 
 export interface Employee {
+  id?: string;
   contact_id: string;
   contact_name: string;
   status: string;
+  role?: string;
+  isNew?: boolean;
+  isModified?: boolean;
+  isDeleted?: boolean;
 }
 
 export interface StateOption {

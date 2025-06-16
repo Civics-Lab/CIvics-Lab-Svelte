@@ -13,7 +13,7 @@
     
     // Import entity-specific subcomponents
     import BusinessBasicInfo from './BusinessDetailsSheet/BusinessBasicInfo.svelte';
-    import BusinessEmployees from './BusinessDetailsSheet/BusinessEmployees.svelte';
+    import BusinessEmployees from './form/BusinessEmployees.svelte';
     import BusinessDonations from './BusinessDetailsSheet/BusinessDonations.svelte';
     
     // Import generic shared components
@@ -36,6 +36,9 @@
     const hasChanges = writable(false);
     const error = writable<string | null>(null);
     const isLoadingContacts = writable(false);
+    
+    // Create a compatible errors store for the form component
+    const formErrors = writable<Record<string, string>>({});
     
     // State for unsaved changes confirmation dialog
     const showUnsavedChangesDialog = writable(false);
@@ -557,8 +560,8 @@
                       <BusinessEmployees 
                         {employees}
                         {contactOptions}
-                        {supabase}
-                        isSaving={$isSaving}
+                        errors={formErrors}
+                        isSubmitting={isSaving}
                         isLoadingContacts={$isLoadingContacts}
                         on:change={handleMultiItemChange}
                         on:searchContacts={(e) => searchContacts(e.detail, $originalData?.workspaceId)}
