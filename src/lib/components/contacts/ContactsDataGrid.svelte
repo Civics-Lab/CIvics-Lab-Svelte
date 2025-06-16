@@ -73,13 +73,18 @@
     return field ? field.label : columnId;
   }
   
-  // Computed paginated contacts
+  // Computed paginated contacts - only for client-side pagination
+  // For server-side pagination, use contacts directly as they're already paginated
   $: paginatedContacts = (() => {
-    if (totalRecords === 0) return contacts;
-    
-    const startIndex = (currentPage - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    return contacts.slice(startIndex, endIndex);
+    // Check if we need client-side pagination based on totalRecords
+    // If totalRecords equals contacts.length, we're likely in client-side mode
+    if (totalRecords === contacts.length) {
+      const startIndex = (currentPage - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+      return contacts.slice(startIndex, endIndex);
+    }
+    // For server-side pagination, contacts are already paginated
+    return contacts;
   })();
   
   function viewContact(contact, e) {

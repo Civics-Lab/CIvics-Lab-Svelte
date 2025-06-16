@@ -133,13 +133,24 @@
     }
   }
 
+  let importCancelled = false;
+  
   async function processBatches() {
     if (!parsedData || !importOptions || !importSessionId) return;
 
     const batchSize = importOptions.batchSize;
     const totalBatches = Math.ceil(parsedData.totalRows / batchSize);
+    
+    // Reset cancellation flag
+    importCancelled = false;
 
     for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+      // Check if import was cancelled
+      if (importCancelled) {
+        console.log('Import cancelled, stopping batch processing');
+        break;
+      }
+      
       const startIndex = batchIndex * batchSize;
       const endIndex = Math.min(startIndex + batchSize, parsedData.totalRows);
       const batchData = parsedData.data.slice(startIndex, endIndex);
@@ -163,7 +174,8 @@
             batchData,
             startIndex,
             batchNumber: batchIndex + 1,
-            totalBatches
+            totalBatches,
+            validateOnly: importOptions.validateOnly
           })
         });
 
@@ -201,6 +213,8 @@
   }
 
   function handleImportCancelled() {
+    // Set cancellation flag to stop batch processing
+    importCancelled = true;
     // Reset to options step
     currentStep = 4;
     importSessionId = null;

@@ -13,25 +13,77 @@
   let validationResults: any = null;
   let isValidating = false;
   
+  // More defensive handling of config loading
   $: {
-    console.log('ImportPreview - importType:', importType);
-    console.log('ImportPreview - IMPORT_CONFIGS:', IMPORT_CONFIGS);
-    console.log('ImportPreview - config:', IMPORT_CONFIGS[importType]);
+    console.log('ImportPreview reactive block:', {
+      importType,
+      IMPORT_CONFIGS: Object.keys(IMPORT_CONFIGS),
+      hasBusinessConfig: !!IMPORT_CONFIGS['businesses'],
+      configValue: IMPORT_CONFIGS[importType]
+    });
   }
-  $: config = IMPORT_CONFIGS[importType] || { requiredFields: [], optionalFields: [], validationRules: {} };
+  
+  // Use a computed config with thorough defaults
+  $: config = (() => {
+    const baseConfig = IMPORT_CONFIGS[importType];
+    
+    if (!baseConfig) {
+      console.warn(`No import config found for type: ${importType}`);
+      return {
+        type: importType,
+        requiredFields: [],
+        optionalFields: [],
+        validationRules: {},
+        displayName: importType.charAt(0).toUpperCase() + importType.slice(1),
+        description: `Import ${importType}`,
+        duplicateDetectionFields: [],
+        relatedEntities: {}
+      } as ImportConfig;
+    }
+    
+    // Ensure all required properties exist
+    return {
+      type: baseConfig.type || importType,
+      requiredFields: baseConfig.requiredFields || [],
+      optionalFields: baseConfig.optionalFields || [],
+      validationRules: baseConfig.validationRules || {},
+      displayName: baseConfig.displayName || importType.charAt(0).toUpperCase() + importType.slice(1),
+      description: baseConfig.description || `Import ${importType}`,
+      duplicateDetectionFields: baseConfig.duplicateDetectionFields || [],
+      relatedEntities: baseConfig.relatedEntities || {}
+    } as ImportConfig;
+  })();
   $: previewData = parsedData.data.slice(0, 5); // Show first 5 rows
   
   async function validateData() {
     isValidating = true;
     
     try {
+      console.log('Starting validation with config:', config);
+      
       // Create a simple field mapping for validation (1:1 mapping for matching field names)
       const fieldMapping: Record<string, string> = {};
+      
+      // Early return if config is not properly loaded
+      if (!config || (!config.requiredFields && !config.optionalFields)) {
+        console.warn('Config not ready for validation, creating default validation result');
+        validationResults = {
+          validRows: [],
+          invalidRows: [],
+          duplicates: []
+        };
+        return;
+      }
       
       // Improved field mapping logic
       parsedData.headers.forEach(header => {
         const normalizedHeader = header.toLowerCase().replace(/[^a-z0-9]/g, '');
-        const allFields = [...config.requiredFields, ...config.optionalFields];
+        const allFields = [...(config.requiredFields || []), ...(config.optionalFields || [])];
+        
+        // Skip if no fields are available
+        if (allFields.length === 0) {
+          return;
+        }
         
         // Define common mappings
         const commonMappings: Record<string, string> = {
@@ -79,8 +131,8 @@
       
       console.log('Field mapping for preview validation:', fieldMapping);
       
-      // Only validate if we have some field mappings
-      if (Object.keys(fieldMapping).length > 0) {
+      // Only validate if we have a valid config and some field mappings
+      if (config && Object.keys(fieldMapping).length > 0) {
         validationResults = CSVProcessor.validateData(
           parsedData.data, 
           config, 

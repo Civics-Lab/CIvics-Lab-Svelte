@@ -113,6 +113,8 @@
     hasFilterChanges.set(false);
     hasSortChanges.set(false);
     
+    console.log('Selected view with filters:', view.filters, 'and sorting:', view.sorting);
+    
     // Re-apply filters and sorting when view changes
     if (useClientSideFiltering) {
       applyFiltersAndSorting();
@@ -167,8 +169,11 @@
   }
   
   function handlePageChanged(event) {
-    contactsPagination.setPage(event.detail.page);
-    // Trigger server-side data fetch when using server-side pagination
+    const newPage = event.detail.page;
+    console.log('Page changed to:', newPage);
+    contactsPagination.setPage(newPage);
+    
+    // Always trigger server-side data fetch when page changes
     if (!useClientSideFiltering) {
       isLoadingContacts.set(true);
       fetchPaginatedContactsData().finally(() => {
@@ -178,8 +183,11 @@
   }
   
   function handlePageSizeChanged(event) {
-    contactsPagination.setPageSize(event.detail.pageSize);
-    // Trigger server-side data fetch when using server-side pagination
+    const newPageSize = event.detail.pageSize;
+    console.log('Page size changed to:', newPageSize);
+    contactsPagination.setPageSize(newPageSize);
+    
+    // Always trigger server-side data fetch when page size changes
     if (!useClientSideFiltering) {
       isLoadingContacts.set(true);
       fetchPaginatedContactsData().finally(() => {
@@ -266,11 +274,18 @@
         if (selectViewId) {
           const viewToSelect = fetchedViews.find(view => view.id === selectViewId);
           if (viewToSelect) {
-            currentView.set(viewToSelect);
-            filters.set(viewToSelect.filters || []);
-            sorting.set(viewToSelect.sorting || []);
-            return;
-          }
+          currentView.set(viewToSelect);
+          filters.set(viewToSelect.filters || []);
+          sorting.set(viewToSelect.sorting || []);
+          // Initialize pending states
+          pendingFilters.set([...(viewToSelect.filters || [])]);
+          pendingSorting.set([...(viewToSelect.sorting || [])]);
+          hasFilterChanges.set(false);
+          hasSortChanges.set(false);
+          // Fetch data with the selected view
+            fetchContactsData();
+          return;
+        }
         }
         
         // Try to restore the previously selected view from localStorage
@@ -282,21 +297,42 @@
           // Find the view with the stored ID
           const savedView = fetchedViews.find(view => view.id === storedViewId);
           if (savedView) {
-            currentView.set(savedView);
-            filters.set(savedView.filters || []);
-            sorting.set(savedView.sorting || []);
+          currentView.set(savedView);
+          filters.set(savedView.filters || []);
+          sorting.set(savedView.sorting || []);
+          // Initialize pending states
+          pendingFilters.set([...(savedView.filters || [])]);
+          pendingSorting.set([...(savedView.sorting || [])]);
+          hasFilterChanges.set(false);
+          hasSortChanges.set(false);
+          // Fetch data with the saved view
+          fetchContactsData();
           } else {
-            // If stored view is not found, use the first one
-            currentView.set(fetchedViews[0]);
-            filters.set(fetchedViews[0].filters || []);
-            sorting.set(fetchedViews[0].sorting || []);
-          }
-        } else {
-          // If no stored view, use the first one
+          // If stored view is not found, use the first one
           currentView.set(fetchedViews[0]);
           filters.set(fetchedViews[0].filters || []);
           sorting.set(fetchedViews[0].sorting || []);
+          // Initialize pending states
+          pendingFilters.set([...(fetchedViews[0].filters || [])]);
+          pendingSorting.set([...(fetchedViews[0].sorting || [])]);
+          hasFilterChanges.set(false);
+          hasSortChanges.set(false);
+          // Fetch data with the first view
+          fetchContactsData();
         }
+        } else {
+        // If no stored view, use the first one
+        currentView.set(fetchedViews[0]);
+        filters.set(fetchedViews[0].filters || []);
+        sorting.set(fetchedViews[0].sorting || []);
+        // Initialize pending states
+        pendingFilters.set([...(fetchedViews[0].filters || [])]);
+        pendingSorting.set([...(fetchedViews[0].sorting || [])]);
+        hasFilterChanges.set(false);
+        hasSortChanges.set(false);
+        // Fetch data with the first view
+        fetchContactsData();
+      }
       } else {
         // Create a default view if none exists
         await createDefaultView();
@@ -320,6 +356,13 @@
       currentView.set(newView);
       filters.set([]);
       sorting.set([]);
+      // Initialize pending states
+      pendingFilters.set([]);
+      pendingSorting.set([]);
+      hasFilterChanges.set(false);
+      hasSortChanges.set(false);
+      // Fetch data with the default view
+      fetchContactsData();
       
     } catch (error) {
       console.error('Error creating default view:', error);
@@ -366,6 +409,11 @@
         currentView.set(refreshedView);
         filters.set(refreshedView.filters || []);
         sorting.set(refreshedView.sorting || []);
+        // Initialize pending states
+        pendingFilters.set([...(refreshedView.filters || [])]);
+        pendingSorting.set([...(refreshedView.sorting || [])]);
+        hasFilterChanges.set(false);
+        hasSortChanges.set(false);
       }
       
       toastStore.success('View created successfully');
@@ -444,8 +492,8 @@
       
       toastStore.success('View updated successfully');
       
-      // Refresh views from database to ensure consistency
-      await fetchViews($currentView.id);
+      // Don't refresh views after update as it causes duplicate data fetches
+      // The view was already updated in local state above
       
     } catch (error) {
       console.error('Error updating view:', error);
@@ -468,6 +516,11 @@
         currentView.set($views[0]);
         filters.set($views[0].filters || []);
         sorting.set($views[0].sorting || []);
+        // Initialize pending states
+        pendingFilters.set([...($views[0].filters || [])]);
+        pendingSorting.set([...($views[0].sorting || [])]);
+        hasFilterChanges.set(false);
+        hasSortChanges.set(false);
       } else {
         await createDefaultView();
       }
@@ -558,6 +611,11 @@
   
   // Save filter/sort changes
   async function saveFilterSortChanges() {
+    if (!$currentView) {
+      console.error('No current view to update');
+      return;
+    }
+    
     try {
       isLoadingContacts.set(true);
       
@@ -572,8 +630,29 @@
         hasSortChanges.set(false);
       }
       
-      // Update the view in the database
-      await updateView();
+      // Update the view in the database with the new filter and sort data
+      const updatedView = {
+        filters: $filters,
+        sorting: $sorting
+      };
+      
+      console.log('Saving filter/sort changes:', updatedView);
+      
+      // Update using API
+      const result = await updateContactView($currentView.id, updatedView);
+      
+      console.log('API update result:', result);
+      
+      // Update the views list
+      views.update(viewsList => 
+        viewsList.map(view => view.id === $currentView.id 
+          ? { ...view, ...updatedView } 
+          : view
+        )
+      );
+      
+      // Update current view
+      currentView.update(view => ({ ...view, ...updatedView }));
       
       // Reset pagination to page 1 and fetch new data
       contactsPagination.setPage(1);
@@ -588,7 +667,7 @@
       
     } catch (error) {
       console.error('Error saving filter/sort changes:', error);
-      toastStore.error('Failed to save changes');
+      toastStore.error('Failed to save changes: ' + (error.message || 'Unknown error'));
     } finally {
       isLoadingContacts.set(false);
     }
@@ -605,7 +684,12 @@
   
   // Function to fetch contacts with pagination
   async function fetchContactsData() {
-    if (!$workspaceStore.currentWorkspace) return;
+    if (!$workspaceStore.currentWorkspace) {
+      console.log('No workspace available, skipping contact fetch');
+      return;
+    }
+    
+    console.log('Fetching contacts data, useClientSideFiltering:', useClientSideFiltering);
     
     isLoadingContacts.set(true);
     contactsError.set(null);
@@ -613,6 +697,7 @@
     try {
       if (useClientSideFiltering) {
         // Client-side approach (for backward compatibility)
+        console.log('Using client-side filtering');
         const contactsData = await fetchContacts($workspaceStore.currentWorkspace.id);
         contacts.set(contactsData || []);
         
@@ -627,6 +712,7 @@
         applyFiltersAndSorting();
       } else {
         // Server-side approach (recommended for large datasets)
+        console.log('Using server-side filtering');
         await fetchPaginatedContactsData();
       }
       
@@ -640,8 +726,20 @@
   
   // Function to fetch paginated contacts from server
   async function fetchPaginatedContactsData() {
-    if (!$workspaceStore.currentWorkspace) return;
+    if (!$workspaceStore.currentWorkspace) {
+      console.error('No workspace available for fetching contacts');
+      return;
+    }
     
+    console.log('Fetching paginated contacts with params:', {
+      page: $contactsPagination.currentPage,
+      pageSize: $contactsPagination.pageSize,
+      search: $searchQuery,
+      filters: $filters,
+      sorting: $sorting,
+      timestamp: new Date().toISOString()
+    });
+
     try {
       const response = await fetchPaginatedContacts(
         $workspaceStore.currentWorkspace.id,
@@ -653,6 +751,15 @@
           sorting: $sorting
         }
       );
+      
+      console.log('Received paginated response at', new Date().toISOString(), ':', {
+        contactsCount: response.contacts.length,
+        firstContact: response.contacts[0] ? {
+          firstName: response.contacts[0].firstName,
+          lastName: response.contacts[0].lastName
+        } : null,
+        pagination: response.pagination
+      });
       
       // Update contacts with server response
       filteredContacts.set(response.contacts);
@@ -667,6 +774,7 @@
       
     } catch (error) {
       console.error('Error fetching paginated contacts:', error);
+      contactsError.set('Failed to fetch contacts: ' + (error.message || 'Unknown error'));
       throw error;
     }
   }
@@ -795,40 +903,35 @@
     }
   }
   
-  // Only fetch when workspace changes
-  $: if ($workspaceStore.currentWorkspace) {
+  // Only fetch when workspace changes and we don't already have a view loaded
+  $: if ($workspaceStore.currentWorkspace && !$currentView) {
     fetchViews();
-    fetchContactsData();
   }
   
-  // Debounced data refresh for other changes
+  // Debounced data refresh for client-side filtering
   let refreshTimeout;
   function scheduleRefresh() {
-    clearTimeout(refreshTimeout);
-    refreshTimeout = setTimeout(() => {
-      if (useClientSideFiltering) {
+    if (useClientSideFiltering) {
+      clearTimeout(refreshTimeout);
+      refreshTimeout = setTimeout(() => {
         applyFiltersAndSorting();
-      }
-    }, PAGINATION_CONFIG.clientDebounceMs);
+      }, PAGINATION_CONFIG.clientDebounceMs);
+    }
   }
   
-  // Debounced server refresh for search
+  // Debounced server refresh for search changes only
   let serverRefreshTimeout;
   function scheduleServerRefresh() {
-    clearTimeout(serverRefreshTimeout);
-    serverRefreshTimeout = setTimeout(() => {
-      if (!useClientSideFiltering) {
+    if (!useClientSideFiltering) {
+      clearTimeout(serverRefreshTimeout);
+      serverRefreshTimeout = setTimeout(() => {
+        console.log('Executing scheduled server refresh for search');
         isLoadingContacts.set(true);
         fetchPaginatedContactsData().finally(() => {
           isLoadingContacts.set(false);
         });
-      }
-    }, PAGINATION_CONFIG.searchDebounceMs);
-  }
-  
-  // Watch for changes that should trigger filtering/sorting
-  $: if ($searchQuery !== undefined || $filters !== undefined || $sorting !== undefined) {
-    scheduleRefresh();
+      }, PAGINATION_CONFIG.searchDebounceMs);
+    }
   }
 </script>
 

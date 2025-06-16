@@ -30,6 +30,8 @@
     export let searchQuery = '';
     export let availableFields: Field[] = [];
     export let currentView: FieldView | null = null;
+    export let hasFilterChanges = false;
+    export let hasSortChanges = false;
     
     const dispatch = createEventDispatcher<{
         searchChanged: string;
@@ -41,6 +43,8 @@
         removeSort: number;
         moveSort: { index: number; direction: 'up' | 'down' };
         sortChanged: void;
+        saveChanges: void;
+        cancelChanges: void;
     }>();
     
     // Get field label from id
@@ -151,7 +155,15 @@
         dispatch('sortChanged');
     }
     
-    // Get available operators
+    // Save changes
+    function saveChanges(): void {
+        dispatch('saveChanges');
+    }
+    
+    // Cancel changes
+    function cancelChanges(): void {
+        dispatch('cancelChanges');
+    }
     function getAvailableOperators(): Array<{ id: string; label: string }> {
         return [
             { id: '=', label: 'Equals' },
@@ -210,7 +222,7 @@
     });
 </script>
 
-<div class="bg-white px-6 py-3 flex items-center justify-between">
+<div class="bg-white px-6 py-3 flex items-center justify-between border-b border-gray-200">
   <div class="flex-1 max-w-lg">
     <div class="relative rounded-md shadow-sm">
       <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -511,3 +523,35 @@
     </div>
   </div>
 </div>
+
+<!-- Save/Cancel bar (only show when there are changes) -->
+{#if hasFilterChanges || hasSortChanges}
+  <div class="bg-blue-50 border-b border-blue-200 px-6 py-3">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center">
+        <svg class="h-5 w-5 text-blue-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span class="text-sm text-blue-800 font-medium">
+          You have unsaved {hasFilterChanges && hasSortChanges ? 'filter and sort' : hasFilterChanges ? 'filter' : 'sort'} changes
+        </span>
+      </div>
+      <div class="flex space-x-3">
+        <button
+          type="button"
+          class="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          on:click={cancelChanges}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          on:click={saveChanges}
+        >
+          Save Changes
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}

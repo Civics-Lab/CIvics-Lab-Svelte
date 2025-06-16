@@ -16,6 +16,15 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     const filters = url.searchParams.get('filters') ? JSON.parse(url.searchParams.get('filters')!) : [];
     const sorting = url.searchParams.get('sorting') ? JSON.parse(url.searchParams.get('sorting')!) : [];
 
+    console.log('Paginated contacts API called with:', {
+      page,
+      pageSize,
+      workspaceId,
+      search,
+      filters,
+      sorting
+    });
+
     if (!workspaceId) {
       throw error(400, 'Workspace ID is required');
     }
@@ -128,6 +137,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
     // Apply sorting
     if (sorting.length > 0) {
+      console.log('Applying server-side sorting:', sorting);
       const orderByClauses = sorting.map((sort: any) => {
         if (sort.field && sort.direction) {
           // Map field names to actual database columns
@@ -159,6 +169,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
               return null;
           }
           
+          console.log(`Sorting by ${sort.field} (${sort.direction})`);
           return sort.direction === 'asc' 
             ? asc(dbField)
             : desc(dbField);
@@ -167,10 +178,12 @@ export const GET: RequestHandler = async ({ url, locals }) => {
       }).filter(Boolean);
       
       if (orderByClauses.length > 0) {
+        console.log('Applied', orderByClauses.length, 'sort clauses');
         query = query.orderBy(...orderByClauses);
       }
     } else {
       // Default sorting by last name, then first name
+      console.log('Using default sorting: lastName ASC, firstName ASC');
       query = query.orderBy(asc(contacts.lastName), asc(contacts.firstName));
     }
 
@@ -240,6 +253,11 @@ export const GET: RequestHandler = async ({ url, locals }) => {
         hasPreviousPage: page > 1
       }
     };
+
+    console.log('Returning paginated response:', {
+      contactsCount: enhancedContacts.length,
+      pagination: responseData.pagination
+    });
 
     return json(responseData);
 

@@ -78,11 +78,14 @@
   // Fields that can be displayed/filtered/sorted
   const availableFields = writable([
     { id: 'businessName', label: 'Business Name' },
+    { id: 'status', label: 'Status' },
     { id: 'addresses', label: 'Address' },
     { id: 'phoneNumbers', label: 'Phone' },
     { id: 'socialMediaAccounts', label: 'Social Media' },
     { id: 'employees', label: 'Employees' },
-    { id: 'tags', label: 'Tags' }
+    { id: 'tags', label: 'Tags' },
+    { id: 'createdAt', label: 'Created Date' },
+    { id: 'updatedAt', label: 'Updated Date' }
   ]);
   
   // Filters state
@@ -174,8 +177,11 @@
   }
   
   function handlePageChanged(event) {
-    businessesPagination.setPage(event.detail.page);
-    // Trigger server-side data fetch when using server-side pagination
+    const newPage = event.detail.page;
+    console.log('Page changed to:', newPage);
+    businessesPagination.setPage(newPage);
+    
+    // Always trigger server-side data fetch when page changes
     if (!useClientSideFiltering) {
       isLoadingBusinesses.set(true);
       fetchPaginatedBusinessesData().finally(() => {
@@ -185,8 +191,11 @@
   }
   
   function handlePageSizeChanged(event) {
-    businessesPagination.setPageSize(event.detail.pageSize);
-    // Trigger server-side data fetch when using server-side pagination
+    const newPageSize = event.detail.pageSize;
+    console.log('Page size changed to:', newPageSize);
+    businessesPagination.setPageSize(newPageSize);
+    
+    // Always trigger server-side data fetch when page size changes
     if (!useClientSideFiltering) {
       isLoadingBusinesses.set(true);
       fetchPaginatedBusinessesData().finally(() => {
@@ -277,6 +286,12 @@
             currentView.set(viewToSelect);
             filters.set(viewToSelect.filters || []);
             sorting.set(viewToSelect.sorting || []);
+            pendingFilters.set([...(viewToSelect.filters || [])]);
+            pendingSorting.set([...(viewToSelect.sorting || [])]);
+            hasFilterChanges.set(false);
+            hasSortChanges.set(false);
+            // Fetch data with the selected view
+            fetchBusinessesData();
             return;
           }
         }
@@ -293,17 +308,35 @@
             currentView.set(savedView);
             filters.set(savedView.filters || []);
             sorting.set(savedView.sorting || []);
+            pendingFilters.set([...(savedView.filters || [])]);
+            pendingSorting.set([...(savedView.sorting || [])]);
+            hasFilterChanges.set(false);
+            hasSortChanges.set(false);
+            // Fetch data with the saved view
+            fetchBusinessesData();
           } else {
             // If stored view is not found, use the first one
             currentView.set(fetchedViews[0]);
             filters.set(fetchedViews[0].filters || []);
             sorting.set(fetchedViews[0].sorting || []);
+            pendingFilters.set([...(fetchedViews[0].filters || [])]);
+            pendingSorting.set([...(fetchedViews[0].sorting || [])]);
+            hasFilterChanges.set(false);
+            hasSortChanges.set(false);
+            // Fetch data with the first view
+            fetchBusinessesData();
           }
         } else {
           // If no stored view, use the first one
           currentView.set(fetchedViews[0]);
           filters.set(fetchedViews[0].filters || []);
           sorting.set(fetchedViews[0].sorting || []);
+          pendingFilters.set([...(fetchedViews[0].filters || [])]);
+          pendingSorting.set([...(fetchedViews[0].sorting || [])]);
+          hasFilterChanges.set(false);
+          hasSortChanges.set(false);
+          // Fetch data with the first view
+          fetchBusinessesData();
         }
       } else {
         // Create a default view if none exists
@@ -339,6 +372,12 @@
       currentView.set(defaultView);
       filters.set([]);
       sorting.set([]);
+      pendingFilters.set([]);
+      pendingSorting.set([]);
+      hasFilterChanges.set(false);
+      hasSortChanges.set(false);
+      // Fetch data with the default view
+      fetchBusinessesData();
       
     } catch (error) {
       console.error('Error creating default view:', error);
@@ -379,6 +418,10 @@
         currentView.set(refreshedView);
         filters.set(refreshedView.filters || []);
         sorting.set(refreshedView.sorting || []);
+        pendingFilters.set([...(refreshedView.filters || [])]);
+        pendingSorting.set([...(refreshedView.sorting || [])]);
+        hasFilterChanges.set(false);
+        hasSortChanges.set(false);
       }
       
       toastStore.success('View created successfully');
@@ -423,15 +466,10 @@
       // Update current view
       currentView.set(updatedView);
       
-      // Refetch views to ensure list is updated
-      await fetchViewsData($currentView.id);
+      toastStore.success('View updated successfully');
       
-      // Close the edit modal if it's open
-      if ($isEditViewModalOpen) {
-        isEditViewModalOpen.set(false);
-        newViewName.set('');
-        toastStore.success('View updated successfully');
-      }
+      // Don't refresh views after update as it causes duplicate data fetches
+      // The view was already updated in local state above
       
     } catch (error) {
       console.error('Error updating view:', error);
@@ -456,6 +494,10 @@
           currentView.set($views[0]);
           filters.set($views[0].filters || []);
           sorting.set($views[0].sorting || []);
+          pendingFilters.set([...($views[0].filters || [])]);
+          pendingSorting.set([...($views[0].sorting || [])]);
+          hasFilterChanges.set(false);
+          hasSortChanges.set(false);
         } else {
           await createDefaultView();
         }
@@ -530,7 +572,19 @@
     hasSortChanges.set(true);
   }
   
-  // Move filter up or down
+  // Move sort up or down
+  function moveSort(index, direction) {
+    pendingSorting.update(s => {
+      const newSorting = [...s];
+      if (direction === 'up' && index > 0) {
+        [newSorting[index], newSorting[index - 1]] = [newSorting[index - 1], newSorting[index]];
+      } else if (direction === 'down' && index < newSorting.length - 1) {
+        [newSorting[index], newSorting[index + 1]] = [newSorting[index + 1], newSorting[index]];
+      }
+      return newSorting;
+    });
+    hasSortChanges.set(true);
+  }
   function moveFilter(index, direction) {
     pendingFilters.update(f => {
       const newFilters = [...f];
@@ -546,6 +600,11 @@
   
   // Save filter/sort changes
   async function saveFilterSortChanges() {
+    if (!$currentView) {
+      console.error('No current view to update');
+      return;
+    }
+    
     try {
       isLoadingBusinesses.set(true);
       
@@ -560,8 +619,29 @@
         hasSortChanges.set(false);
       }
       
-      // Update the view in the database
-      await updateView();
+      // Update the view in the database with the new filter and sort data
+      const updatedView = {
+        filters: $filters,
+        sorting: $sorting
+      };
+      
+      console.log('Saving filter/sort changes:', updatedView);
+      
+      // Update using API
+      const result = await updateBusinessView($currentView.id, updatedView);
+      
+      console.log('API update result:', result);
+      
+      // Update the views list
+      views.update(viewsList => 
+        viewsList.map(view => view.id === $currentView.id 
+          ? { ...view, ...updatedView } 
+          : view
+        )
+      );
+      
+      // Update current view
+      currentView.update(view => ({ ...view, ...updatedView }));
       
       // Reset pagination to page 1 and fetch new data
       businessesPagination.setPage(1);
@@ -576,7 +656,7 @@
       
     } catch (error) {
       console.error('Error saving filter/sort changes:', error);
-      toastStore.error('Failed to save changes');
+      toastStore.error('Failed to save changes: ' + (error.message || 'Unknown error'));
     } finally {
       isLoadingBusinesses.set(false);
     }
@@ -593,7 +673,12 @@
   
   // Function to fetch businesses with pagination
   async function fetchBusinessesData() {
-    if (!$workspaceStore.currentWorkspace) return;
+    if (!$workspaceStore.currentWorkspace) {
+      console.log('No workspace available, skipping business fetch');
+      return;
+    }
+    
+    console.log('Fetching businesses data, useClientSideFiltering:', useClientSideFiltering);
     
     isLoadingBusinesses.set(true);
     businessesError.set(null);
@@ -601,6 +686,7 @@
     try {
       if (useClientSideFiltering) {
         // Client-side approach (for backward compatibility)
+        console.log('Using client-side filtering');
         const businessData = await fetchBusinesses($workspaceStore.currentWorkspace.id);
         businesses.set(businessData || []);
         
@@ -615,6 +701,7 @@
         applyFiltersAndSorting();
       } else {
         // Server-side approach (recommended for large datasets)
+        console.log('Using server-side filtering');
         await fetchPaginatedBusinessesData();
       }
       
@@ -628,8 +715,20 @@
   
   // Function to fetch paginated businesses from server
   async function fetchPaginatedBusinessesData() {
-    if (!$workspaceStore.currentWorkspace) return;
+    if (!$workspaceStore.currentWorkspace) {
+      console.error('No workspace available for fetching businesses');
+      return;
+    }
     
+    console.log('Fetching paginated businesses with params:', {
+      page: $businessesPagination.currentPage,
+      pageSize: $businessesPagination.pageSize,
+      search: $searchQuery,
+      filters: $filters,
+      sorting: $sorting,
+      timestamp: new Date().toISOString()
+    });
+
     try {
       const response = await fetchPaginatedBusinesses(
         $workspaceStore.currentWorkspace.id,
@@ -641,6 +740,14 @@
           sorting: $sorting
         }
       );
+      
+      console.log('Received paginated response at', new Date().toISOString(), ':', {
+        businessesCount: response.businesses.length,
+        firstBusiness: response.businesses[0] ? {
+          businessName: response.businesses[0].businessName
+        } : null,
+        pagination: response.pagination
+      });
       
       // Update businesses with server response
       filteredBusinesses.set(response.businesses);
@@ -655,6 +762,7 @@
       
     } catch (error) {
       console.error('Error fetching paginated businesses:', error);
+      businessesError.set('Failed to fetch businesses: ' + (error.message || 'Unknown error'));
       throw error;
     }
   }
@@ -811,40 +919,35 @@
     }
   }
   
-  // Only fetch when workspace changes
-  $: if ($workspaceStore.currentWorkspace) {
+  // Only fetch when workspace changes and we don't already have a view loaded
+  $: if ($workspaceStore.currentWorkspace && !$currentView) {
     fetchViewsData();
-    fetchBusinessesData();
   }
   
-  // Debounced data refresh for other changes
+  // Debounced data refresh for client-side filtering
   let refreshTimeout;
   function scheduleRefresh() {
-    clearTimeout(refreshTimeout);
-    refreshTimeout = setTimeout(() => {
-      if (useClientSideFiltering) {
+    if (useClientSideFiltering) {
+      clearTimeout(refreshTimeout);
+      refreshTimeout = setTimeout(() => {
         applyFiltersAndSorting();
-      }
-    }, PAGINATION_CONFIG.clientDebounceMs);
+      }, PAGINATION_CONFIG.clientDebounceMs);
+    }
   }
   
-  // Debounced server refresh for search
+  // Debounced server refresh for search changes only
   let serverRefreshTimeout;
   function scheduleServerRefresh() {
-    clearTimeout(serverRefreshTimeout);
-    serverRefreshTimeout = setTimeout(() => {
-      if (!useClientSideFiltering) {
+    if (!useClientSideFiltering) {
+      clearTimeout(serverRefreshTimeout);
+      serverRefreshTimeout = setTimeout(() => {
+        console.log('Executing scheduled server refresh for search');
         isLoadingBusinesses.set(true);
         fetchPaginatedBusinessesData().finally(() => {
           isLoadingBusinesses.set(false);
         });
-      }
-    }, PAGINATION_CONFIG.searchDebounceMs);
-  }
-  
-  // Watch for changes that should trigger filtering/sorting
-  $: if ($searchQuery !== undefined || $filters !== undefined || $sorting !== undefined) {
-    scheduleRefresh();
+      }, PAGINATION_CONFIG.searchDebounceMs);
+    }
   }
 </script>
 

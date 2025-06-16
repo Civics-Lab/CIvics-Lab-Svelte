@@ -79,12 +79,22 @@ export class CSVProcessor {
     const validRows: any[] = [];
     const invalidRows: Array<{ row: any; rowNumber: number; errors: string[] }> = [];
 
+    // Return early with empty results if config is incomplete
+    if (!config || !config.requiredFields || !config.validationRules) {
+      console.warn('Incomplete import config provided, skipping validation');
+      return {
+        validRows: data.map(row => this.mapRowData(row, fieldMapping)),
+        invalidRows: [],
+        duplicates: []
+      };
+    }
+
     data.forEach((row, index) => {
       const errors: string[] = [];
       const mappedRow = this.mapRowData(row, fieldMapping);
 
       // Validate required fields
-      config.requiredFields.forEach(field => {
+      (config.requiredFields || []).forEach(field => {
         const value = mappedRow[field];
         if (!value || (typeof value === 'string' && value.trim() === '')) {
           errors.push(`${field} is required`);
@@ -92,7 +102,7 @@ export class CSVProcessor {
       });
 
       // Apply validation rules
-      Object.entries(config.validationRules).forEach(([field, rule]) => {
+      Object.entries(config.validationRules || {}).forEach(([field, rule]) => {
         const value = mappedRow[field];
         if (value) {
           const error = this.validateField(value, rule);

@@ -97,7 +97,7 @@ async function handleCreateSession(data: any, userId: string) {
  * Process a batch of import data
  */
 async function handleProcessBatch(data: any) {
-  const { sessionId, batchData, startIndex } = data;
+  const { sessionId, batchData, startIndex, validateOnly } = data;
 
   if (!sessionId || !batchData || startIndex === undefined) {
     throw error(400, 'Missing required fields for batch processing');
@@ -106,14 +106,16 @@ async function handleProcessBatch(data: any) {
   console.log(`Processing batch for session ${sessionId}:`, {
     startIndex,
     batchSize: batchData.length,
-    sampleData: batchData[0]
+    sampleData: batchData[0],
+    validateOnly: validateOnly || false
   });
 
   try {
     const result = await ImportService.processImportBatch(
       sessionId,
       batchData,
-      startIndex
+      startIndex,
+      validateOnly || false
     );
 
     console.log(`Batch processing completed:`, result);

@@ -1,8 +1,8 @@
 // src/routes/api/businesses/paginated/+server.ts
 import { json, error } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
-import { businesses, businessPhoneNumbers, businessAddresses, businessSocialMediaAccounts, businessEmployees, businessTags, contacts } from '$lib/db/drizzle/schema';
-import { eq, and, or, ilike, asc, desc, count, not } from 'drizzle-orm';
+import { businesses, businessPhoneNumbers, businessAddresses, businessSocialMediaAccounts, businessEmployees, businessTags, contacts, zipCodes } from '$lib/db/drizzle/schema';
+import { eq, and, or, ilike, gt, lt, gte, lte, ne, desc, asc, count, exists } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import { verifyWorkspaceAccess } from '$lib/utils/auth';
 
@@ -16,71 +16,157 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     const filters = url.searchParams.get('filters') ? JSON.parse(url.searchParams.get('filters')!) : [];
     const sorting = url.searchParams.get('sorting') ? JSON.parse(url.searchParams.get('sorting')!) : [];
 
+    console.log('Paginated businesses API called with:', {
+      page,
+      pageSize,
+      workspaceId,
+      search,
+      filters,
+      sorting
+    });
+
     if (!workspaceId) {
       throw error(400, 'Workspace ID is required');
     }
-
-    // Verify workspace access
-    await verifyWorkspaceAccess(locals.user, workspaceId);
 
     // Validate pagination parameters
     if (page < 1 || pageSize < 1 || pageSize > 1000) {
       throw error(400, 'Invalid pagination parameters');
     }
 
-    const offset = (page - 1) * pageSize;
+    // Verify workspace access
+    await verifyWorkspaceAccess(locals.user, workspaceId);
 
-    // Build base where conditions
-    let whereConditions = [eq(businesses.workspaceId, workspaceId)];
+    // Build the base where conditions
+    const whereConditions = [eq(businesses.workspaceId, workspaceId)];
 
-    // Apply search
-    if (search.trim()) {
+    // Apply search to main business fields and related data
+    if (search && search.trim()) {
       const searchTerm = `%${search.trim()}%`;
       whereConditions.push(
-        ilike(businesses.businessName, searchTerm)
+        or(
+          ilike(businesses.businessName, searchTerm),
+          ilike(businesses.status, searchTerm),
+          // Search in addresses
+          exists(
+            db.select()
+              .from(businessAddresses)
+              .where(
+                and(
+                  eq(businessAddresses.businessId, businesses.id),
+                  or(
+                    ilike(businessAddresses.streetAddress, searchTerm),
+                    ilike(businessAddresses.city, searchTerm),
+                    ilike(businessAddresses.secondaryStreetAddress, searchTerm)
+                  )
+                )
+              )
+          ),
+          // Search in phone numbers
+          exists(
+            db.select()
+              .from(businessPhoneNumbers)
+              .where(
+                and(
+                  eq(businessPhoneNumbers.businessId, businesses.id),
+                  ilike(businessPhoneNumbers.phoneNumber, searchTerm)
+                )
+              )
+          ),
+          // Search in social media accounts
+          exists(
+            db.select()
+              .from(businessSocialMediaAccounts)
+              .where(
+                and(
+                  eq(businessSocialMediaAccounts.businessId, businesses.id),
+                  ilike(businessSocialMediaAccounts.socialMediaAccount, searchTerm)
+                )
+              )
+          ),
+          // Search in tags
+          exists(
+            db.select()
+              .from(businessTags)
+              .where(
+                and(
+                  eq(businessTags.businessId, businesses.id),
+                  ilike(businessTags.tag, searchTerm)
+                )
+              )
+          )
+        )
       );
     }
 
     // Apply filters
     filters.forEach((filter: any) => {
-      if (filter.field && filter.operator && filter.value) {
-        const filterValue = filter.value;
+      if (filter.field && filter.operator && filter.value !== undefined && filter.value !== '') {
+        const fieldValue = filter.value;
         
+        // Map field names to actual database columns
+        let dbField;
         switch (filter.field) {
           case 'businessName':
-            switch (filter.operator) {
-              case '=':
-                whereConditions.push(eq(businesses.businessName, filterValue));
-                break;
-              case '!=':
-                whereConditions.push(not(eq(businesses.businessName, filterValue)));
-                break;
-              case 'contains':
-                whereConditions.push(ilike(businesses.businessName, `%${filterValue}%`));
-                break;
-              case 'startsWith':
-                whereConditions.push(ilike(businesses.businessName, `${filterValue}%`));
-                break;
-              case 'endsWith':
-                whereConditions.push(ilike(businesses.businessName, `%${filterValue}`));
-                break;
-            }
+            dbField = businesses.businessName;
             break;
-          // Add more fields as needed
+          case 'status':
+            dbField = businesses.status;
+            break;
+          case 'createdAt':
+            dbField = businesses.createdAt;
+            break;
+          case 'updatedAt':
+            dbField = businesses.updatedAt;
+            break;
+          default:
+            console.warn(`Unknown filter field: ${filter.field}`);
+            return; // Skip this filter
+        }
+        
+        switch (filter.operator) {
+          case '=':
+            whereConditions.push(eq(dbField, fieldValue));
+            break;
+          case '!=':
+            whereConditions.push(ne(dbField, fieldValue));
+            break;
+          case 'contains':
+            whereConditions.push(ilike(dbField, `%${fieldValue}%`));
+            break;
+          case 'startsWith':
+            whereConditions.push(ilike(dbField, `${fieldValue}%`));
+            break;
+          case 'endsWith':
+            whereConditions.push(ilike(dbField, `%${fieldValue}`));
+            break;
+          case '>':
+            whereConditions.push(gt(dbField, fieldValue));
+            break;
+          case '<':
+            whereConditions.push(lt(dbField, fieldValue));
+            break;
+          case '>=':
+            whereConditions.push(gte(dbField, fieldValue));
+            break;
+          case '<=':
+            whereConditions.push(lte(dbField, fieldValue));
+            break;
         }
       }
     });
 
     // Get total count for pagination
-    const [totalResult] = await db
+    const totalCountResult = await db
       .select({ count: count() })
       .from(businesses)
       .where(and(...whereConditions));
     
-    const totalRecords = totalResult.count;
+    const totalRecords = totalCountResult[0]?.count || 0;
     const totalPages = Math.ceil(totalRecords / pageSize);
+    const offset = (page - 1) * pageSize;
 
-    // Build the main query with sorting
+    // Build the main query
     let query = db
       .select()
       .from(businesses)
@@ -88,22 +174,43 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
     // Apply sorting
     if (sorting.length > 0) {
-      const orderBy: any[] = [];
-      sorting.forEach((sort: any) => {
+      console.log('Applying server-side sorting:', sorting);
+      const orderByClauses = sorting.map((sort: any) => {
         if (sort.field && sort.direction) {
+          // Map field names to actual database columns
+          let dbField;
           switch (sort.field) {
             case 'businessName':
-              orderBy.push(sort.direction === 'asc' ? asc(businesses.businessName) : desc(businesses.businessName));
+              dbField = businesses.businessName;
               break;
-            // Add more sortable fields as needed
+            case 'status':
+              dbField = businesses.status;
+              break;
+            case 'createdAt':
+              dbField = businesses.createdAt;
+              break;
+            case 'updatedAt':
+              dbField = businesses.updatedAt;
+              break;
+            default:
+              console.warn(`Unknown sort field: ${sort.field}`);
+              return null;
           }
+          
+          return sort.direction === 'asc' 
+            ? asc(dbField)
+            : desc(dbField);
         }
-      });
-      if (orderBy.length > 0) {
-        query = query.orderBy(...orderBy);
+        return null;
+      }).filter(Boolean);
+      
+      if (orderByClauses.length > 0) {
+        console.log('Applied', orderByClauses.length, 'sort clauses');
+        query = query.orderBy(...orderByClauses);
       }
     } else {
-      // Default sorting
+      // Default sorting by business name
+      console.log('Using default sorting: businessName ASC');
       query = query.orderBy(asc(businesses.businessName));
     }
 
@@ -174,12 +281,12 @@ export const GET: RequestHandler = async ({ url, locals }) => {
           addresses: addresses || [],
           socialMediaAccounts: socialMedia || [],
           employees: employeesWithContactNames || [],
-          tags: tags || []
+          tags: tags || [],
         };
       })
     );
 
-    return json({
+    const responseData = {
       businesses: enhancedBusinesses,
       pagination: {
         currentPage: page,
@@ -189,7 +296,14 @@ export const GET: RequestHandler = async ({ url, locals }) => {
         hasNextPage: page < totalPages,
         hasPreviousPage: page > 1
       }
+    };
+
+    console.log('Returning paginated response:', {
+      businessesCount: enhancedBusinesses.length,
+      pagination: responseData.pagination
     });
+
+    return json(responseData);
 
   } catch (err) {
     console.error('Error in paginated businesses API:', err);
@@ -198,6 +312,6 @@ export const GET: RequestHandler = async ({ url, locals }) => {
       throw err;
     }
     
-    throw error(500, 'Internal server error');
+    throw error(500, 'Failed to fetch paginated businesses');
   }
 };

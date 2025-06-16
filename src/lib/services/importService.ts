@@ -106,12 +106,14 @@ export class ImportService {
   static async processImportBatch(
     sessionId: string,
     batchData: any[],
-    startIndex: number
+    startIndex: number,
+    validateOnly: boolean = false
   ): Promise<BatchProcessResult> {
     console.log(`ImportService.processImportBatch called:`, {
       sessionId,
       startIndex,
-      batchSize: batchData.length
+      batchSize: batchData.length,
+      validateOnly
     });
 
     // Get session details
@@ -147,6 +149,13 @@ export class ImportService {
     for (let i = 0; i < batchData.length; i++) {
       const rowIndex = startIndex + i;
       const row = batchData[i];
+      
+      // Check if session was cancelled before processing each row
+      const currentSession = await this.getImportSession(sessionId);
+      if (currentSession && currentSession.status === 'failed') {
+        console.log(`Session ${sessionId} was cancelled, stopping batch processing`);
+        break;
+      }
 
       try {
         console.log(`Processing row ${rowIndex + 1}:`, row);
@@ -154,14 +163,21 @@ export class ImportService {
         const mappedData = this.mapRowData(row, session.fieldMapping, config);
         console.log('Mapped data:', mappedData);
         
-        if (session.importMode === 'update_or_create') {
-          await this.upsertRecord(session.importType, mappedData, session.workspaceId, session.duplicateField);
+        if (validateOnly) {
+          // Validation-only mode: just validate the data without creating records
+          await this.validateRecord(session.importType, mappedData, session.workspaceId, session.duplicateField);
+          console.log(`Row ${rowIndex + 1} validation successful`);
         } else {
-          await this.createRecord(session.importType, mappedData, session.workspaceId);
+          // Normal mode: create or update records
+          if (session.importMode === 'update_or_create') {
+            await this.upsertRecord(session.importType, mappedData, session.workspaceId, session.duplicateField);
+          } else {
+            await this.createRecord(session.importType, mappedData, session.workspaceId);
+          }
+          console.log(`Row ${rowIndex + 1} processed successfully`);
         }
         
         successful++;
-        console.log(`Row ${rowIndex + 1} processed successfully`);
       } catch (error) {
         failed++;
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -250,6 +266,175 @@ export class ImportService {
     });
 
     return mappedData;
+  }
+
+  /**
+   * Validate a record without creating it (for validation-only mode)
+   */
+  private static async validateRecord(
+    importType: string,
+    data: any,
+    workspaceId: string,
+    duplicateField: string
+  ): Promise<void> {
+    // Check for required fields based on import type
+    const config = IMPORT_CONFIGS[importType];
+    
+    if (!config) {
+      throw new Error(`Invalid import type: ${importType}`);
+    }
+    
+    // Validate required fields
+    for (const field of config.requiredFields) {
+      if (!data[field] || (typeof data[field] === 'string' && data[field].trim() === '')) {
+        throw new Error(`Required field '${field}' is missing or empty`);
+      }
+    }
+    
+    // Validate field formats based on validation rules
+    for (const [field, rule] of Object.entries(config.validationRules)) {
+      const value = data[field];
+      if (value && value !== '') {
+        // Basic validation based on rule type
+        if (rule.type === 'email' && typeof value === 'string') {
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          const emails = value.split(',').map(email => email.trim());
+          for (const email of emails) {
+            if (!emailRegex.test(email)) {
+              throw new Error(`Invalid email format: ${email}`);
+            }
+          }
+        }
+        
+        if (rule.type === 'phone' && typeof value === 'string') {
+          const phoneRegex = /^\+?[\d\s\-\(\)\.]+$/;
+          const phones = value.split(',').map(phone => phone.trim());
+          for (const phone of phones) {
+            if (!phoneRegex.test(phone)) {
+              throw new Error(`Invalid phone format: ${phone}`);
+            }
+          }
+        }
+        
+        if (rule.type === 'number') {
+          const num = parseFloat(value);
+          if (isNaN(num)) {
+            throw new Error(`Field '${field}' must be a valid number`);
+          }
+          if (rule.min !== undefined && num < rule.min) {
+            throw new Error(`Field '${field}' must be at least ${rule.min}`);
+          }
+          if (rule.max !== undefined && num > rule.max) {
+            throw new Error(`Field '${field}' must be at most ${rule.max}`);
+          }
+        }
+        
+        if (rule.type === 'enum' && rule.options) {
+          if (!rule.options.includes(value)) {
+            throw new Error(`Field '${field}' must be one of: ${rule.options.join(', ')}`);
+          }
+        }
+      }
+    }
+    
+    // Check for potential duplicates if in update mode
+    if (duplicateField && data[duplicateField]) {
+      const existing = await this.findExistingRecord(importType, data, workspaceId, duplicateField);
+      if (existing) {
+        // This is expected in validation mode, just note it
+        console.log(`Potential duplicate found for ${duplicateField}: ${data[duplicateField]}`);
+      }
+    }
+    
+    // Additional type-specific validation
+    await this.validateTypeSpecificData(importType, data, workspaceId);
+  }
+  
+  /**
+   * Perform type-specific validation (without database operations)
+   */
+  private static async validateTypeSpecificData(
+    importType: string,
+    data: any,
+    workspaceId: string
+  ): Promise<void> {
+    switch (importType) {
+      case 'contacts':
+        // Validate gender/race references exist (if provided)
+        if (data.genderId && typeof data.genderId === 'string') {
+          const [gender] = await db
+            .select({ id: genders.id })
+            .from(genders)
+            .where(ilike(genders.gender, data.genderId))
+            .limit(1);
+          if (!gender) {
+            console.warn(`Gender '${data.genderId}' not found in database - will be skipped`);
+          }
+        }
+        
+        if (data.raceId && typeof data.raceId === 'string') {
+          const [race] = await db
+            .select({ id: races.id })
+            .from(races)
+            .where(ilike(races.race, data.raceId))
+            .limit(1);
+          if (!race) {
+            console.warn(`Race '${data.raceId}' not found in database - will be skipped`);
+          }
+        }
+        break;
+        
+      case 'businesses':
+        // Validate business-specific data
+        if (data.status && !['active', 'inactive', 'closed'].includes(data.status)) {
+          throw new Error(`Invalid business status: ${data.status}. Must be one of: active, inactive, closed`);
+        }
+        break;
+        
+      case 'donations':
+        // Validate donation amount
+        if (data.amount) {
+          const amount = parseFloat(data.amount);
+          if (isNaN(amount) || amount < 0) {
+            throw new Error('Donation amount must be a positive number');
+          }
+        }
+        
+        // Check if donor contact/business exists (if provided)
+        if (data.donorEmail) {
+          const [contact] = await db
+            .select({ id: contacts.id })
+            .from(contacts)
+            .innerJoin(contactEmails, eq(contacts.id, contactEmails.contactId))
+            .where(
+              and(
+                eq(contacts.workspaceId, workspaceId),
+                eq(contactEmails.email, data.donorEmail)
+              )
+            )
+            .limit(1);
+          if (!contact) {
+            console.warn(`Donor contact with email '${data.donorEmail}' not found`);
+          }
+        }
+        
+        if (data.businessName) {
+          const [business] = await db
+            .select({ id: businesses.id })
+            .from(businesses)
+            .where(
+              and(
+                eq(businesses.workspaceId, workspaceId),
+                ilike(businesses.businessName, data.businessName)
+              )
+            )
+            .limit(1);
+          if (!business) {
+            console.warn(`Business '${data.businessName}' not found`);
+          }
+        }
+        break;
+    }
   }
 
   /**
