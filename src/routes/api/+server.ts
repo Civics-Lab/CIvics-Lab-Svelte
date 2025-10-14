@@ -18,6 +18,7 @@ import { inviteRouter } from './invites-new/routes';
 import { productRouter } from './products/routes';
 import { subscriptionRouter } from './subscriptions/routes';
 import { actblueConfigRouter } from './actblue/config/routes';
+import { actblueCsvRouter } from './actblue/csv/routes';
 
 // Create main Hono app
 const app = new Hono()
@@ -39,6 +40,7 @@ const app = new Hono()
   .route('/products', productRouter)
   .route('/subscriptions', subscriptionRouter)
   .route('/actblue/config', actblueConfigRouter)
+  .route('/actblue/csv', actblueCsvRouter)
   .route('/dashboard', dashboardRouter)
   .route('/form-options', formOptionsRouter)
   .route('/admin', adminRouter)
