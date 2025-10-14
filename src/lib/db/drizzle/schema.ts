@@ -15,6 +15,9 @@ export const workspaceRoleEnum = pgEnum('workspace_role', ['Super Admin', 'Admin
 export const inviteStatusEnum = pgEnum('invite_status', ['Pending', 'Accepted', 'Declined', 'Expired']);
 export const interactionTypeEnum = pgEnum('interaction_type', ['note', 'call', 'email', 'in_person']);
 export const interactionStatusEnum = pgEnum('interaction_status', ['active', 'archived', 'deleted']);
+export const productBillingPeriodEnum = pgEnum('product_billing_period', ['one_time', 'weekly', 'monthly', 'yearly']);
+export const subscriptionStatusEnum = pgEnum('subscription_status', ['active', 'canceled', 'paused', 'failed', 'pending']);
+export const actblueEventTypeEnum = pgEnum('actblue_event_type', ['donation', 'refund', 'cancellation']);
 
 // Users Table - For Hono Auth
 export const users = pgTable('users', {
@@ -273,6 +276,22 @@ export const donations = pgTable('donations', {
   status: donationStatusEnum('status').default('promise'),
   paymentType: text('payment_type'),
   notes: text('notes'),
+  // Recurring donations fields
+  productId: uuid('product_id').references(() => products.id),
+  subscriptionId: uuid('subscription_id').references(() => subscriptions.id),
+  isRecurring: boolean('is_recurring').default(false),
+  recurringPeriod: text('recurring_period').default('once'),
+  recurrenceNumber: integer('recurrence_number'),
+  // ActBlue integration fields
+  actblueOrderNumber: text('actblue_order_number'),
+  actblueLineitemId: text('actblue_lineitem_id'),
+  actbluePaymentId: text('actblue_payment_id'),
+  actblueDonorId: text('actblue_donor_id'),
+  actblueData: jsonb('actblue_data'),
+  externalSource: text('external_source'),
+  refundedAt: timestamp('refunded_at'),
+  disbursedAt: timestamp('disbursed_at'),
+  recoveredAt: timestamp('recovered_at'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow()
 });
@@ -296,6 +315,92 @@ export const donationViews = pgTable('donation_views', {
   sorting: jsonb('sorting'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
+  createdById: uuid('created_by').references(() => users.id)
+});
+
+// Products Table
+export const products = pgTable('products', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  workspaceId: uuid('workspace_id').references(() => workspaces.id),
+  name: text('name').notNull(),
+  description: text('description'),
+  amount: integer('amount').notNull(),
+  billingPeriod: productBillingPeriodEnum('billing_period').default('one_time').notNull(),
+  isActive: boolean('is_active').default(true).notNull(),
+  metadata: jsonb('metadata'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  createdById: uuid('created_by').references(() => users.id)
+});
+
+// Subscriptions Table
+export const subscriptions = pgTable('subscriptions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  workspaceId: uuid('workspace_id').references(() => workspaces.id),
+  contactId: uuid('contact_id').references(() => contacts.id),
+  productId: uuid('product_id').references(() => products.id),
+  status: subscriptionStatusEnum('status').default('pending').notNull(),
+  startDate: timestamp('start_date'),
+  nextBillingDate: timestamp('next_billing_date'),
+  endDate: timestamp('end_date'),
+  canceledAt: timestamp('canceled_at'),
+  billingPeriod: productBillingPeriodEnum('billing_period').notNull(),
+  amount: integer('amount').notNull(),
+  actblueOrderNumber: text('actblue_order_number'),
+  recurringDuration: integer('recurring_duration'),
+  recurringCompleted: integer('recurring_completed').default(0),
+  weeklyRecurringSunset: timestamp('weekly_recurring_sunset'),
+  metadata: jsonb('metadata'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow()
+});
+
+// ActBlue Config Table
+export const actblueConfig = pgTable('actblue_config', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  workspaceId: uuid('workspace_id').references(() => workspaces.id).unique(),
+  clientUuid: text('client_uuid'),
+  clientSecretEncrypted: text('client_secret_encrypted'),
+  webhookUrl: text('webhook_url'),
+  webhookUsername: text('webhook_username'),
+  webhookPasswordHash: text('webhook_password_hash'),
+  isActive: boolean('is_active').default(false).notNull(),
+  lastSyncAt: timestamp('last_sync_at'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  createdById: uuid('created_by').references(() => users.id)
+});
+
+// ActBlue Webhook Logs Table
+export const actblueWebhookLogs = pgTable('actblue_webhook_logs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  workspaceId: uuid('workspace_id').references(() => workspaces.id),
+  eventType: actblueEventTypeEnum('event_type').notNull(),
+  actblueOrderNumber: text('actblue_order_number'),
+  payload: jsonb('payload').notNull(),
+  processedAt: timestamp('processed_at'),
+  status: text('status').default('pending').notNull(),
+  errorMessage: text('error_message'),
+  createdAt: timestamp('created_at').defaultNow()
+});
+
+// ActBlue Imports Table
+export const actblueImports = pgTable('actblue_imports', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  workspaceId: uuid('workspace_id').references(() => workspaces.id),
+  importType: text('import_type').notNull(),
+  filename: text('filename'),
+  csvType: text('csv_type'),
+  dateRangeStart: timestamp('date_range_start'),
+  dateRangeEnd: timestamp('date_range_end'),
+  totalRecords: integer('total_records').default(0),
+  processedRecords: integer('processed_records').default(0),
+  successfulRecords: integer('successful_records').default(0),
+  failedRecords: integer('failed_records').default(0),
+  status: text('status').default('pending').notNull(),
+  errorLog: jsonb('error_log'),
+  createdAt: timestamp('created_at').defaultNow(),
+  completedAt: timestamp('completed_at'),
   createdById: uuid('created_by').references(() => users.id)
 });
 
@@ -404,7 +509,12 @@ export const workspacesRelations = relations(workspaces, ({ one, many }) => ({
   subscriptions: many(workspaceSubscriptions),
   payments: many(workspacePayments),
   userInvites: many(userInvites),
-  interactionStreams: many(interactionStreams)
+  interactionStreams: many(interactionStreams),
+  products: many(products),
+  donorSubscriptions: many(subscriptions),
+  actblueConfig: one(actblueConfig),
+  actblueWebhookLogs: many(actblueWebhookLogs),
+  actblueImports: many(actblueImports)
 }));
 
 export const userWorkspacesRelations = relations(userWorkspaces, ({ one }) => ({
@@ -447,7 +557,9 @@ export const contactsRelations = relations(contacts, ({ one, many }) => ({
   socialMediaAccounts: many(contactSocialMediaAccounts),
   tags: many(contactTags),
   businessEmployments: many(businessEmployees),
-  interactionStreams: many(interactionStreams)
+  interactionStreams: many(interactionStreams),
+  subscriptions: many(subscriptions),
+  donations: many(donations)
 }));
 
 // Add the remaining relation definitions for all tables
@@ -473,6 +585,14 @@ export const donationsRelations = relations(donations, ({ one, many }) => ({
   business: one(businesses, {
     fields: [donations.businessId],
     references: [businesses.id]
+  }),
+  product: one(products, {
+    fields: [donations.productId],
+    references: [products.id]
+  }),
+  subscription: one(subscriptions, {
+    fields: [donations.subscriptionId],
+    references: [subscriptions.id]
   }),
   tags: many(donationTags)
 }));
@@ -589,5 +709,68 @@ export const importErrorsRelations = relations(importErrors, ({ one }) => ({
   importSession: one(importSessions, {
     fields: [importErrors.importSessionId],
     references: [importSessions.id]
+  })
+}));
+
+// Products Relations
+export const productsRelations = relations(products, ({ one, many }) => ({
+  workspace: one(workspaces, {
+    fields: [products.workspaceId],
+    references: [workspaces.id]
+  }),
+  createdBy: one(users, {
+    fields: [products.createdById],
+    references: [users.id]
+  }),
+  subscriptions: many(subscriptions),
+  donations: many(donations)
+}));
+
+// Subscriptions Relations
+export const subscriptionsRelations = relations(subscriptions, ({ one, many }) => ({
+  workspace: one(workspaces, {
+    fields: [subscriptions.workspaceId],
+    references: [workspaces.id]
+  }),
+  contact: one(contacts, {
+    fields: [subscriptions.contactId],
+    references: [contacts.id]
+  }),
+  product: one(products, {
+    fields: [subscriptions.productId],
+    references: [products.id]
+  }),
+  donations: many(donations)
+}));
+
+// ActBlue Config Relations
+export const actblueConfigRelations = relations(actblueConfig, ({ one }) => ({
+  workspace: one(workspaces, {
+    fields: [actblueConfig.workspaceId],
+    references: [workspaces.id]
+  }),
+  createdBy: one(users, {
+    fields: [actblueConfig.createdById],
+    references: [users.id]
+  })
+}));
+
+// ActBlue Webhook Logs Relations
+export const actblueWebhookLogsRelations = relations(actblueWebhookLogs, ({ one }) => ({
+  workspace: one(workspaces, {
+    fields: [actblueWebhookLogs.workspaceId],
+    references: [workspaces.id]
+  })
+}));
+
+// ActBlue Imports Relations
+export const actblueImportsRelations = relations(actblueImports, ({ one }) => ({
+  workspace: one(workspaces, {
+    fields: [actblueImports.workspaceId],
+    references: [workspaces.id]
+  }),
+  createdBy: one(users, {
+    fields: [actblueImports.createdById],
+    references: [users.id]
   })
 }));
