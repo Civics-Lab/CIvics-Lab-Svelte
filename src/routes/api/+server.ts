@@ -15,6 +15,7 @@ import { formOptionsRouter } from './form-options/routes';
 import { adminRouter } from './admin/routes';
 import { importExportRouter } from './import-export/routes';
 import { inviteRouter } from './invites-new/routes';
+import { productRouter } from './products/routes';
 
 // Create main Hono app
 const app = new Hono()
@@ -33,6 +34,7 @@ const app = new Hono()
   .route('/contacts', contactRouter)
   .route('/businesses', businessRouter)
   .route('/donations', donationRouter)
+  .route('/products', productRouter)
   .route('/dashboard', dashboardRouter)
   .route('/form-options', formOptionsRouter)
   .route('/admin', adminRouter)
