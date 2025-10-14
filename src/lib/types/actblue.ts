@@ -10,33 +10,32 @@ export type ActBlueImportStatus = 'pending' | 'processing' | 'completed' | 'fail
 export interface ActBlueConfig {
   id: string;
   workspaceId: string;
-  clientUuid?: string;
-  clientSecretEncrypted?: string;
-  webhookUrl?: string;
-  webhookUsername?: string;
-  webhookPasswordHash?: string;
-  isActive: boolean;
-  lastSyncAt?: string;
+  apiKey?: string;
+  webhookUsername: string;
+  webhookPasswordHash?: string; // Never returned to client
+  isWebhookEnabled: boolean;
+  isCsvImportEnabled: boolean;
+  metadata?: Record<string, any>;
   createdAt: string;
   updatedAt: string;
-  createdById?: string;
 }
 
 export interface CreateActBlueConfigData {
-  workspaceId: string;
-  clientUuid: string;
-  clientSecret: string; // Will be encrypted before storing
-  webhookUsername?: string;
-  webhookPassword?: string; // Will be hashed before storing
-  isActive?: boolean;
+  apiKey?: string;
+  webhookUsername: string;
+  webhookPassword: string; // Will be hashed before storing
+  isWebhookEnabled?: boolean;
+  isCsvImportEnabled?: boolean;
+  metadata?: Record<string, any>;
 }
 
 export interface UpdateActBlueConfigData {
-  clientUuid?: string;
-  clientSecret?: string;
+  apiKey?: string;
   webhookUsername?: string;
-  webhookPassword?: string;
-  isActive?: boolean;
+  webhookPassword?: string; // Will be hashed before storing
+  isWebhookEnabled?: boolean;
+  isCsvImportEnabled?: boolean;
+  metadata?: Record<string, any>;
 }
 
 // ActBlue Webhook Log
