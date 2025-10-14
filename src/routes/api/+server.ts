@@ -6,6 +6,15 @@ import type { RequestHandler } from '@sveltejs/kit';
 // Import route handlers
 import { authRouter } from './auth/routes';
 import { graphRouter } from './graph/routes';
+import { workspaceRouter } from './workspaces/routes';
+import { contactRouter } from './contacts/routes';
+import { businessRouter } from './businesses/routes';
+import { donationRouter } from './donations/routes';
+import { dashboardRouter } from './dashboard/routes';
+import { formOptionsRouter } from './form-options/routes';
+import { adminRouter } from './admin/routes';
+import { importExportRouter } from './import-export/routes';
+import { inviteRouter } from './invites-new/routes';
 
 // Create main Hono app
 const app = new Hono()
@@ -20,6 +29,15 @@ const app = new Hono()
   // Route handlers
   .route('/auth', authRouter)
   .route('/graph', graphRouter)
+  .route('/workspaces', workspaceRouter)
+  .route('/contacts', contactRouter)
+  .route('/businesses', businessRouter)
+  .route('/donations', donationRouter)
+  .route('/dashboard', dashboardRouter)
+  .route('/form-options', formOptionsRouter)
+  .route('/admin', adminRouter)
+  .route('/import-export', importExportRouter)
+  .route('/invites-new', inviteRouter)
   
   // Health check endpoint for testing
   .get('/health', (c) => {

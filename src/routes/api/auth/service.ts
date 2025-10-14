@@ -355,5 +355,258 @@ export const authService = {
       console.error('Token validation error:', error);
       throw new Error('Invalid token');
     }
+  },
+
+  /**
+   * Change user password
+   */
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    if (!currentPassword || !newPassword) {
+      throw new Error('Current password and new password are required');
+    }
+    
+    if (newPassword.length < 6) {
+      throw new Error('Password must be at least 6 characters long');
+    }
+    
+    // Get the user from the database to verify current password
+    const userResult = await db.select()
+      .from(users)
+      .where(eq(users.id, userId));
+    
+    if (userResult.length === 0) {
+      throw new Error('User not found');
+    }
+    
+    const user = userResult[0];
+    
+    // Verify current password
+    const isPasswordValid = await bcrypt.compare(currentPassword, user.passwordHash);
+    
+    if (!isPasswordValid) {
+      throw new Error('Current password is incorrect');
+    }
+    
+    // Hash the new password
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    
+    // Update the password in the database
+    await db.update(users)
+      .set({ passwordHash })
+      .where(eq(users.id, userId));
+    
+    return { success: true, message: 'Password updated successfully' };
+  },
+
+  /**
+   * Check if username is available
+   */
+  async checkUsername(currentUserId: string, currentUsername: string, username: string) {
+    if (!username) {
+      throw new Error('Username is required');
+    }
+    
+    // Check if the username is the same as the current user's username
+    if (currentUsername === username) {
+      return { available: true };
+    }
+    
+    // Check if the username already exists in the database
+    const existingUser = await db.select({ id: users.id })
+      .from(users)
+      .where(eq(users.username, username));
+    
+    const available = existingUser.length === 0;
+    return { available };
+  },
+
+  /**
+   * Update user profile
+   */
+  async updateProfile(userId: string, currentUsername: string, updates: { username?: string; displayName?: string; avatar?: string | null }) {
+    const dbUpdates: Record<string, any> = {};
+    
+    // Handle username update
+    if (updates.username && updates.username !== currentUsername) {
+      // Check if the username is already taken
+      const existingUser = await db.select({ id: users.id })
+        .from(users)
+        .where(eq(users.username, updates.username));
+      
+      if (existingUser.length > 0) {
+        throw new Error('Username is already taken');
+      }
+      
+      dbUpdates.username = updates.username;
+    }
+    
+    // Handle displayName update
+    if (updates.displayName !== undefined) {
+      dbUpdates.displayName = updates.displayName;
+    }
+    
+    // Handle avatar update (including removal)
+    if (updates.hasOwnProperty('avatar')) {
+      dbUpdates.avatar = updates.avatar; // Can be null to remove the avatar
+    }
+    
+    // If no updates, return early
+    if (Object.keys(dbUpdates).length === 0) {
+      const userResult = await db.select({
+        id: users.id,
+        username: users.username,
+        email: users.email,
+        displayName: users.displayName,
+        avatar: users.avatar,
+        role: users.role
+      }).from(users).where(eq(users.id, userId));
+      
+      return { 
+        message: 'No changes made',
+        user: userResult[0],
+        token: null
+      };
+    }
+    
+    // Update the user in the database
+    const [updatedUser] = await db.update(users)
+      .set(dbUpdates)
+      .where(eq(users.id, userId))
+      .returning({
+        id: users.id,
+        username: users.username,
+        email: users.email,
+        displayName: users.displayName,
+        avatar: users.avatar,
+        role: users.role
+      });
+    
+    if (!updatedUser) {
+      throw new Error('User not found');
+    }
+    
+    // Generate a new token with the updated information
+    const newToken = await this.generateToken({
+      id: updatedUser.id,
+      username: updatedUser.username,
+      email: updatedUser.email,
+      role: updatedUser.role
+    });
+    
+    return { 
+      user: updatedUser,
+      token: newToken
+    };
+  },
+
+  /**
+   * Update user email
+   */
+  async updateEmail(userId: string, newEmail: string) {
+    if (!newEmail) {
+      throw new Error('Email is required');
+    }
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(newEmail)) {
+      throw new Error('Invalid email format');
+    }
+    
+    // Check if email is already taken
+    const existingUser = await db.select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, newEmail));
+    
+    if (existingUser.length > 0) {
+      throw new Error('Email is already taken');
+    }
+    
+    // Update the email in the database
+    const [updatedUser] = await db.update(users)
+      .set({ email: newEmail })
+      .where(eq(users.id, userId))
+      .returning({
+        id: users.id,
+        username: users.username,
+        email: users.email,
+        displayName: users.displayName,
+        avatar: users.avatar,
+        role: users.role
+      });
+    
+    if (!updatedUser) {
+      throw new Error('User not found');
+    }
+    
+    // Generate a new token with the updated information
+    const newToken = await this.generateToken({
+      id: updatedUser.id,
+      username: updatedUser.username,
+      email: updatedUser.email,
+      role: updatedUser.role
+    });
+    
+    return { 
+      user: updatedUser,
+      token: newToken
+    };
+  },
+
+  /**
+   * Upload user avatar
+   */
+  async uploadAvatar(userId: string, avatarFile: File) {
+    // Validate file type
+    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!validTypes.includes(avatarFile.type)) {
+      throw new Error('Invalid file type. Only JPG, PNG, GIF, and WebP are supported.');
+    }
+    
+    // Validate file size (limit to 2MB)
+    const maxSize = 2 * 1024 * 1024; // 2MB
+    if (avatarFile.size > maxSize) {
+      throw new Error('File size exceeds the 2MB limit.');
+    }
+    
+    // Read the file as a base64-encoded string
+    const buffer = await avatarFile.arrayBuffer();
+    const uint8Array = new Uint8Array(buffer);
+    const base64Image = Buffer.from(uint8Array).toString('base64');
+    const avatarData = `data:${avatarFile.type};base64,${base64Image}`;
+    
+    // Update the user record in the database
+    const [updatedUser] = await db.update(users)
+      .set({ 
+        avatar: avatarData,
+        updatedAt: new Date() 
+      })
+      .where(eq(users.id, userId))
+      .returning({
+        id: users.id,
+        username: users.username,
+        email: users.email,
+        displayName: users.displayName,
+        avatar: users.avatar,
+        role: users.role
+      });
+    
+    if (!updatedUser) {
+      throw new Error('User not found');
+    }
+    
+    // Generate a new token with the updated information
+    const newToken = await this.generateToken({
+      id: updatedUser.id,
+      username: updatedUser.username,
+      email: updatedUser.email,
+      role: updatedUser.role
+    });
+    
+    return { 
+      message: 'Avatar uploaded successfully',
+      user: updatedUser,
+      token: newToken
+    };
   }
 };

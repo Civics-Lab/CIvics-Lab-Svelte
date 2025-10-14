@@ -1,121 +1,224 @@
-# Civics Lab SvelteKit Application
+# Civics Lab Documentation
 
-A multi-tenant web application for civic organizations built with SvelteKit, Drizzle ORM, PostgreSQL, and Hono.
+Welcome to the comprehensive documentation for Civics Lab, a civic engagement management platform built with SvelteKit and Supabase.
 
-## API Endpoints
+## Project Overview
 
-This application uses Hono for API routes within the SvelteKit project. The API uses JWT for authentication and GraphQL for data operations.
+Civics Lab is a web application designed to help organizations manage civic engagement efforts. It provides tools for managing contacts, businesses, donations, and other aspects of civic campaigns within a multi-workspace environment.
 
-### Authentication Endpoints
+### Tech Stack
 
-- `POST /api/auth/signup` - Create a new user account
-- `POST /api/auth/login` - Authenticate a user
-- `POST /api/auth/validate` - Validate a JWT token
+- **Frontend**: SvelteKit 2.16.0 with Svelte 5
+- **Styling**: TailwindCSS 4.0
+- **Backend**: Supabase (PostgreSQL)
+- **Authentication**: Supabase Auth
+- **API**: Hono.js for API routes
+- **Deployment**: Vercel
+- **Language**: TypeScript
 
-### GraphQL Endpoint
+## Documentation Structure
 
-- `POST /api/graph` - GraphQL API for all data operations
+This documentation is organized into the following sections:
 
-## Getting Started
+### 📐 Architecture
+Documentation covering the overall system design and structure.
+
+- [Application Structure](./architecture/app-structure.md) - Complete overview of the application architecture
+- [CRM System](./architecture/crm.md) - Customer Relationship Management system documentation
+- [Database Structure](./architecture/database.md) - Comprehensive database schema documentation
+
+### 🔌 API
+API-related documentation including routes, endpoints, and integration guides.
+
+- [API Migration Guide](./api/API_MIGRATION_SVELTEKIT_TO_HONO.md) - Migration from SvelteKit to Hono API
+- [API Route Mapping](./api/API_ROUTE_MAPPING.md) - Complete mapping of all API endpoints
+- [API Testing](./api/API_TESTING.md) - Testing strategies and examples
+- [Hono Implementation Guide](./api/HONO_IMPLEMENTATION_GUIDE.md) - Guide for implementing Hono.js APIs
+- [Business API](./api/README-business-api.md) - Business management API documentation
+- [Contact API](./api/README-contact-api.md) - Contact management API documentation
+- [Donation API](./api/README-donation-api.md) - Donation tracking API documentation
+- [Donation API Integration](./api/README-donation-api-integration.md) - Integration guide for donations
+
+### 🗄️ Database
+Database-related documentation including schema updates and migrations.
+
+- [Database Updates](./database/database-updates.md) - Recent database schema changes and updates
+
+### ✨ Features
+Documentation for specific features and functionality.
+
+- [Import System](./features/IMPORT_SYSTEM.md) - Data import functionality
+- [Interaction Streams](./features/INTERACTION_STREAMS_README.md) - Activity tracking system
+- [Invite System](./features/INVITE_SYSTEM.md) - User invitation management
+- [SendGrid Integration](./features/SENDGRID_INVITE_IMPLEMENTATION.md) - Email service integration
+- [SendGrid Setup](./features/SENDGRID_SETUP_GUIDE.md) - Email service configuration
+- [Tag Autocomplete](./features/TAG_AUTOCOMPLETE_README.md) - Tag management system
+- [Workspace Creation](./features/WORKSPACE_CREATION.md) - Multi-tenancy workspace system
+- [Workspace Implementation](./features/WORKSPACE_IMPLEMENTATION.md) - Workspace feature implementation
+- [Workspace Service Flags](./features/WORKSPACE_SERVICE_FLAGS_IMPLEMENTATION.md) - Service configuration flags
+- [Business API Updates](./features/business-api-updates.md) - Business management enhancements
+- [CRM Updates](./features/crm-updates.md) - Contact management improvements
+- [Donation Schema Update](./features/donation-schema-update.md) - Donation system enhancements
+- [Donation Tracking](./features/donation-tracking.md) - Donation management system
+- [Donation Views Implementation](./features/donation-views-implementation.md) - Donation display views
+- [Workspace Management](./features/workspace-management.md) - Workspace administration
+
+### 🔧 Fixes
+Documentation of bug fixes and problem resolutions.
+
+- [Business Pagination](./fixes/BUSINESSES_PAGINATION_IMPLEMENTATION.md) - Business list pagination fixes
+- [Business Import Error Fix](./fixes/BUSINESSES_IMPORT_ERROR_FIX.md) - Import system error resolution
+- [Component Unification](./fixes/COMPONENT_UNIFICATION_FINAL.md) - UI component standardization
+- [Contact Filter Sort Fix](./fixes/CONTACTS_FILTER_SORT_FIX.md) - Contact filtering improvements
+- [Server-side Fixes](./fixes/SERVER_SIDE_FIXES_APPLIED.md) - Backend performance improvements
+- [Pagination Implementation](./fixes/PAGINATION_IMPLEMENTATION.md) - Pagination system enhancements
+
+### 📚 Guides
+Step-by-step guides and tutorials.
+
+- [Debugging Guide](./guides/DEBUGGING_GUIDE.md) - Troubleshooting and debugging strategies
+- [Migration Testing Guide](./guides/MIGRATION_TESTING_GUIDE.md) - Database migration testing procedures
+
+### 🔄 Migrations
+Database migration scripts and procedures.
+
+- [Donation Tags Migration](./migrations/donation-tags-migration.md) - Migration for donation tagging system
+- [Donation Views Migration](./migrations/donation-views-migration.md) - Migration for donation display views
+- [Fix Donation Views Table](./migrations/fix-donation-views-table.md) - Database table repair procedures
+
+## Quick Start
+
+### Prerequisites
+
+- Node.js 18+ 
+- PostgreSQL database (via Supabase)
+- npm or yarn package manager
+
+### Installation
 
 1. Clone the repository
-2. Install dependencies
-   ```bash
-   npm install
-   ```
-3. Copy the `.env.example` file to `.env` and fill in the required values
-   ```bash
-   cp .env.example .env
-   ```
-4. Set up the database
-   ```bash
-   # Generate Drizzle migrations
-   npm run db:generate
-   
-   # Apply migrations to the database
-   npm run db:migrate
-   
-   # Seed the database with initial data
-   npm run db:seed
-   
-   # Or do all of the above in one command
-   npm run db:setup
-   ```
-   
-5. Start the development server
-   ```bash
-   npm run dev
-   ```
+2. Install dependencies: `npm install`
+3. Set up environment variables (copy `.env.example` to `.env.local`)
+4. Run database migrations: `npm run db:setup`
+5. Start development server: `npm run dev`
 
-## Database Setup
+### Key Scripts
 
-This project uses Drizzle ORM with PostgreSQL. The database schema includes:
+```bash
+# Development
+npm run dev                    # Start development server
+npm run build                  # Build for production
+npm run preview                # Preview production build
 
-- User authentication tables for Hono JWT middleware
-- Multi-tenant workspace organization
-- Contact management
-- Business tracking
-- Donation records
-- Reference tables for demographics, locations, etc.
+# Database
+npm run db:generate            # Generate database schema
+npm run db:migrate             # Run migrations
+npm run db:studio              # Open database studio
+npm run db:seed                # Seed database with initial data
+npm run db:setup               # Full database setup (generate + migrate + seed)
 
-### Database Commands
+# Type Checking
+npm run check                  # Run type checking
+npm run check:watch            # Run type checking in watch mode
+```
 
-- `npm run db:generate` - Generate SQL migrations from schema changes
-- `npm run db:migrate` - Apply migrations to the database
-- `npm run db:seed` - Seed the database with initial data
-- `npm run db:studio` - Launch Drizzle Studio to view/edit data
-- `npm run db:setup` - Run generate, migrate, and seed in sequence
+## Project Structure
 
-## Testing API Endpoints
+```
+civics-lab-svelte/
+├── src/
+│   ├── app.html                    # Root HTML template
+│   ├── app.css                     # Global styles
+│   ├── hooks.server.ts             # Server-side hooks
+│   ├── lib/                        # Shared utilities and components
+│   │   ├── auth/                   # Authentication utilities
+│   │   ├── components/             # Reusable UI components
+│   │   │   ├── businesses/         # Business management components
+│   │   │   ├── contacts/           # Contact management components
+│   │   │   ├── donations/          # Donation tracking components
+│   │   │   ├── import/             # Data import components
+│   │   │   ├── marketing-site/     # Marketing site components
+│   │   │   └── shared/             # Shared UI components
+│   │   ├── config/                 # Configuration files
+│   │   ├── db/                     # Database utilities and migrations
+│   │   ├── middleware/             # Server middleware
+│   │   ├── server/                 # Server-side utilities
+│   │   ├── services/               # Service layer for data operations
+│   │   ├── stores/                 # Svelte stores for state management
+│   │   ├── types/                  # TypeScript type definitions
+│   │   └── utils/                  # Utility functions
+│   └── routes/                     # Application routes
+│       ├── (marketing)/            # Marketing site pages
+│       ├── api/                    # API endpoints
+│       ├── app/                    # Main application pages
+│       ├── auth/                   # Authentication pages
+│       ├── login/                  # Login page
+│       ├── logout/                 # Logout functionality
+│       └── signup/                 # Registration page
+├── static/                         # Static assets
+├── docs/                          # Documentation (this folder)
+├── drizzle/                       # Database migrations
+├── scripts/                       # Utility scripts
+├── supabase/                      # Supabase configuration
+└── postman/                       # API testing collections
+```
 
-You can test the API endpoints using:
+## Core Features
 
-1. Tools like Postman, Insomnia, or curl
-2. GraphiQL - Available at `http://localhost:5173/api/graph` when in development mode
+### Multi-Workspace Management
+- Support for multiple organizations/campaigns
+- Role-based access control (Super Admin, Admin, Basic User, Volunteer)
+- Workspace-specific data isolation
 
-For detailed testing instructions, see [API_TESTING.md](API_TESTING.md).
+### Contact Management
+- Comprehensive contact profiles with multiple contact methods
+- Advanced filtering, sorting, and custom views
+- Tag-based organization and categorization
+- Import/export functionality
 
-## Multi-tenant Architecture
+### Business Management
+- Business entity tracking with employee relationships
+- Multi-location support with address management
+- Social media account tracking
 
-This application implements a multi-tenant architecture where:
+### Donation Tracking
+- Record donations from individuals and businesses
+- Status tracking (promised, donated, processing, cleared)
+- Reporting and analytics
 
-- Each organization has its own workspace
-- Users can belong to multiple workspaces with different roles
-- Data is isolated at the workspace level
-- GraphQL queries and mutations enforce proper permissions
+### Activity Tracking
+- Interaction streams for tracking user activities
+- Timeline views of recent actions
+- Audit trails for data changes
 
-## Database Schema
+## Contributing
 
-- **users** - User accounts for authentication
-- **workspaces** - Tenant workspaces for organization separation
-- **user_workspaces** - Junction table for workspace members with roles
-- **contacts** - Contact information with demographic data
-- **contact_emails/phones/addresses** - Contact details with status tracking
-- **businesses** - Business information
-- **donations** - Donation records from contacts or businesses
-- **reference tables** - For states, counties, demographics, etc.
+When contributing to this project:
 
-## API Authentication Flow
+1. Follow the existing code style and conventions
+2. Update documentation for any new features
+3. Add tests for new functionality
+4. Ensure all existing tests pass
+5. Update the appropriate documentation files in this `/docs` folder
 
-1. User registers or logs in to receive a JWT token
-2. Client includes the JWT token in the Authorization header for all API requests
-3. Protected routes validate the token and check permissions
-4. GraphQL resolvers enforce data isolation based on workspace membership
+## Support and Maintenance
 
-## Development
+This project includes comprehensive documentation for:
 
-To add new features:
+- System architecture and design decisions
+- API endpoints and integration guides  
+- Database schema and migration procedures
+- Feature implementation details
+- Bug fixes and problem resolution
+- Testing strategies and procedures
 
-1. Update the schema in `src/lib/db/drizzle/schema.ts`
-2. Generate migrations with `npm run db:generate`
-3. Apply migrations with `npm run db:migrate`
-4. Add new GraphQL types to `src/routes/api/graph/schema.ts`
-5. Implement resolvers in `src/routes/api/graph/resolvers.ts`
-6. Test the new functionality using your preferred API testing tool
+For questions or issues, refer to the relevant documentation section or the debugging guide.
 
-## Security Considerations
+## License
 
-- All passwords are hashed with bcrypt
-- JWT tokens are required for accessing protected routes
-- Multi-tenant isolation is enforced at the database query level
-- Role-based authorization controls access to resources
+[Add license information here]
+
+---
+
+*Last updated: October 2024*
+*Documentation version: 1.0*
