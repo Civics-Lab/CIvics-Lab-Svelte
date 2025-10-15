@@ -4,6 +4,8 @@
   import { workspaceStore } from '$lib/stores/workspaceStore';
   import { toastStore } from '$lib/stores/toastStore';
   import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+  import SidebarToggle from '$lib/components/SidebarToggle.svelte';
+  import { Package } from '@lucide/svelte';
 
   import {
     fetchProducts,
@@ -22,6 +24,30 @@
   const products = writable<ProductWithStats[]>([]);
   const isLoading = writable(false);
   const error = writable<string | null>(null);
+
+  // Search state
+  const searchQuery = writable('');
+
+  // Filtered products based on search
+  const filteredProducts = writable<ProductWithStats[]>([]);
+
+  // Apply search filter whenever products or search query changes
+  $: {
+    const query = $searchQuery.toLowerCase().trim();
+    if (query === '') {
+      filteredProducts.set($products);
+    } else {
+      const filtered = $products.filter(product => {
+        return (
+          product.name.toLowerCase().includes(query) ||
+          (product.description && product.description.toLowerCase().includes(query)) ||
+          formatProductAmount(product.amount).toLowerCase().includes(query) ||
+          formatBillingPeriod(product.billingPeriod).toLowerCase().includes(query)
+        );
+      });
+      filteredProducts.set(filtered);
+    }
+  }
 
   // Modal state
   const isModalOpen = writable(false);
@@ -199,7 +225,7 @@
   <title>Products | Civics Lab</title>
 </svelte:head>
 
-<div class="h-full flex flex-col bg-gray-50">
+<div class="h-full flex flex-col">
   {#if $workspaceStore.isLoading}
     <div class="flex-1 flex justify-center items-center">
       <LoadingSpinner size="lg" />
@@ -213,17 +239,26 @@
     </div>
   {:else}
     <!-- Header -->
-    <div class="bg-white border-b border-gray-200 px-6 py-4">
-      <div class="flex justify-between items-center">
-        <div>
-          <h1 class="text-2xl font-semibold text-gray-900">Products</h1>
-          <p class="text-sm text-gray-500 mt-1">Manage donation products and subscription tiers</p>
-        </div>
+    <div class="bg-white px-6 py-3 flex justify-between items-center flex-shrink-0">
+      <div class="flex items-center">
+        <!-- Sidebar Toggle Button -->
+        <SidebarToggle />
+
+        <!-- Divider -->
+        <div class="w-px h-6 bg-slate-200 mx-3"></div>
+
+        <!-- Icon and Heading -->
+        <Package class="h-5 w-5 text-blue-600 mr-1.5" />
+        <h1 class="text-xl font-semibold">Products</h1>
+      </div>
+
+      <div class="flex items-center space-x-4">
+        <!-- Add Product Button -->
         <button
+          class="inline-flex h-10 items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white ring-offset-white transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
           on:click={handleCreate}
-          class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-2"
         >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4 -ml-1 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
           </svg>
           New Product
@@ -231,18 +266,40 @@
       </div>
     </div>
 
+    <!-- Search Bar -->
+    <div class="bg-white border-b border-gray-200 px-6 py-3 flex-shrink-0">
+      <div class="flex items-center gap-4">
+        <div class="flex-1 relative">
+          <input
+            type="text"
+            bind:value={$searchQuery}
+            on:input={() => {}}
+            placeholder="Search products..."
+            class="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2 text-sm"
+          />
+          <svg class="absolute left-3 top-2.5 h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </div>
+        <div class="flex items-center gap-2 text-sm text-slate-600">
+          <span class="font-medium">{$filteredProducts.length}</span>
+          <span>{$filteredProducts.length === 1 ? 'product' : 'products'}</span>
+        </div>
+      </div>
+    </div>
+
     <!-- Content -->
-    <div class="flex-1 overflow-auto p-6">
+    <div class="flex-1 overflow-auto bg-slate-50">
       {#if $isLoading}
         <div class="flex justify-center items-center py-12">
           <LoadingSpinner size="lg" />
         </div>
       {:else if $error}
-        <div class="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+        <div class="m-6 bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
           {$error}
         </div>
       {:else if $products.length === 0}
-        <div class="bg-white rounded-lg shadow-sm p-12 text-center">
+        <div class="m-6 bg-white rounded-lg shadow-sm p-12 text-center">
           <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
           </svg>
@@ -251,7 +308,7 @@
           <div class="mt-6">
             <button
               on:click={handleCreate}
-              class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+              class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <svg class="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -260,78 +317,88 @@
             </button>
           </div>
         </div>
+      {:else if $filteredProducts.length === 0}
+        <div class="m-6 bg-white rounded-lg shadow-sm p-12 text-center">
+          <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <h3 class="mt-2 text-sm font-medium text-gray-900">No products found</h3>
+          <p class="mt-1 text-sm text-gray-500">Try adjusting your search query.</p>
+        </div>
       {:else}
-        <div class="bg-white rounded-lg shadow-sm overflow-hidden">
-          <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-              <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Billing Period</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subscriptions</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Revenue</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-              {#each $products as product}
-                <tr class="hover:bg-gray-50">
-                  <td class="px-6 py-4 whitespace-nowrap">
-                    <div class="text-sm font-medium text-gray-900">{product.name}</div>
-                    {#if product.description}
-                      <div class="text-sm text-gray-500">{product.description}</div>
-                    {/if}
-                  </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatProductAmount(product.amount)}
-                  </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatBillingPeriod(product.billingPeriod)}
-                  </td>
-                  <td class="px-6 py-4 whitespace-nowrap">
-                    {#if product.isActive}
-                      <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                        Active
-                      </span>
-                    {:else}
-                      <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
-                        Archived
-                      </span>
-                    {/if}
-                  </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {product.activeSubscriptions || 0} active
-                  </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatProductAmount(product.totalRevenue || 0)}
-                  </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button
-                      on:click={() => handleEdit(product)}
-                      class="text-blue-600 hover:text-blue-900 mr-3"
-                    >
-                      Edit
-                    </button>
-                    {#if product.isActive}
-                      <button
-                        on:click={() => handleArchive(product)}
-                        class="text-yellow-600 hover:text-yellow-900 mr-3"
-                      >
-                        Archive
-                      </button>
-                    {/if}
-                    <button
-                      on:click={() => handleDelete(product)}
-                      class="text-red-600 hover:text-red-900"
-                    >
-                      Delete
-                    </button>
-                  </td>
+        <div class="m-6">
+          <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Billing Period</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subscriptions</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Revenue</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
-              {/each}
-            </tbody>
-          </table>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200">
+                {#each $filteredProducts as product}
+                  <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="px-6 py-4">
+                      <div class="text-sm font-medium text-gray-900">{product.name}</div>
+                      {#if product.description}
+                        <div class="text-sm text-gray-500 mt-1">{product.description}</div>
+                      {/if}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {formatProductAmount(product.amount)}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {formatBillingPeriod(product.billingPeriod)}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      {#if product.isActive}
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                          Active
+                        </span>
+                      {:else}
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                          Archived
+                        </span>
+                      {/if}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {product.activeSubscriptions || 0} active
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {formatProductAmount(product.totalRevenue || 0)}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
+                      <button
+                        on:click={() => handleEdit(product)}
+                        class="text-blue-600 hover:text-blue-900 font-medium"
+                      >
+                        Edit
+                      </button>
+                      {#if product.isActive}
+                        <button
+                          on:click={() => handleArchive(product)}
+                          class="text-yellow-600 hover:text-yellow-900 font-medium"
+                        >
+                          Archive
+                        </button>
+                      {/if}
+                      <button
+                        on:click={() => handleDelete(product)}
+                        class="text-red-600 hover:text-red-900 font-medium"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
         </div>
       {/if}
     </div>

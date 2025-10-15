@@ -4,6 +4,8 @@
   import { workspaceStore } from '$lib/stores/workspaceStore';
   import { toastStore } from '$lib/stores/toastStore';
   import LoadingSpinner from '$lib/components/LoadingSpinner.svelte';
+  import SidebarToggle from '$lib/components/SidebarToggle.svelte';
+  import { Repeat } from '@lucide/svelte';
 
   import {
     fetchSubscriptions,
@@ -209,7 +211,7 @@
   <title>Subscriptions | Civics Lab</title>
 </svelte:head>
 
-<div class="h-full flex flex-col bg-gray-50">
+<div class="h-full flex flex-col">
   {#if $workspaceStore.isLoading}
     <div class="flex-1 flex justify-center items-center">
       <LoadingSpinner size="lg" />
@@ -223,43 +225,54 @@
     </div>
   {:else}
     <!-- Header -->
-    <div class="bg-white border-b border-gray-200 px-6 py-4">
-      <div class="flex justify-between items-center mb-4">
-        <div>
-          <h1 class="text-2xl font-semibold text-gray-900">Subscriptions</h1>
-          <p class="text-sm text-gray-500 mt-1">Manage recurring donations and subscriptions</p>
-        </div>
+    <div class="bg-white px-6 py-3 flex justify-between items-center flex-shrink-0">
+      <div class="flex items-center">
+        <!-- Sidebar Toggle Button -->
+        <SidebarToggle />
+
+        <!-- Divider -->
+        <div class="w-px h-6 bg-slate-200 mx-3"></div>
+
+        <!-- Icon and Heading -->
+        <Repeat class="h-5 w-5 text-blue-600 mr-1.5" />
+        <h1 class="text-xl font-semibold">Subscriptions</h1>
+      </div>
+    </div>
+
+    <!-- Stats row with subscription metrics -->
+    <div class="grid grid-cols-5 gap-4 px-6 py-4 bg-white border-b border-gray-200">
+      <div class="p-3 bg-gray-50 rounded-lg">
+        <h3 class="text-sm font-medium text-gray-500">Total</h3>
+        <p class="text-2xl font-bold text-gray-900">{$stats.total}</p>
       </div>
 
-      <!-- Stats Cards -->
-      <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mt-4">
-        <div class="bg-white border border-gray-200 rounded-lg p-4">
-          <p class="text-xs text-gray-500 uppercase">Total</p>
-          <p class="text-2xl font-semibold text-gray-900">{$stats.total}</p>
-        </div>
-        <div class="bg-white border border-gray-200 rounded-lg p-4">
-          <p class="text-xs text-green-600 uppercase">Active</p>
-          <p class="text-2xl font-semibold text-green-600">{$stats.active}</p>
-        </div>
-        <div class="bg-white border border-gray-200 rounded-lg p-4">
-          <p class="text-xs text-yellow-600 uppercase">Paused</p>
-          <p class="text-2xl font-semibold text-yellow-600">{$stats.paused}</p>
-        </div>
-        <div class="bg-white border border-gray-200 rounded-lg p-4">
-          <p class="text-xs text-gray-500 uppercase">Canceled</p>
-          <p class="text-2xl font-semibold text-gray-500">{$stats.canceled}</p>
-        </div>
-        <div class="bg-white border border-gray-200 rounded-lg p-4">
-          <p class="text-xs text-blue-600 uppercase">Monthly Revenue</p>
-          <p class="text-2xl font-semibold text-blue-600">{formatProductAmount($stats.monthlyRevenue)}</p>
-        </div>
+      <div class="p-3 bg-gray-50 rounded-lg">
+        <h3 class="text-sm font-medium text-gray-500">Active</h3>
+        <p class="text-2xl font-bold text-green-600">{$stats.active}</p>
       </div>
 
-      <!-- Filter -->
-      <div class="mt-4">
+      <div class="p-3 bg-gray-50 rounded-lg">
+        <h3 class="text-sm font-medium text-gray-500">Paused</h3>
+        <p class="text-2xl font-bold text-yellow-600">{$stats.paused}</p>
+      </div>
+
+      <div class="p-3 bg-gray-50 rounded-lg">
+        <h3 class="text-sm font-medium text-gray-500">Canceled</h3>
+        <p class="text-2xl font-bold text-gray-500">{$stats.canceled}</p>
+      </div>
+
+      <div class="p-3 bg-gray-50 rounded-lg">
+        <h3 class="text-sm font-medium text-gray-500">Monthly Revenue</h3>
+        <p class="text-2xl font-bold text-blue-600">{formatProductAmount($stats.monthlyRevenue)}</p>
+      </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="bg-white border-b border-gray-200 px-6 py-3 flex-shrink-0">
+      <div class="flex items-center gap-4">
         <select
           bind:value={$statusFilter}
-          class="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          class="px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2 text-sm"
         >
           <option value="all">All Subscriptions</option>
           <option value="active">Active</option>
@@ -268,21 +281,25 @@
           <option value="failed">Failed</option>
           <option value="pending">Pending</option>
         </select>
+        <div class="flex items-center gap-2 text-sm text-slate-600">
+          <span class="font-medium">{filteredSubscriptions.length}</span>
+          <span>{filteredSubscriptions.length === 1 ? 'subscription' : 'subscriptions'}</span>
+        </div>
       </div>
     </div>
 
     <!-- Content -->
-    <div class="flex-1 overflow-auto p-6">
+    <div class="flex-1 overflow-auto bg-slate-50">
       {#if $isLoading}
         <div class="flex justify-center items-center py-12">
           <LoadingSpinner size="lg" />
         </div>
       {:else if $error}
-        <div class="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+        <div class="m-6 bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
           {$error}
         </div>
       {:else if filteredSubscriptions.length === 0}
-        <div class="bg-white rounded-lg shadow-sm p-12 text-center">
+        <div class="m-6 bg-white rounded-lg shadow-sm p-12 text-center">
           <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
@@ -294,86 +311,88 @@
           </p>
         </div>
       {:else}
-        <div class="bg-white rounded-lg shadow-sm overflow-hidden">
-          <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-              <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Billing</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Date</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Next Billing</th>
-                <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-              {#each filteredSubscriptions as subscription}
-                <tr class="hover:bg-gray-50">
-                  <td class="px-6 py-4 whitespace-nowrap">
-                    <div class="text-sm font-medium text-gray-900">
-                      {subscription.contact?.firstName || ''} {subscription.contact?.lastName || ''}
-                    </div>
-                    {#if subscription.contact?.email}
-                      <div class="text-sm text-gray-500">{subscription.contact.email}</div>
-                    {/if}
-                  </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatProductAmount(subscription.amount)}
-                  </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {getBillingPeriodText(subscription.billingPeriod)}
-                  </td>
-                  <td class="px-6 py-4 whitespace-nowrap">
-                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-{getStatusColor(subscription.status)}-100 text-{getStatusColor(subscription.status)}-800">
-                      {formatSubscriptionStatus(subscription.status)}
-                    </span>
-                  </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatDate(subscription.startDate)}
-                  </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {subscription.nextBillingDate ? formatDate(subscription.nextBillingDate) : 'N/A'}
-                  </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button
-                      on:click={() => handleViewDetails(subscription)}
-                      class="text-blue-600 hover:text-blue-900 mr-3"
-                    >
-                      Details
-                    </button>
-                    {#if subscription.status === 'active'}
-                      <button
-                        on:click={() => handlePause(subscription)}
-                        class="text-yellow-600 hover:text-yellow-900 mr-3"
-                      >
-                        Pause
-                      </button>
-                      <button
-                        on:click={() => handleCancelClick(subscription)}
-                        class="text-red-600 hover:text-red-900"
-                      >
-                        Cancel
-                      </button>
-                    {:else if subscription.status === 'paused'}
-                      <button
-                        on:click={() => handleResume(subscription)}
-                        class="text-green-600 hover:text-green-900 mr-3"
-                      >
-                        Resume
-                      </button>
-                      <button
-                        on:click={() => handleCancelClick(subscription)}
-                        class="text-red-600 hover:text-red-900"
-                      >
-                        Cancel
-                      </button>
-                    {/if}
-                  </td>
+        <div class="m-6">
+          <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Billing</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Date</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Next Billing</th>
+                  <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
-              {/each}
-            </tbody>
-          </table>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200">
+                {#each filteredSubscriptions as subscription}
+                  <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <div class="text-sm font-medium text-gray-900">
+                        {subscription.contact?.firstName || ''} {subscription.contact?.lastName || ''}
+                      </div>
+                      {#if subscription.contact?.email}
+                        <div class="text-sm text-gray-500">{subscription.contact.email}</div>
+                      {/if}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {formatProductAmount(subscription.amount)}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {getBillingPeriodText(subscription.billingPeriod)}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-{getStatusColor(subscription.status)}-100 text-{getStatusColor(subscription.status)}-800">
+                        {formatSubscriptionStatus(subscription.status)}
+                      </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {formatDate(subscription.startDate)}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {subscription.nextBillingDate ? formatDate(subscription.nextBillingDate) : 'N/A'}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
+                      <button
+                        on:click={() => handleViewDetails(subscription)}
+                        class="text-blue-600 hover:text-blue-900 font-medium"
+                      >
+                        Details
+                      </button>
+                      {#if subscription.status === 'active'}
+                        <button
+                          on:click={() => handlePause(subscription)}
+                          class="text-yellow-600 hover:text-yellow-900 font-medium"
+                        >
+                          Pause
+                        </button>
+                        <button
+                          on:click={() => handleCancelClick(subscription)}
+                          class="text-red-600 hover:text-red-900 font-medium"
+                        >
+                          Cancel
+                        </button>
+                      {:else if subscription.status === 'paused'}
+                        <button
+                          on:click={() => handleResume(subscription)}
+                          class="text-green-600 hover:text-green-900 font-medium"
+                        >
+                          Resume
+                        </button>
+                        <button
+                          on:click={() => handleCancelClick(subscription)}
+                          class="text-red-600 hover:text-red-900 font-medium"
+                        >
+                          Cancel
+                        </button>
+                      {/if}
+                    </td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
         </div>
       {/if}
     </div>
