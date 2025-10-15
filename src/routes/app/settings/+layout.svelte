@@ -34,7 +34,8 @@
         items: [
           { label: 'General', href: '/app/settings/workspace/general' },
           { label: 'People', href: '/app/settings/workspace/people' },
-          { label: 'Billing', href: '/app/settings/workspace/billing' }
+          { label: 'Billing', href: '/app/settings/workspace/billing' },
+          { label: 'ActBlue', href: '/app/settings/workspace/actblue' }
         ]
       },
       {

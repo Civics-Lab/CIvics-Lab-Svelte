@@ -1,23 +1,28 @@
-import type { RequestHandler } from '@sveltejs/kit';
-import { actblueCsvRouter } from './routes';
+import { json, error } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
+import { actblueCsvService } from './service';
+import { verifyWorkspaceAccess } from '$lib/utils/auth';
 
-// Export all HTTP methods to handle Hono routes through SvelteKit
-export const GET: RequestHandler = async ({ request }) => {
-  return await actblueCsvRouter.fetch(request);
-};
+// GET /api/actblue/csv?workspace_id=[workspace_id] - Get all CSV imports
+export const GET: RequestHandler = async ({ url, locals }) => {
+  const workspaceId = url.searchParams.get('workspace_id');
 
-export const POST: RequestHandler = async ({ request }) => {
-  return await actblueCsvRouter.fetch(request);
-};
+  if (!workspaceId) {
+    throw error(400, 'workspace_id is required');
+  }
 
-export const PUT: RequestHandler = async ({ request }) => {
-  return await actblueCsvRouter.fetch(request);
-};
+  await verifyWorkspaceAccess(locals.user, workspaceId);
 
-export const DELETE: RequestHandler = async ({ request }) => {
-  return await actblueCsvRouter.fetch(request);
-};
+  try {
+    const imports = await actblueCsvService.getImports(workspaceId);
+    return json({ imports });
+  } catch (err) {
+    console.error('Error fetching CSV imports:', err);
 
-export const PATCH: RequestHandler = async ({ request }) => {
-  return await actblueCsvRouter.fetch(request);
+    if (err instanceof Response) {
+      throw err;
+    }
+
+    throw error(500, 'Failed to fetch CSV imports');
+  }
 };
