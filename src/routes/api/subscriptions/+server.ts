@@ -1,23 +1,67 @@
-import type { RequestHandler } from '@sveltejs/kit';
-import { subscriptionRouter } from './routes';
+import { json, error } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
+import { subscriptionService } from './service';
+import { verifyWorkspaceAccess } from '$lib/utils/auth';
 
-// Export all HTTP methods to handle Hono routes through SvelteKit
-export const GET: RequestHandler = async ({ request }) => {
-  return await subscriptionRouter.fetch(request);
+// GET /api/subscriptions?workspace_id=[workspace_id]&status=[status] - Get all subscriptions for a workspace
+export const GET: RequestHandler = async ({ url, locals }) => {
+  const workspaceId = url.searchParams.get('workspace_id');
+  const status = url.searchParams.get('status') || undefined;
+
+  if (!workspaceId) {
+    throw error(400, 'workspace_id is required');
+  }
+
+  // Verify workspace access
+  await verifyWorkspaceAccess(locals.user, workspaceId);
+
+  try {
+    const result = await subscriptionService.getSubscriptions(workspaceId, locals.user?.id || '', status);
+    return json(result);
+  } catch (err) {
+    console.error('Error fetching subscriptions:', err);
+
+    if (err instanceof Response) {
+      throw err;
+    }
+
+    throw error(500, 'Failed to fetch subscriptions');
+  }
 };
 
-export const POST: RequestHandler = async ({ request }) => {
-  return await subscriptionRouter.fetch(request);
-};
+// POST /api/subscriptions - Create a new subscription
+export const POST: RequestHandler = async ({ request, locals }) => {
+  const user = locals.user;
 
-export const PUT: RequestHandler = async ({ request }) => {
-  return await subscriptionRouter.fetch(request);
-};
+  if (!user) {
+    throw error(401, 'Authentication required');
+  }
 
-export const DELETE: RequestHandler = async ({ request }) => {
-  return await subscriptionRouter.fetch(request);
-};
+  const subscriptionData = await request.json();
 
-export const PATCH: RequestHandler = async ({ request }) => {
-  return await subscriptionRouter.fetch(request);
+  if (!subscriptionData.workspaceId) {
+    throw error(400, 'workspaceId is required');
+  }
+
+  // Verify workspace access
+  await verifyWorkspaceAccess(user, subscriptionData.workspaceId);
+
+  try {
+    const subscription = await subscriptionService.createSubscription(subscriptionData, user.id);
+    return json({ subscription }, { status: 201 });
+  } catch (err) {
+    console.error('Error creating subscription:', err);
+
+    if (err instanceof Response) {
+      throw err;
+    }
+
+    if (err instanceof Error) {
+      if (err.message.includes('required') || err.message.includes('Invalid')) {
+        throw error(400, err.message);
+      }
+    }
+
+    throw error(500, 'Failed to create subscription');
+  }
 };

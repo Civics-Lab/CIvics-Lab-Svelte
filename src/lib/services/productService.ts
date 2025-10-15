@@ -13,8 +13,13 @@ export async function fetchProducts(workspaceId: string): Promise<Product[]> {
     const response = await fetch(`/api/products?workspace_id=${workspaceId}`);
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to fetch products');
+      try {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to fetch products');
+      } catch (jsonError) {
+        // If the response body isn't valid JSON
+        throw new Error(`Failed to fetch products: ${response.status} ${response.statusText}`);
+      }
     }
 
     const data = await response.json();
@@ -33,8 +38,12 @@ export async function fetchActiveProducts(workspaceId: string): Promise<Product[
     const response = await fetch(`/api/products?workspace_id=${workspaceId}&active_only=true`);
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to fetch active products');
+      try {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to fetch active products');
+      } catch (jsonError) {
+        throw new Error(`Failed to fetch active products: ${response.status} ${response.statusText}`);
+      }
     }
 
     const data = await response.json();
@@ -53,8 +62,12 @@ export async function fetchProduct(productId: string): Promise<Product> {
     const response = await fetch(`/api/products/${productId}`);
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to fetch product');
+      try {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to fetch product');
+      } catch (jsonError) {
+        throw new Error(`Failed to fetch product: ${response.status} ${response.statusText}`);
+      }
     }
 
     const data = await response.json();
@@ -73,8 +86,12 @@ export async function fetchProductWithStats(productId: string): Promise<ProductW
     const response = await fetch(`/api/products/${productId}/stats`);
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to fetch product stats');
+      try {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to fetch product stats');
+      } catch (jsonError) {
+        throw new Error(`Failed to fetch product stats: ${response.status} ${response.statusText}`);
+      }
     }
 
     const data = await response.json();
@@ -99,8 +116,12 @@ export async function createProduct(productData: CreateProductData): Promise<Pro
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to create product');
+      try {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to create product');
+      } catch (jsonError) {
+        throw new Error(`Failed to create product: ${response.status} ${response.statusText}`);
+      }
     }
 
     const data = await response.json();
@@ -125,8 +146,12 @@ export async function updateProduct(productId: string, updateData: UpdateProduct
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to update product');
+      try {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to update product');
+      } catch (jsonError) {
+        throw new Error(`Failed to update product: ${response.status} ${response.statusText}`);
+      }
     }
 
     const data = await response.json();
@@ -147,8 +172,12 @@ export async function archiveProduct(productId: string): Promise<boolean> {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to archive product');
+      try {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to archive product');
+      } catch (jsonError) {
+        throw new Error(`Failed to archive product: ${response.status} ${response.statusText}`);
+      }
     }
 
     const data = await response.json();
@@ -169,8 +198,12 @@ export async function deleteProduct(productId: string): Promise<boolean> {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to delete product');
+      try {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to delete product');
+      } catch (jsonError) {
+        throw new Error(`Failed to delete product: ${response.status} ${response.statusText}`);
+      }
     }
 
     const data = await response.json();

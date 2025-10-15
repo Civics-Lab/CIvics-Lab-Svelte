@@ -24,8 +24,12 @@ export async function fetchSubscriptions(workspaceId: string, status?: string): 
     const response = await fetch(`/api/subscriptions?${params}`);
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to fetch subscriptions');
+      try {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to fetch subscriptions');
+      } catch (jsonError) {
+        throw new Error(`Failed to fetch subscriptions: ${response.status} ${response.statusText}`);
+      }
     }
 
     const data = await response.json();
@@ -44,8 +48,12 @@ export async function fetchContactSubscriptions(contactId: string): Promise<Subs
     const response = await fetch(`/api/contacts/${contactId}/subscriptions`);
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to fetch contact subscriptions');
+      try {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to fetch contact subscriptions');
+      } catch (jsonError) {
+        throw new Error(`Failed to fetch contact subscriptions: ${response.status} ${response.statusText}`);
+      }
     }
 
     const data = await response.json();
@@ -64,8 +72,12 @@ export async function fetchSubscription(subscriptionId: string): Promise<Subscri
     const response = await fetch(`/api/subscriptions/${subscriptionId}`);
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to fetch subscription');
+      try {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to fetch subscription');
+      } catch (jsonError) {
+        throw new Error(`Failed to fetch subscription: ${response.status} ${response.statusText}`);
+      }
     }
 
     const data = await response.json();
@@ -84,8 +96,12 @@ export async function fetchSubscriptionWithDetails(subscriptionId: string): Prom
     const response = await fetch(`/api/subscriptions/${subscriptionId}/details`);
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to fetch subscription details');
+      try {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to fetch subscription details');
+      } catch (jsonError) {
+        throw new Error(`Failed to fetch subscription details: ${response.status} ${response.statusText}`);
+      }
     }
 
     const data = await response.json();
@@ -104,8 +120,12 @@ export async function fetchUpcomingBilling(workspaceId: string, days: number = 7
     const response = await fetch(`/api/subscriptions/upcoming?workspace_id=${workspaceId}&days=${days}`);
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to fetch upcoming billing');
+      try {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to fetch upcoming billing');
+      } catch (jsonError) {
+        throw new Error(`Failed to fetch upcoming billing: ${response.status} ${response.statusText}`);
+      }
     }
 
     const data = await response.json();
@@ -130,8 +150,12 @@ export async function createSubscription(subscriptionData: CreateSubscriptionDat
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to create subscription');
+      try {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to create subscription');
+      } catch (jsonError) {
+        throw new Error(`Failed to create subscription: ${response.status} ${response.statusText}`);
+      }
     }
 
     const data = await response.json();
@@ -156,8 +180,12 @@ export async function updateSubscription(subscriptionId: string, updateData: Upd
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to update subscription');
+      try {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to update subscription');
+      } catch (jsonError) {
+        throw new Error(`Failed to update subscription: ${response.status} ${response.statusText}`);
+      }
     }
 
     const data = await response.json();
@@ -182,8 +210,12 @@ export async function cancelSubscription(subscriptionId: string, cancelData?: Ca
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to cancel subscription');
+      try {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to cancel subscription');
+      } catch (jsonError) {
+        throw new Error(`Failed to cancel subscription: ${response.status} ${response.statusText}`);
+      }
     }
 
     const data = await response.json();
@@ -204,8 +236,12 @@ export async function pauseSubscription(subscriptionId: string): Promise<Subscri
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to pause subscription');
+      try {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to pause subscription');
+      } catch (jsonError) {
+        throw new Error(`Failed to pause subscription: ${response.status} ${response.statusText}`);
+      }
     }
 
     const data = await response.json();
@@ -226,8 +262,12 @@ export async function resumeSubscription(subscriptionId: string): Promise<Subscr
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to resume subscription');
+      try {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to resume subscription');
+      } catch (jsonError) {
+        throw new Error(`Failed to resume subscription: ${response.status} ${response.statusText}`);
+      }
     }
 
     const data = await response.json();
@@ -248,8 +288,12 @@ export async function deleteSubscription(subscriptionId: string): Promise<boolea
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to delete subscription');
+      try {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to delete subscription');
+      } catch (jsonError) {
+        throw new Error(`Failed to delete subscription: ${response.status} ${response.statusText}`);
+      }
     }
 
     const data = await response.json();

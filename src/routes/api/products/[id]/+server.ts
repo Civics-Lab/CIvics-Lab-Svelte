@@ -1,72 +1,45 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { productService } from './service';
-import { verifyWorkspaceAccess } from '$lib/utils/auth';
+import { productService } from '../service';
 
-// GET /api/products?workspace_id=[workspace_id]&active_only=[true|false] - Get all products for a workspace
-export const GET: RequestHandler = async ({ url, locals }) => {
-  const workspaceId = url.searchParams.get('workspace_id');
-  const activeOnly = url.searchParams.get('active_only') === 'true';
-
-  if (!workspaceId) {
-    throw error(400, 'workspace_id is required');
-  }
-
-  // Verify workspace access
-  await verifyWorkspaceAccess(locals.user, workspaceId);
-
-  try {
-    const result = await productService.getProducts(workspaceId, locals.user?.id || '', activeOnly);
-    return json(result);
-  } catch (err) {
-    console.error('Error fetching products:', err);
-
-    if (err instanceof Response) {
-      throw err;
-    }
-
-    throw error(500, 'Failed to fetch products');
-  }
-};
-
-// POST /api/products - Create a new product
-export const POST: RequestHandler = async ({ request, locals }) => {
+// GET /api/products/:id - Get specific product
+export const GET: RequestHandler = async ({ params, locals }) => {
   const user = locals.user;
 
   if (!user) {
     throw error(401, 'Authentication required');
   }
 
-  const productData = await request.json();
+  const { id } = params;
 
-  if (!productData.workspaceId) {
-    throw error(400, 'workspaceId is required');
+  if (!id) {
+    throw error(400, 'Product ID is required');
   }
 
-  // Verify workspace access
-  await verifyWorkspaceAccess(user, productData.workspaceId);
-
   try {
-    const product = await productService.createProduct(productData, user.id);
-    return json({ product }, { status: 201 });
+    const product = await productService.getProductById(id, user.id);
+    return json({ product });
   } catch (err) {
-    console.error('Error creating product:', err);
+    console.error('Error fetching product:', err);
 
     if (err instanceof Response) {
       throw err;
     }
 
     if (err instanceof Error) {
-      if (err.message.includes('required') || err.message.includes('Invalid')) {
-        throw error(400, err.message);
+      if (err.message === 'Product not found') {
+        throw error(404, err.message);
+      }
+      if (err.message.includes('access') || err.message.includes('permission')) {
+        throw error(403, err.message);
       }
     }
 
-    throw error(500, 'Failed to create product');
+    throw error(500, 'Failed to fetch product');
   }
 };
 
-// PUT /api/products/:id - Update a product
+// PUT /api/products/:id - Update product
 export const PUT: RequestHandler = async ({ params, request, locals }) => {
   const user = locals.user;
 
@@ -108,7 +81,7 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
   }
 };
 
-// DELETE /api/products/:id - Delete a product
+// DELETE /api/products/:id - Delete product
 export const DELETE: RequestHandler = async ({ params, locals }) => {
   const user = locals.user;
 

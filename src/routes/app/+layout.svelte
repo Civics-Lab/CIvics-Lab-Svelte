@@ -12,17 +12,19 @@
     import CreateWorkspaceModal from '$lib/components/CreateWorkspaceModal.svelte';
     import type { LayoutData } from './$types';
     // Import Lucide icons
-    import { 
-        LayoutDashboard, 
-        Users, 
-        Building2, 
-        DollarSign, 
-        Settings, 
-        HelpCircle, 
+    import {
+        LayoutDashboard,
+        Users,
+        Building2,
+        DollarSign,
+        Settings,
+        HelpCircle,
         LogOut,
         ChevronDown,
         MessageSquare,
-        ShieldAlert
+        ShieldAlert,
+        Package,
+        Repeat
     } from '@lucide/svelte';
     
     export let data: LayoutData;
@@ -167,12 +169,30 @@
           </a>
           
           <!-- Donations -->
-          <a 
-            href="/app/donations" 
+          <a
+            href="/app/donations"
             class="flex items-center px-3 py-2 text-sm rounded-md mb-1 {isActive('/app/donations') ? 'bg-white text-slate-900 font-medium' : 'text-white hover:bg-slate-800'}"
           >
             <DollarSign class="h-5 w-5 mr-2" />
             Donations
+          </a>
+
+          <!-- Products -->
+          <a
+            href="/app/products"
+            class="flex items-center px-3 py-2 text-sm rounded-md mb-1 {isActive('/app/products') ? 'bg-white text-slate-900 font-medium' : 'text-white hover:bg-slate-800'}"
+          >
+            <Package class="h-5 w-5 mr-2" />
+            Products
+          </a>
+
+          <!-- Subscriptions -->
+          <a
+            href="/app/subscriptions"
+            class="flex items-center px-3 py-2 text-sm rounded-md mb-1 {isActive('/app/subscriptions') ? 'bg-white text-slate-900 font-medium' : 'text-white hover:bg-slate-800'}"
+          >
+            <Repeat class="h-5 w-5 mr-2" />
+            Subscriptions
           </a>
         </div>
         {/if}

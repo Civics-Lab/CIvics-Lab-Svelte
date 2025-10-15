@@ -63,10 +63,7 @@
     isLoading.set(true);
 
     try {
-      const token = localStorage.getItem('token');
-      if (!token) throw new Error('No authentication token');
-
-      const configData = await fetchActBlueConfig($workspaceStore.currentWorkspace.id, token);
+      const configData = await fetchActBlueConfig($workspaceStore.currentWorkspace.id);
 
       if (configData) {
         config.set(configData);
@@ -81,8 +78,7 @@
         // Get webhook URL
         const url = await getWebhookUrl(
           $workspaceStore.currentWorkspace.id,
-          window.location.origin,
-          token
+          window.location.origin
         );
         webhookUrl.set(url);
       }
@@ -106,10 +102,7 @@
     isLoadingImports.set(true);
 
     try {
-      const token = localStorage.getItem('token');
-      if (!token) throw new Error('No authentication token');
-
-      const importsList = await fetchCsvImports($workspaceStore.currentWorkspace.id, token);
+      const importsList = await fetchCsvImports($workspaceStore.currentWorkspace.id);
       imports.set(importsList);
     } catch (err) {
       console.error('Error loading imports:', err);
@@ -146,10 +139,8 @@
     isSaving.set(true);
 
     try {
-      const token = localStorage.getItem('token');
-      if (!token) throw new Error('No authentication token');
-
       const configData: any = {
+        workspaceId: $workspaceStore.currentWorkspace.id,
         webhookUsername: $formData.webhookUsername.trim(),
         isWebhookEnabled: $formData.isWebhookEnabled,
         isCsvImportEnabled: $formData.isCsvImportEnabled
@@ -164,10 +155,10 @@
       }
 
       if ($config) {
-        await updateActBlueConfig($workspaceStore.currentWorkspace.id, configData, token);
+        await updateActBlueConfig($workspaceStore.currentWorkspace.id, configData);
         toastStore.success('ActBlue configuration updated');
       } else {
-        await createActBlueConfig($workspaceStore.currentWorkspace.id, configData, token);
+        await createActBlueConfig($workspaceStore.currentWorkspace.id, configData);
         toastStore.success('ActBlue configuration created');
       }
 
@@ -193,13 +184,9 @@
     isTesting.set(true);
 
     try {
-      const token = localStorage.getItem('token');
-      if (!token) throw new Error('No authentication token');
-
       const result = await testWebhookCredentials(
         $workspaceStore.currentWorkspace.id,
-        $testPassword,
-        token
+        $testPassword
       );
 
       if (result.valid) {
@@ -235,15 +222,11 @@
     isRequesting.set(true);
 
     try {
-      const token = localStorage.getItem('token');
-      if (!token) throw new Error('No authentication token');
-
       const result = await requestCsvExport(
         $workspaceStore.currentWorkspace.id,
         $csvFormData.csvType,
         $csvFormData.dateRangeStart,
-        $csvFormData.dateRangeEnd,
-        token
+        $csvFormData.dateRangeEnd
       );
 
       toastStore.success('CSV export requested. Check back in a few minutes.');

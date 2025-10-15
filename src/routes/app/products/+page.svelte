@@ -49,16 +49,13 @@
     error.set(null);
 
     try {
-      const token = localStorage.getItem('token');
-      if (!token) throw new Error('No authentication token');
-
-      const productsList = await fetchProducts($workspaceStore.currentWorkspace.id, token);
+      const productsList = await fetchProducts($workspaceStore.currentWorkspace.id);
 
       // Fetch stats for each product
       const productsWithStats = await Promise.all(
         productsList.map(async (product) => {
           try {
-            return await fetchProductWithStats(product.id, token);
+            return await fetchProductWithStats(product.id);
           } catch {
             return { ...product, activeSubscriptions: 0, totalRevenue: 0, totalSubscribers: 0 };
           }
@@ -133,10 +130,8 @@
     isSubmitting.set(true);
 
     try {
-      const token = localStorage.getItem('token');
-      if (!token) throw new Error('No authentication token');
-
       const productData = {
+        workspaceId: $workspaceStore.currentWorkspace.id,
         name: $formData.name.trim(),
         description: $formData.description.trim() || undefined,
         amount: Math.round(parseFloat($formData.amount) * 100), // Convert to cents
@@ -145,18 +140,10 @@
       };
 
       if ($modalMode === 'create') {
-        await createProduct(
-          $workspaceStore.currentWorkspace.id,
-          productData,
-          token
-        );
+        await createProduct(productData);
         toastStore.success('Product created successfully');
       } else if ($modalMode === 'edit' && $selectedProduct) {
-        await updateProduct(
-          $selectedProduct.id,
-          productData,
-          token
-        );
+        await updateProduct($selectedProduct.id, productData);
         toastStore.success('Product updated successfully');
       }
 
@@ -177,10 +164,7 @@
     }
 
     try {
-      const token = localStorage.getItem('token');
-      if (!token) throw new Error('No authentication token');
-
-      await archiveProduct(product.id, token);
+      await archiveProduct(product.id);
       toastStore.success('Product archived successfully');
       await loadProducts();
     } catch (err) {
@@ -194,10 +178,7 @@
     if (!$selectedProduct) return;
 
     try {
-      const token = localStorage.getItem('token');
-      if (!token) throw new Error('No authentication token');
-
-      await deleteProduct($selectedProduct.id, token);
+      await deleteProduct($selectedProduct.id);
       toastStore.success('Product deleted successfully');
       isDeleteModalOpen.set(false);
       selectedProduct.set(null);

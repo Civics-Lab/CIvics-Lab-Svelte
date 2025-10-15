@@ -53,12 +53,8 @@
     error.set(null);
 
     try {
-      const token = localStorage.getItem('token');
-      if (!token) throw new Error('No authentication token');
-
       const subscriptionsList = await fetchSubscriptions(
-        $workspaceStore.currentWorkspace.id,
-        token
+        $workspaceStore.currentWorkspace.id
       );
 
       subscriptions.set(subscriptionsList);
@@ -90,10 +86,7 @@
     selectedSubscription.set(null);
 
     try {
-      const token = localStorage.getItem('token');
-      if (!token) throw new Error('No authentication token');
-
-      const details = await fetchSubscriptionWithDetails(subscription.id, token);
+      const details = await fetchSubscriptionWithDetails(subscription.id);
       selectedSubscription.set(details);
     } catch (err) {
       console.error('Error loading subscription details:', err);
@@ -118,14 +111,11 @@
     isProcessing.set(true);
 
     try {
-      const token = localStorage.getItem('token');
-      if (!token) throw new Error('No authentication token');
+      const cancelData = $cancelReason.trim()
+        ? { reason: $cancelReason.trim() }
+        : undefined;
 
-      await cancelSubscription(
-        $selectedSubscription.id,
-        $cancelReason.trim() || undefined,
-        token
-      );
+      await cancelSubscription($selectedSubscription.id, cancelData);
 
       toastStore.success('Subscription canceled successfully');
       isCancelModalOpen.set(false);
@@ -147,10 +137,7 @@
     }
 
     try {
-      const token = localStorage.getItem('token');
-      if (!token) throw new Error('No authentication token');
-
-      await pauseSubscription(subscription.id, token);
+      await pauseSubscription(subscription.id);
       toastStore.success('Subscription paused successfully');
       await loadSubscriptions();
     } catch (err) {
@@ -166,10 +153,7 @@
     }
 
     try {
-      const token = localStorage.getItem('token');
-      if (!token) throw new Error('No authentication token');
-
-      await resumeSubscription(subscription.id, token);
+      await resumeSubscription(subscription.id);
       toastStore.success('Subscription resumed successfully');
       await loadSubscriptions();
     } catch (err) {
