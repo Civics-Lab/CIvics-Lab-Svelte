@@ -22,7 +22,7 @@ export const jwtUtils = {
     // Calculate expiration time
     const now = Math.floor(Date.now() / 1000);
     let expiration: number;
-    
+
     if (expiresIn === '7d') {
       expiration = now + (7 * 24 * 60 * 60); // 7 days
     } else if (expiresIn === '1d') {
@@ -32,17 +32,17 @@ export const jwtUtils = {
     } else {
       expiration = now + (7 * 24 * 60 * 60); // Default to 7 days
     }
-    
+
     // Create token with expiration
     const tokenPayload = {
       ...payload,
       iat: now,
       exp: expiration
     };
-    
+
     return sign(tokenPayload, env.JWT_SECRET);
   },
-  
+
   /**
    * Verify and decode a JWT token
    */
@@ -54,3 +54,7 @@ export const jwtUtils = {
     }
   }
 };
+
+// Export named functions for backward compatibility
+export const verifyJWT = jwtUtils.verifyToken;
+export const generateJWT = jwtUtils.generateToken;

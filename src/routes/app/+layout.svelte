@@ -24,7 +24,8 @@
         MessageSquare,
         ShieldAlert,
         Package,
-        Repeat
+        Repeat,
+        FileText
     } from '@lucide/svelte';
     
     export let data: LayoutData;
@@ -193,6 +194,15 @@
           >
             <Repeat class="h-5 w-5 mr-2" />
             Subscriptions
+          </a>
+
+          <!-- Forms -->
+          <a
+            href="/app/forms"
+            class="flex items-center px-3 py-2 text-sm rounded-md mb-1 {isActive('/app/forms') ? 'bg-white text-slate-900 font-medium' : 'text-white hover:bg-slate-800'}"
+          >
+            <FileText class="h-5 w-5 mr-2" />
+            Forms
           </a>
         </div>
         {/if}

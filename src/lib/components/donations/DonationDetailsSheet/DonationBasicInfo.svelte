@@ -2,14 +2,15 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
   import { writable } from 'svelte/store';
-  import { DollarSign, Calendar, CreditCard, User, Building, Edit3 } from '@lucide/svelte';
+  import { DollarSign, Calendar, CreditCard, User, Building, Edit3, FileText, ExternalLink } from '@lucide/svelte';
   import DonorSelector from '../DonorSelector.svelte';
-  
+
   export let formData;
   export let donor;
   export let statusOptions = [];
   export let paymentTypeOptions = [];
   export let isSaving = false;
+  export let formSource: { formName: string; formSlug: string } | null = null;
   
   const dispatch = createEventDispatcher();
   
@@ -195,7 +196,29 @@
         {/if}
       {/if}
     </div>
-    
+
+    <!-- Form Source (if available) -->
+    {#if formSource}
+      <div class="rounded-lg border border-blue-200 bg-blue-50 p-4">
+        <div class="flex items-center gap-2 mb-2">
+          <FileText class="h-4 w-4 text-blue-600" />
+          <label class="text-sm font-medium text-blue-900">Form Source</label>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-sm text-blue-800">{formSource.formName}</span>
+          <a
+            href="/forms/{formSource.formSlug}"
+            target="_blank"
+            class="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
+          >
+            View Form
+            <ExternalLink class="h-3 w-3" />
+          </a>
+        </div>
+        <p class="text-xs text-blue-600 mt-1">This donation was submitted via a public form</p>
+      </div>
+    {/if}
+
     <!-- Amount and Status Row -->
     <div class="grid gap-6 md:grid-cols-2">
       <div class="space-y-2">

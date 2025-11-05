@@ -6,7 +6,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
 import { actblueConfigService } from './service';
-import { verifyJWT } from '$lib/auth/jwt';
+import { verifyJWT } from '$lib/utils/jwt';
 
 // Zod schemas for validation
 const createConfigSchema = z.object({

@@ -36,6 +36,13 @@
       "when": 1749431664145,
       "tag": "0004_red_saracen",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1762282810812,
+      "tag": "0005_tiny_rick_jones",
+      "breakpoints": true
     }
   ]
 }

@@ -41,7 +41,8 @@
   
   // Related entities
   const donor = writable<any>(null);
-  
+  const formSource = writable<{ formName: string; formSlug: string } | null>(null);
+
   // Multi-item sections
   const tags = writable<string[]>([]);
   
@@ -147,7 +148,17 @@
         
         // Set tags
         tags.set(donationTags ? donationTags.map(tag => tag.tag) : []);
-        
+
+        // Set form source if available
+        if (data.formId && data.form) {
+          formSource.set({
+            formName: data.form.name,
+            formSlug: data.form.slug
+          });
+        } else {
+          formSource.set(null);
+        }
+
       } else {
         error.set('Donation not found');
       }
@@ -405,11 +416,12 @@
             {:else}
               <div class="space-y-8" on:click|stopPropagation={() => {}}>
                 <!-- Basic Information Section -->
-                <DonationBasicInfo 
+                <DonationBasicInfo
                   {formData}
                   {donor}
                   {statusOptions}
                   {paymentTypeOptions}
+                  formSource={$formSource}
                   isSaving={$isSaving}
                   on:change={handleFormDataChange}
                 />

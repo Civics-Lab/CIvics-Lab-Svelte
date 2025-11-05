@@ -181,10 +181,32 @@ export const donationService = {
       .select()
       .from(donationTags)
       .where(eq(donationTags.donationId, donationId));
-    
+
+    // Get form information if this donation came from a form
+    let formDetails = {};
+    if (donation.formId) {
+      const { forms } = await import('$lib/db/drizzle/schema');
+      const formResult = await db
+        .select({
+          id: forms.id,
+          name: forms.name,
+          slug: forms.slug
+        })
+        .from(forms)
+        .where(eq(forms.id, donation.formId))
+        .limit(1);
+
+      if (formResult.length > 0) {
+        formDetails = {
+          form: formResult[0]
+        };
+      }
+    }
+
     return {
       ...donation,
       ...donorDetails,
+      ...formDetails,
       tags: tags || []
     };
   },

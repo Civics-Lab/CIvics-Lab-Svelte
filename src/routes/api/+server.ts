@@ -19,12 +19,16 @@ import { productRouter } from './products/routes';
 import { subscriptionRouter } from './subscriptions/routes';
 import { actblueConfigRouter } from './actblue/config/routes';
 import { actblueCsvRouter } from './actblue/csv/routes';
+import { formsRouter } from './forms/routes';
+import { stripeRouter } from './stripe/routes';
+import { donorsRouter } from './donors/routes';
+import { adminFinancialRouter } from './admin/financial/routes';
 
 // Create main Hono app
 const app = new Hono()
   // Global middleware
   .use('*', cors({
-    origin: ['http://localhost:5173', 'https://civics-lab.vercel.app'],
+    origin: ['http://localhost:5173', 'http://localhost:5177', 'https://civics-lab.vercel.app'],
     credentials: true,
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Authorization', 'Content-Type']
@@ -46,6 +50,10 @@ const app = new Hono()
   .route('/admin', adminRouter)
   .route('/import-export', importExportRouter)
   .route('/invites-new', inviteRouter)
+  .route('/forms', formsRouter)
+  .route('/stripe', stripeRouter)
+  .route('/donors', donorsRouter)
+  .route('/admin/financial', adminFinancialRouter)
   
   // Health check endpoint for testing
   .get('/health', (c) => {

@@ -18,6 +18,11 @@ export const interactionStatusEnum = pgEnum('interaction_status', ['active', 'ar
 export const productBillingPeriodEnum = pgEnum('product_billing_period', ['one_time', 'weekly', 'monthly', 'yearly']);
 export const subscriptionStatusEnum = pgEnum('subscription_status', ['active', 'canceled', 'paused', 'failed', 'pending']);
 export const actblueEventTypeEnum = pgEnum('actblue_event_type', ['donation', 'refund', 'cancellation']);
+export const formTypeEnum = pgEnum('form_type', ['donation', 'product', 'subscription']);
+export const formSubmissionStatusEnum = pgEnum('form_submission_status', ['pending', 'completed', 'failed', 'refunded']);
+export const stripeTransactionTypeEnum = pgEnum('stripe_transaction_type', ['donation', 'subscription', 'product']);
+export const stripeTransactionStatusEnum = pgEnum('stripe_transaction_status', ['pending', 'succeeded', 'failed', 'refunded']);
+export const stripePayoutStatusEnum = pgEnum('stripe_payout_status', ['pending', 'processing', 'paid', 'failed']);
 
 // Users Table - For Hono Auth
 export const users = pgTable('users', {
@@ -32,7 +37,8 @@ export const users = pgTable('users', {
   lastLoginAt: timestamp('last_login_at'),
   isActive: boolean('is_active').default(true).notNull(),
   role: text('role').default('user').notNull(),
-  isGlobalSuperAdmin: boolean('is_global_super_admin').default(false).notNull()
+  isGlobalSuperAdmin: boolean('is_global_super_admin').default(false).notNull(),
+  canAccessDonorPortal: boolean('can_access_donor_portal').default(false).notNull()
 });
 
 // Main Tables from Supabase Schema
@@ -275,6 +281,7 @@ export const donations = pgTable('donations', {
   businessId: uuid('business_id').references(() => businesses.id),
   status: donationStatusEnum('status').default('promise'),
   paymentType: text('payment_type'),
+  donationDate: timestamp('donation_date'),
   notes: text('notes'),
   // Recurring donations fields
   productId: uuid('product_id').references(() => products.id),
@@ -292,6 +299,9 @@ export const donations = pgTable('donations', {
   refundedAt: timestamp('refunded_at'),
   disbursedAt: timestamp('disbursed_at'),
   recoveredAt: timestamp('recovered_at'),
+  // Forms integration fields - references will be added after forms/formSubmissions are defined
+  formId: uuid('form_id'),
+  formSubmissionId: uuid('form_submission_id'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow()
 });
@@ -404,6 +414,106 @@ export const actblueImports = pgTable('actblue_imports', {
   createdById: uuid('created_by').references(() => users.id)
 });
 
+// Forms Tables
+export const forms = pgTable('forms', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  workspaceId: uuid('workspace_id').references(() => workspaces.id).notNull(),
+  name: text('name').notNull(),
+  slug: text('slug').notNull().unique(),
+  logoUrl: text('logo_url'),
+  leftContent: jsonb('left_content').notNull(),
+  type: formTypeEnum('type').notNull(),
+  linkedItemId: uuid('linked_item_id').notNull(),
+  footerContent: jsonb('footer_content').notNull(),
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  createdById: uuid('created_by').references(() => users.id)
+});
+
+export const formSubmissions = pgTable('form_submissions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  formId: uuid('form_id').references(() => forms.id).notNull(),
+  contactId: uuid('contact_id').references(() => contacts.id).notNull(),
+  workspaceId: uuid('workspace_id').references(() => workspaces.id).notNull(),
+  amount: integer('amount').notNull(),
+  stripePaymentIntentId: text('stripe_payment_intent_id'),
+  stripeChargeId: text('stripe_charge_id'),
+  status: formSubmissionStatusEnum('status').default('pending').notNull(),
+  submissionData: jsonb('submission_data').notNull(),
+  submittedAt: timestamp('submitted_at').defaultNow().notNull(),
+  metadata: jsonb('metadata')
+});
+
+export const stripeTransactions = pgTable('stripe_transactions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  workspaceId: uuid('workspace_id').references(() => workspaces.id).notNull(),
+  contactId: uuid('contact_id').references(() => contacts.id),
+  formSubmissionId: uuid('form_submission_id').references(() => formSubmissions.id),
+  donationId: uuid('donation_id').references(() => donations.id),
+  subscriptionId: uuid('subscription_id').references(() => subscriptions.id),
+  amount: integer('amount').notNull(),
+  stripeFee: integer('stripe_fee').notNull(),
+  platformFee: integer('platform_fee').notNull(),
+  netAmount: integer('net_amount').notNull(),
+  stripePaymentIntentId: text('stripe_payment_intent_id').notNull(),
+  stripeChargeId: text('stripe_charge_id'),
+  type: stripeTransactionTypeEnum('type').notNull(),
+  status: stripeTransactionStatusEnum('status').default('pending').notNull(),
+  payoutStatus: stripePayoutStatusEnum('payout_status').default('pending').notNull(),
+  payoutDate: timestamp('payout_date'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  metadata: jsonb('metadata')
+});
+
+export const stripePayouts = pgTable('stripe_payouts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  workspaceId: uuid('workspace_id').references(() => workspaces.id).notNull(),
+  payoutAmount: integer('payout_amount').notNull(),
+  transactionIds: jsonb('transaction_ids').notNull(),
+  totalGross: integer('total_gross').notNull(),
+  totalStripeFees: integer('total_stripe_fees').notNull(),
+  totalPlatformFees: integer('total_platform_fees').notNull(),
+  payoutMethod: text('payout_method'),
+  status: stripePayoutStatusEnum('status').default('pending').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  completedAt: timestamp('completed_at'),
+  createdById: uuid('created_by').references(() => users.id).notNull(),
+  notes: text('notes')
+});
+
+export const donorPortalInvites = pgTable('donor_portal_invites', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  contactId: uuid('contact_id').references(() => contacts.id).notNull(),
+  workspaceId: uuid('workspace_id').references(() => workspaces.id).notNull(),
+  email: text('email').notNull(),
+  inviteToken: text('invite_token').notNull().unique(),
+  expiresAt: timestamp('expires_at').notNull(),
+  acceptedAt: timestamp('accepted_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull()
+});
+
+export const stripeConfig = pgTable('stripe_config', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  workspaceId: uuid('workspace_id').references(() => workspaces.id).notNull().unique(),
+  publishableKey: text('publishable_key').notNull(),
+  secretKey: text('secret_key').notNull(),
+  webhookSecret: text('webhook_secret').notNull(),
+  platformFeePercentage: integer('platform_fee_percentage').default(0).notNull(),
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull()
+});
+
+export const formSettings = pgTable('form_settings', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  workspaceId: uuid('workspace_id').references(() => workspaces.id).notNull().unique(),
+  defaultFooterContent: jsonb('default_footer_content').notNull(),
+  fieldBindings: jsonb('field_bindings'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull()
+});
+
 export const workspaceSubscriptions = pgTable('workspace_subscriptions', {
   id: uuid('id').primaryKey().defaultRandom(),
   workspaceId: uuid('workspace_id').references(() => workspaces.id),
@@ -514,7 +624,14 @@ export const workspacesRelations = relations(workspaces, ({ one, many }) => ({
   donorSubscriptions: many(subscriptions),
   actblueConfig: one(actblueConfig),
   actblueWebhookLogs: many(actblueWebhookLogs),
-  actblueImports: many(actblueImports)
+  actblueImports: many(actblueImports),
+  forms: many(forms),
+  formSubmissions: many(formSubmissions),
+  stripeTransactions: many(stripeTransactions),
+  stripePayouts: many(stripePayouts),
+  donorPortalInvites: many(donorPortalInvites),
+  stripeConfig: one(stripeConfig),
+  formSettings: one(formSettings)
 }));
 
 export const userWorkspacesRelations = relations(userWorkspaces, ({ one }) => ({
@@ -593,6 +710,14 @@ export const donationsRelations = relations(donations, ({ one, many }) => ({
   subscription: one(subscriptions, {
     fields: [donations.subscriptionId],
     references: [subscriptions.id]
+  }),
+  form: one(forms, {
+    fields: [donations.formId],
+    references: [forms.id]
+  }),
+  formSubmission: one(formSubmissions, {
+    fields: [donations.formSubmissionId],
+    references: [formSubmissions.id]
   }),
   tags: many(donationTags)
 }));
@@ -772,5 +897,98 @@ export const actblueImportsRelations = relations(actblueImports, ({ one }) => ({
   createdBy: one(users, {
     fields: [actblueImports.createdById],
     references: [users.id]
+  })
+}));
+
+// Forms Relations
+export const formsRelations = relations(forms, ({ one, many }) => ({
+  workspace: one(workspaces, {
+    fields: [forms.workspaceId],
+    references: [workspaces.id]
+  }),
+  createdBy: one(users, {
+    fields: [forms.createdById],
+    references: [users.id]
+  }),
+  submissions: many(formSubmissions)
+}));
+
+// Form Submissions Relations
+export const formSubmissionsRelations = relations(formSubmissions, ({ one }) => ({
+  form: one(forms, {
+    fields: [formSubmissions.formId],
+    references: [forms.id]
+  }),
+  contact: one(contacts, {
+    fields: [formSubmissions.contactId],
+    references: [contacts.id]
+  }),
+  workspace: one(workspaces, {
+    fields: [formSubmissions.workspaceId],
+    references: [workspaces.id]
+  })
+}));
+
+// Stripe Transactions Relations
+export const stripeTransactionsRelations = relations(stripeTransactions, ({ one }) => ({
+  workspace: one(workspaces, {
+    fields: [stripeTransactions.workspaceId],
+    references: [workspaces.id]
+  }),
+  contact: one(contacts, {
+    fields: [stripeTransactions.contactId],
+    references: [contacts.id]
+  }),
+  formSubmission: one(formSubmissions, {
+    fields: [stripeTransactions.formSubmissionId],
+    references: [formSubmissions.id]
+  }),
+  donation: one(donations, {
+    fields: [stripeTransactions.donationId],
+    references: [donations.id]
+  }),
+  subscription: one(subscriptions, {
+    fields: [stripeTransactions.subscriptionId],
+    references: [subscriptions.id]
+  })
+}));
+
+// Stripe Payouts Relations
+export const stripePayoutsRelations = relations(stripePayouts, ({ one }) => ({
+  workspace: one(workspaces, {
+    fields: [stripePayouts.workspaceId],
+    references: [workspaces.id]
+  }),
+  createdBy: one(users, {
+    fields: [stripePayouts.createdById],
+    references: [users.id]
+  })
+}));
+
+// Donor Portal Invites Relations
+export const donorPortalInvitesRelations = relations(donorPortalInvites, ({ one }) => ({
+  contact: one(contacts, {
+    fields: [donorPortalInvites.contactId],
+    references: [contacts.id]
+  }),
+  workspace: one(workspaces, {
+    fields: [donorPortalInvites.workspaceId],
+    references: [workspaces.id]
+  })
+}));
+
+// Stripe Config Relations
+export const stripeConfigRelations = relations(stripeConfig, ({ one }) => ({
+  workspace: one(workspaces, {
+    fields: [stripeConfig.workspaceId],
+    references: [workspaces.id]
+  })
+}));
+
+// Form Settings Relations
+export const formSettingsRelations = relations(formSettings, ({ one }) => ({
+  workspace: one(workspaces, {
+    fields: [formSettings.workspaceId],
+    references: [workspaces.id]
   })
 }));
