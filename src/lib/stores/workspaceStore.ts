@@ -27,36 +27,34 @@ function createWorkspaceStore() {
     subscribe,
     
     // Helper function to validate a workspace ID before using it
+    // Note: Simplified for standalone API - validates against local workspaces list
     validateWorkspaceId: async (workspaceId: string): Promise<boolean> => {
       console.log(`Validating workspace ID: ${workspaceId}`);
-      
+
       if (!workspaceId || workspaceId.trim() === '') {
         console.log('Empty workspace ID provided');
         return false;
       }
-      
+
+      // For standalone API, we'll validate by checking if the workspace exists
+      // in the user's workspace list (client-side validation)
+      // This is sufficient since the API will reject unauthorized access anyway
       try {
-        // Use the check endpoint to verify if the workspace exists
-        const response = await fetch(`/api/workspaces/check?id=${workspaceId}`);
-        
-        if (!response.ok) {
-          console.log(`Error validating workspace ID: ${response.status}`);
-          return false;
-        }
-        
-        const result = await response.json();
-        
-        if (!result.exists) {
-          console.log('Workspace does not exist in the database');
+        const response = await fetchUserWorkspaces();
+        const workspaces = response.workspaces || [];
+        const exists = workspaces.some(w => w.id === workspaceId);
+
+        if (!exists) {
+          console.log('Workspace does not exist in user\'s workspace list');
           // If localStorage has this ID, clear it
-          if (typeof window !== 'undefined' && 
+          if (typeof window !== 'undefined' &&
               localStorage.getItem('current_workspace_id') === workspaceId) {
             console.log('Removing invalid workspace ID from localStorage');
             localStorage.removeItem('current_workspace_id');
           }
           return false;
         }
-        
+
         return true;
       } catch (error) {
         console.error('Error validating workspace ID:', error);
@@ -132,17 +130,9 @@ function createWorkspaceStore() {
         if (typeof window !== 'undefined' && workspace) {
           console.log("Saving workspace ID to localStorage:", workspace.id);
           localStorage.setItem('current_workspace_id', workspace.id);
-          
-          // Also send to server to set in cookies
-          fetch('/api/workspaces/set-current', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ workspaceId: workspace.id })
-          }).catch(err => {
-            console.error('Error setting current workspace in cookies:', err);
-          });
+
+          // Note: /api/workspaces/set-current endpoint not available in standalone API
+          // LocalStorage persistence is sufficient for the frontend
         }
         
         return {
@@ -266,20 +256,14 @@ function createWorkspaceStore() {
           
           // Ensure currentWorkspace is not undefined when returning
           currentWorkspace = currentWorkspace || null;
-          
-          // If we have a current workspace, sync it with the server
-          if (currentWorkspace) {
-            fetch('/api/workspaces/set-current', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({ workspaceId: currentWorkspace.id })
-            }).catch(err => {
-              console.error('Error syncing current workspace with server:', err);
-            });
+
+          // If we have a current workspace, save it to localStorage
+          if (currentWorkspace && typeof window !== 'undefined') {
+            localStorage.setItem('current_workspace_id', currentWorkspace.id);
+            // Note: /api/workspaces/set-current endpoint not available in standalone API
+            // LocalStorage persistence is sufficient for the frontend
           }
-          
+
           return {
             ...state,
             workspaces: fetchedWorkspaces,

@@ -1,8 +1,11 @@
 /**
  * Service for workspace-related API calls
+ * Updated to use standalone Hono.js API
  */
 
 import type { Workspace } from '$lib/types/supabase';
+import { http } from '$lib/utils/httpClient';
+import { API_ENDPOINTS } from '$lib/config/api';
 
 /**
  * Update a workspace using the simple API that uses query parameters instead of path parameters
@@ -178,16 +181,20 @@ export async function createOrUpdateWorkspace(updates: { id?: string, name: stri
  */
 export async function fetchUserWorkspaces(): Promise<{ workspaces: Workspace[], isGlobalSuperAdmin?: boolean, error?: string }> {
   try {
-    const response = await fetch('/api/workspaces');
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: `Server error: ${response.status}` }));
-      console.error('Workspace API error:', errorData);
-      throw new Error(errorData.error || `Failed to fetch workspaces: ${response.status}`);
+    const response = await http.get(API_ENDPOINTS.workspaces.list);
+
+    if (!response.success) {
+      console.error('Workspace API error:', response.error);
+      throw new Error(response.error || 'Failed to fetch workspaces');
     }
-    
-    const data = await response.json();
-    return data; // Should contain workspaces array, isGlobalSuperAdmin flag, and possibly error
+
+    // The standalone API returns { success: true, data: { workspaces: [...], isGlobalSuperAdmin: false } }
+    const data = response.data;
+    return {
+      workspaces: data.workspaces || [],
+      isGlobalSuperAdmin: data.isGlobalSuperAdmin || false,
+      error: undefined
+    };
   } catch (error) {
     console.error('Error in fetchUserWorkspaces:', error);
     throw error;
@@ -199,21 +206,13 @@ export async function fetchUserWorkspaces(): Promise<{ workspaces: Workspace[], 
  */
 export async function createWorkspace(name: string): Promise<Workspace> {
   try {
-    const response = await fetch('/api/workspaces', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ name })
-    });
-    
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to create workspace');
+    const response = await http.post(API_ENDPOINTS.workspaces.create, { name });
+
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to create workspace');
     }
-    
-    const data = await response.json();
-    return data.workspace;
+
+    return response.data.workspace;
   } catch (error) {
     console.error('Error in createWorkspace:', error);
     throw error;
@@ -222,84 +221,30 @@ export async function createWorkspace(name: string): Promise<Workspace> {
 
 /**
  * Update an existing workspace
+ * Note: Standalone API uses PUT instead of PATCH and handles access control internally
  */
 export async function updateWorkspace(id: string, updates: { name?: string }): Promise<Workspace> {
   try {
     console.log(`Updating workspace ${id} with:`, updates);
-    
-    // First, check if workspace exists and user has access
-    const checkResponse = await fetch(`/api/workspaces/check?id=${id}`);
-    if (checkResponse.ok) {
-      const checkData = await checkResponse.json();
-      console.log('Workspace check results:', checkData);
-      
-      // If workspace doesn't exist, throw error
-      if (!checkData.exists) {
-        console.error('Workspace does not exist:', id);
+
+    // Use PUT method as required by standalone API
+    const response = await http.put(API_ENDPOINTS.workspaces.update(id), updates);
+
+    if (!response.success) {
+      console.error('Workspace update error:', response.error);
+
+      // Handle specific error messages
+      if (response.error?.includes('not found')) {
         throw new Error('Workspace not found. It may have been deleted or does not exist.');
+      } else if (response.error?.includes('permission') || response.error?.includes('access')) {
+        throw new Error('You do not have permission to update this workspace. You need Admin or Super Admin role.');
       }
-      
-      // If user doesn't have access, try to fix permissions
-      if (!checkData.hasAccess) {
-        console.log('User does not have access to workspace. Attempting to fix...');
-        try {
-          const fixResponse = await fetch('/api/workspaces/fix', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ workspaceId: id, role: 'Super Admin' })
-          });
-          
-          if (fixResponse.ok) {
-            const fixData = await fixResponse.json();
-            console.log('Permission fix result:', fixData);
-          } else {
-            console.error('Failed to fix permissions');
-          }
-        } catch (fixError) {
-          console.error('Error fixing permissions:', fixError);
-        }
-      }
+
+      throw new Error(response.error || 'Failed to update workspace');
     }
-    
-    // Proceed with update request
-    const response = await fetch(`/api/workspaces/${id}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(updates)
-    });
-    
-    // Handle 404 - Workspace not found
-    if (response.status === 404) {
-      console.error('Workspace not found. The workspace may have been deleted or does not exist.');
-      throw new Error('Workspace not found. It may have been deleted or does not exist.');
-    }
-    
-    // Handle 403 - Permission denied
-    if (response.status === 403) {
-      console.error('Permission denied to update workspace. You may not have the required role.');
-      throw new Error('You do not have permission to update this workspace. You need Admin or Super Admin role.');
-    }
-    
-    if (!response.ok) {
-      let errorMessage: string;
-      try {
-        const errorData = await response.json();
-        console.error('Workspace update error response:', errorData);
-        errorMessage = errorData.message || errorData.error || `Server error: ${response.status}`;
-      } catch (jsonError) {
-        console.error('Failed to parse error response:', jsonError);
-        errorMessage = `Failed to update workspace: ${response.status}`;
-      }
-      throw new Error(errorMessage);
-    }
-    
-    const data = await response.json();
-    console.log('Workspace updated successfully:', data.workspace);
-    return data.workspace;
+
+    console.log('Workspace updated successfully:', response.data.workspace);
+    return response.data.workspace;
   } catch (error) {
     console.error('Error in updateWorkspace:', error);
     throw error;
@@ -312,30 +257,17 @@ export async function updateWorkspace(id: string, updates: { name?: string }): P
 export async function deleteWorkspace(id: string): Promise<void> {
   try {
     console.log(`Service: Deleting workspace ${id}`);
-    
+
     const startTime = performance.now();
-    const response = await fetch(`/api/workspaces/${id}`, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
+    const response = await http.delete(API_ENDPOINTS.workspaces.delete(id));
     const endTime = performance.now();
     console.log(`DELETE request took ${endTime - startTime}ms`);
-    
-    if (!response.ok) {
-      let errorMessage = `Server error: ${response.status}`;
-      try {
-        const errorData = await response.json();
-        console.error('Workspace delete error:', errorData);
-        errorMessage = errorData.error || errorMessage;
-      } catch (parseError) {
-        console.error('Failed to parse error response:', parseError);
-      }
-      
-      throw new Error(`Failed to delete workspace: ${response.status}`);
+
+    if (!response.success) {
+      console.error('Workspace delete error:', response.error);
+      throw new Error(response.error || 'Failed to delete workspace');
     }
-    
+
     console.log(`Successfully deleted workspace ${id}`);
   } catch (error) {
     console.error('Error in deleteWorkspace:', error);
@@ -345,26 +277,30 @@ export async function deleteWorkspace(id: string): Promise<void> {
 
 /**
  * Upload a logo for a workspace
+ * Note: FormData uploads need special handling, bypassing the HTTP client for now
  */
 export async function uploadWorkspaceLogo(id: string, logoFile: File): Promise<string> {
   try {
     console.log(`Uploading logo for workspace ${id}`);
     const formData = new FormData();
     formData.append('logo', logoFile);
-    
-    const response = await fetch(`/api/workspaces/${id}/logo`, {
-      method: 'PUT',
-      body: formData
+
+    // Get auth token for manual fetch call
+    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+
+    const response = await http.request(API_ENDPOINTS.workspaces.uploadLogo(id), {
+      method: 'POST',
+      body: formData,
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      includeAuth: true
     });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: `Server error: ${response.status}` }));
-      console.error('Logo upload error:', errorData);
-      throw new Error(errorData.error || `Failed to upload logo: ${response.status}`);
+
+    if (!response.success) {
+      console.error('Logo upload error:', response.error);
+      throw new Error(response.error || 'Failed to upload logo');
     }
-    
-    const data = await response.json();
-    return data.logo;
+
+    return response.data.logo;
   } catch (error) {
     console.error('Error in uploadWorkspaceLogo:', error);
     throw error;
@@ -373,18 +309,19 @@ export async function uploadWorkspaceLogo(id: string, logoFile: File): Promise<s
 
 /**
  * Remove a workspace logo
+ * Note: This endpoint may not be implemented in the standalone API yet
  */
 export async function removeWorkspaceLogo(id: string): Promise<void> {
   try {
     console.log(`Removing logo for workspace ${id}`);
-    const response = await fetch(`/api/workspaces/${id}/logo`, {
-      method: 'DELETE'
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: `Server error: ${response.status}` }));
-      console.error('Logo removal error:', errorData);
-      throw new Error(errorData.error || `Failed to remove logo: ${response.status}`);
+
+    // The standalone API might not have a logo deletion endpoint yet
+    // Using PUT with null logo as a workaround
+    const response = await http.put(API_ENDPOINTS.workspaces.update(id), { logo: null });
+
+    if (!response.success) {
+      console.error('Logo removal error:', response.error);
+      throw new Error(response.error || 'Failed to remove logo');
     }
   } catch (error) {
     console.error('Error in removeWorkspaceLogo:', error);
